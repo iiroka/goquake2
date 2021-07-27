@@ -387,6 +387,77 @@ func (T *qGl3) Init() bool {
 	return true
 }
 
+func (T *qGl3) setupFrame() {
+	// int i;
+	// mleaf_t *leaf;
+
+	T.gl3_framecount++
+
+	/* build the transformation matrix for the given view angles */
+	copy(T.gl3_origin[:][:], T.gl3_newrefdef.Vieworg[:])
+
+	shared.AngleVectors(T.gl3_newrefdef.Viewangles[:], T.vpn[:], T.vright[:], T.vup[:])
+
+	/* current viewcluster */
+	if (T.gl3_newrefdef.Rdflags & shared.RDF_NOWORLDMODEL) == 0 {
+		T.gl3_oldviewcluster = T.gl3_viewcluster
+		T.gl3_oldviewcluster2 = T.gl3_viewcluster2
+		// 	leaf = GL3_Mod_PointInLeaf(gl3_origin, gl3_worldmodel);
+		// 	gl3_viewcluster = gl3_viewcluster2 = leaf->cluster;
+
+		/* check above and below so crossing solid water doesn't draw wrong */
+		// 	if (!leaf->contents)
+		// 	{
+		// 		/* look down a bit */
+		// 		vec3_t temp;
+
+		// 		VectorCopy(gl3_origin, temp);
+		// 		temp[2] -= 16;
+		// 		leaf = GL3_Mod_PointInLeaf(temp, gl3_worldmodel);
+
+		// 		if (!(leaf->contents & CONTENTS_SOLID) &&
+		// 			(leaf->cluster != gl3_viewcluster2))
+		// 		{
+		// 			gl3_viewcluster2 = leaf->cluster;
+		// 		}
+		// 	}
+		// 	else
+		// 	{
+		// 		/* look up a bit */
+		// 		vec3_t temp;
+
+		// 		VectorCopy(gl3_origin, temp);
+		// 		temp[2] += 16;
+		// 		leaf = GL3_Mod_PointInLeaf(temp, gl3_worldmodel);
+
+		// 		if (!(leaf->contents & CONTENTS_SOLID) &&
+		// 			(leaf->cluster != gl3_viewcluster2))
+		// 		{
+		// 			gl3_viewcluster2 = leaf->cluster;
+		// 		}
+		// 	}
+	}
+
+	// for (i = 0; i < 4; i++) {
+	// 	v_blend[i] = gl3_newrefdef.blend[i];
+	// }
+
+	// c_brush_polys = 0;
+	// c_alias_polys = 0;
+
+	/* clear out the portion of the screen that the NOWORLDMODEL defines */
+	if (T.gl3_newrefdef.Rdflags & shared.RDF_NOWORLDMODEL) != 0 {
+		// 	glEnable(GL_SCISSOR_TEST);
+		// 	glClearColor(0.3, 0.3, 0.3, 1);
+		// 	glScissor(gl3_newrefdef.x,
+		// 			vid.height - gl3_newrefdef.height - gl3_newrefdef.y,
+		// 			gl3_newrefdef.width, gl3_newrefdef.height);
+		// 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		// 	glClearColor(1, 0, 0.5, 0.5);
+		// 	glDisable(GL_SCISSOR_TEST);
+	}
+}
+
 func (T *qGl3) setGL2D() {
 	var x int32 = 0
 	var w int32 = int32(T.vid.width)
@@ -520,6 +591,79 @@ func (T *qGl3) BeginFrame(camera_separation float32) error {
 
 	/* clear screen if desired */
 	T.clear()
+	return nil
+}
+
+/*
+ * gl3_newrefdef must be set before the first call
+ */
+func (T *qGl3) renderView(fd shared.Refdef_t) error {
+
+	if T.r_norefresh.Bool() {
+		return nil
+	}
+
+	T.gl3_newrefdef = fd
+
+	if T.gl3_worldmodel == nil && (T.gl3_newrefdef.Rdflags&shared.RDF_NOWORLDMODEL) == 0 {
+		return T.ri.Sys_Error(shared.ERR_DROP, "R_RenderView: NULL worldmodel")
+	}
+
+	//  if (r_speeds->value) {
+	// 	 c_brush_polys = 0;
+	// 	 c_alias_polys = 0;
+	//  }
+
+	//  GL3_PushDlights();
+
+	//  if (gl_finish->value) {
+	// 	 glFinish();
+	//  }
+
+	T.setupFrame()
+
+	//  SetFrustum();
+
+	//  SetupGL();
+
+	//  GL3_MarkLeaves(); /* done here so we know if we're in water */
+
+	//  GL3_DrawWorld();
+
+	//  GL3_DrawEntitiesOnList();
+
+	//  // kick the silly gl1_flashblend poly lights
+	//  // GL3_RenderDlights();
+
+	//  GL3_DrawParticles();
+
+	//  GL3_DrawAlphaSurfaces();
+
+	//  // Note: R_Flash() is now GL3_Draw_Flash() and called from GL3_RenderFrame()
+
+	//  if (r_speeds->value) {
+	// 	 R_Printf(PRINT_ALL, "%4i wpoly %4i epoly %i tex %i lmaps\n",
+	// 			 c_brush_polys, c_alias_polys, c_visible_textures,
+	// 			 c_visible_lightmaps);
+	//  }
+
+	return nil
+}
+
+func (T *qGl3) RenderFrame(fd shared.Refdef_t) error {
+
+	if err := T.renderView(fd); err != nil {
+		return err
+	}
+	// GL3_SetLightLevel();
+	// GL3_SetGL2D();
+
+	// if(v_blend[3] != 0.0f) {
+	// 	int x = (vid.width - gl3_newrefdef.width)/2;
+	// 	int y = (vid.height - gl3_newrefdef.height)/2;
+
+	// 	GL3_Draw_Flash(v_blend, x, y, gl3_newrefdef.width, gl3_newrefdef.height);
+	// }
 	return nil
 }
 

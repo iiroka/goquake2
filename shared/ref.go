@@ -86,6 +86,8 @@ type Refexport_t interface {
 	RegisterModel(name string) (interface{}, error)
 	RegisterSkin(name string) interface{}
 
+	RenderFrame(fd Refdef_t) error
+
 	DrawStretchPic(x, y, w, h int, name string)
 
 	BeginFrame(camera_separation float32) error

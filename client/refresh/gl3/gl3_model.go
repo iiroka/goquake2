@@ -346,7 +346,7 @@ func (T *qGl3) modForName(name string, crash bool) (*gl3model_t, error) {
 func (T *qGl3) BeginRegistration(model string) error {
 
 	T.registration_sequence++
-	// gl3_oldviewcluster = -1; /* force markleafs */
+	T.gl3_oldviewcluster = -1 /* force markleafs */
 
 	// gl3state.currentlightmap = -1;
 
@@ -367,7 +367,7 @@ func (T *qGl3) BeginRegistration(model string) error {
 	}
 	T.gl3_worldmodel = mod
 
-	// gl3_viewcluster = -1;
+	T.gl3_viewcluster = -1
 	return nil
 }
 

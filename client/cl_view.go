@@ -294,7 +294,9 @@ func (T *qClient) renderView(stereo_separation float32) error {
 	}
 	T.cl.refdef.Fov_y = fov
 
-	// R_RenderFrame(&cl.refdef);
+	if err := T.R_RenderFrame(T.cl.refdef); err != nil {
+		return err
+	}
 
 	// if (cl_stats->value)
 	// {

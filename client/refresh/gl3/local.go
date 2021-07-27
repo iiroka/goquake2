@@ -376,6 +376,8 @@ type qGl3 struct {
 
 	gl3depthmin, gl3depthmax float64
 
+	gl3_newrefdef shared.Refdef_t
+
 	gl_filter_min int32
 	gl_filter_max int32
 
@@ -384,6 +386,17 @@ type qGl3 struct {
 
 	draw_chars               *gl3image_t
 	vbo2D, vao2D, vao2Dcolor uint32
+
+	/* view origin */
+	vup        [3]float32
+	vpn        [3]float32
+	vright     [3]float32
+	gl3_origin [3]float32
+
+	gl3_viewcluster, gl3_viewcluster2, gl3_oldviewcluster, gl3_oldviewcluster2 int
+
+	gl3_visframecount int /* bumped when going to a new PVS */
+	gl3_framecount    int /* used for dlight push checking */
 
 	d_8to24table []uint32
 
