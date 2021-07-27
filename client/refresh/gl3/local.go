@@ -63,8 +63,8 @@ type gl3config_t struct {
 
 type gl3ShaderInfo_t struct {
 	shaderProgram uint32
-	uniLmScales   uint32
-	// hmm_vec4 lmScales[4];
+	uniLmScales   int32
+	lmScales      [4][4]float32
 }
 
 type gl3UniCommon_t struct {
@@ -104,6 +104,83 @@ type gl3Uni2D_t struct {
 	data []float32
 }
 
+type gl3Uni3D_t struct {
+	// hmm_mat4 transProjMat4;
+	// hmm_mat4 transViewMat4;
+	// hmm_mat4 transModelMat4;
+
+	// GLfloat scroll; // for SURF_FLOWING
+	// GLfloat time; // for warping surfaces like water & possibly other things
+	// GLfloat alpha; // for translucent surfaces (water, glass, ..)
+	// GLfloat overbrightbits; // gl3_overbrightbits, applied to lightmaps (and elsewhere to models)
+	// GLfloat particleFadeFactor; // gl3_particle_fade_factor, higher => less fading out towards edges
+
+	// 	GLfloat _padding[3]; // again, some padding to ensure this has right size
+	data []float32
+}
+
+const gl3Uni3D_Size = 3*16 + 5 + 3
+
+func (T *gl3Uni3D_t) setTransProjMat4(v []float32) {
+	copy(T.data[:16], v)
+}
+
+func (T *gl3Uni3D_t) setTransViewMat4(v []float32) {
+	copy(T.data[16:2*16], v)
+}
+
+func (T *gl3Uni3D_t) setTransModelMat4(v []float32) {
+	copy(T.data[2*16:3*16], v)
+}
+
+func (T *gl3Uni3D_t) setScroll(v float32) {
+	T.data[3*16] = v
+}
+
+func (T *gl3Uni3D_t) setTime(v float32) {
+	T.data[3*16+1] = v
+}
+
+func (T *gl3Uni3D_t) setAlpha(v float32) {
+	T.data[3*16+2] = v
+}
+
+func (T *gl3Uni3D_t) setOverbrightbits(v float32) {
+	T.data[3*16+3] = v
+}
+
+func (T *gl3Uni3D_t) setParticleFadeFactor(v float32) {
+	T.data[3*16+4] = v
+}
+
+// extern const hmm_mat4 gl3_identityMat4;
+
+type gl3UniDynLight_t struct {
+	// vec3_t origin;
+	// GLfloat _padding;
+	// vec3_t color;
+	// GLfloat intensity;
+	data []uint32
+}
+
+const gl3UniDynLight_Size = 8
+
+type gl3UniLights_t struct {
+	dynLights []gl3UniDynLight_t
+	// GLuint numDynLights;
+	// GLfloat _padding[3];
+	data []uint32
+}
+
+const gl3UniLights_Size = 4 + shared.MAX_DLIGHTS*gl3UniDynLight_Size
+
+func (T *gl3UniLights_t) initialize() {
+	T.dynLights = make([]gl3UniDynLight_t, shared.MAX_DLIGHTS)
+	for i := 0; i < shared.MAX_DLIGHTS; i++ {
+		T.dynLights[i].data = T.data[i*gl3UniDynLight_Size:]
+	}
+}
+
 const (
 	// width and height used to be 128, so now we should be able to get the same lightmap data
 	// that used 32 lightmaps before into one, so 4 lightmaps should be enough
@@ -141,41 +218,41 @@ type gl3state_t struct {
 	// NOTE: make sure si2D is always the first shaderInfo (or adapt GL3_ShutdownShaders())
 	si2D      gl3ShaderInfo_t // shader for rendering 2D with textures
 	si2Dcolor gl3ShaderInfo_t // shader for rendering 2D with flat colors
-	// gl3ShaderInfo_t si3Dlm;        // a regular opaque face (e.g. from brush) with lightmap
-	// // TODO: lm-only variants for gl_lightmap 1
-	// gl3ShaderInfo_t si3Dtrans;     // transparent is always w/o lightmap
-	// gl3ShaderInfo_t si3DcolorOnly; // used for beams - no lightmaps
-	// gl3ShaderInfo_t si3Dturb;      // for water etc - always without lightmap
-	// gl3ShaderInfo_t si3DlmFlow;    // for flowing/scrolling things with lightmap (conveyor, ..?)
-	// gl3ShaderInfo_t si3DtransFlow; // for transparent flowing/scrolling things (=> no lightmap)
-	// gl3ShaderInfo_t si3Dsky;       // guess what..
-	// gl3ShaderInfo_t si3Dsprite;    // for sprites
-	// gl3ShaderInfo_t si3DspriteAlpha; // for sprites with alpha-testing
+	si3Dlm    gl3ShaderInfo_t // a regular opaque face (e.g. from brush) with lightmap
+	// TODO: lm-only variants for gl_lightmap 1
+	si3Dtrans       gl3ShaderInfo_t // transparent is always w/o lightmap
+	si3DcolorOnly   gl3ShaderInfo_t // used for beams - no lightmaps
+	si3Dturb        gl3ShaderInfo_t // for water etc - always without lightmap
+	si3DlmFlow      gl3ShaderInfo_t // for flowing/scrolling things with lightmap (conveyor, ..?)
+	si3DtransFlow   gl3ShaderInfo_t // for transparent flowing/scrolling things (=> no lightmap)
+	si3Dsky         gl3ShaderInfo_t // guess what..
+	si3Dsprite      gl3ShaderInfo_t // for sprites
+	si3DspriteAlpha gl3ShaderInfo_t // for sprites with alpha-testing
 
-	// gl3ShaderInfo_t si3Dalias;      // for models
-	// gl3ShaderInfo_t si3DaliasColor; // for models w/ flat colors
+	si3Dalias      gl3ShaderInfo_t // for models
+	si3DaliasColor gl3ShaderInfo_t // for models w/ flat colors
 
-	// // NOTE: make sure siParticle is always the last shaderInfo (or adapt GL3_ShutdownShaders())
-	// gl3ShaderInfo_t siParticle; // for particles. surprising, right?
+	// NOTE: make sure siParticle is always the last shaderInfo (or adapt GL3_ShutdownShaders())
+	siParticle gl3ShaderInfo_t // for particles. surprising, right?
 
-	// GLuint vao3D, vbo3D; // for brushes etc, using 10 floats and one uint as vertex input (x,y,z, s,t, lms,lmt, normX,normY,normZ ; lightFlags)
+	vao3D, vbo3D uint32 // for brushes etc, using 10 floats and one uint as vertex input (x,y,z, s,t, lms,lmt, normX,normY,normZ ; lightFlags)
 
 	// the next two are for gl3config.useBigVBO == true
 	// int vbo3Dsize;
 	// int vbo3DcurOffset;
 
-	// GLuint vaoAlias, vboAlias, eboAlias; // for models, using 9 floats as (x,y,z, s,t, r,g,b,a)
-	// GLuint vaoParticle, vboParticle; // for particles, using 9 floats (x,y,z, size,distance, r,g,b,a)
+	vaoAlias, vboAlias, eboAlias uint32 // for models, using 9 floats as (x,y,z, s,t, r,g,b,a)
+	vaoParticle, vboParticle     uint32 // for particles, using 9 floats (x,y,z, size,distance, r,g,b,a)
 
 	// UBOs and their data
 	uniCommonData gl3UniCommon_t
 	uni2DData     gl3Uni2D_t
-	// gl3Uni3D_t uni3DData;
-	// gl3UniLights_t uniLightsData;
-	uniCommonUBO uint32
-	uni2DUBO     uint32
-	uni3DUBO     uint32
-	uniLightsUBO uint32
+	uni3DData     gl3Uni3D_t
+	uniLightsData gl3UniLights_t
+	uniCommonUBO  uint32
+	uni2DUBO      uint32
+	uni3DUBO      uint32
+	uniLightsUBO  uint32
 }
 
 // attribute locations for vertex shaders
@@ -296,6 +373,8 @@ type qGl3 struct {
 	r_fixsurfsky     *shared.CvarT
 
 	gl3_worldmodel *gl3model_t
+
+	gl3depthmin, gl3depthmax float64
 
 	gl_filter_min int32
 	gl_filter_max int32

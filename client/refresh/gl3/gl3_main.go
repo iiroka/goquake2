@@ -32,6 +32,13 @@ import (
 	"github.com/go-gl/gl/v3.2-core/gl"
 )
 
+var gl3_identityMat4 = []float32{
+	1, 0, 0, 0,
+	0, 1, 0, 0,
+	0, 0, 1, 0,
+	0, 0, 0, 1,
+}
+
 func QGl3Create(ri shared.Refimport_t) shared.Refexport_t {
 	r := &qGl3{}
 	r.ri = ri
@@ -284,11 +291,11 @@ func (T *qGl3) Init() bool {
 	T.rPrintf(shared.PRINT_ALL, " - Anisotropic Filtering: ")
 
 	if T.gl3config.anisotropic {
-		// 		glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &gl3config.max_anisotropy);
+		// gl.GetFloatv(gl.MAX_TEXTURE_MAX_ANISOTROPY_EXT, &T.gl3config.max_anisotropy)
 
 		T.rPrintf(shared.PRINT_ALL, "Max level: %vx\n", T.gl3config.max_anisotropy)
 	} else {
-		// 		gl3config.max_anisotropy = 0.0;
+		T.gl3config.max_anisotropy = 0.0
 
 		T.rPrintf(shared.PRINT_ALL, "Not supported\n")
 	}
@@ -374,7 +381,7 @@ func (T *qGl3) Init() bool {
 		return false
 	}
 
-	// 	GL3_SurfInit();
+	T.surfInit()
 
 	T.rPrintf(shared.PRINT_ALL, "\n")
 	return true
@@ -409,11 +416,11 @@ func (T *qGl3) clear() {
 		gl.Clear(gl.DEPTH_BUFFER_BIT | stencilFlags)
 	}
 
-	// 	gl3depthmin = 0;
-	// 	gl3depthmax = 1;
-	// 	glDepthFunc(GL_LEQUAL);
+	T.gl3depthmin = 0
+	T.gl3depthmax = 1
+	gl.DepthFunc(gl.LEQUAL)
 
-	// 	glDepthRange(gl3depthmin, gl3depthmax);
+	gl.DepthRange(T.gl3depthmin, T.gl3depthmax)
 
 	// 	if (gl_zfix->value)
 	// 	{

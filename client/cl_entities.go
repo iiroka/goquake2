@@ -31,13 +31,29 @@ import (
 )
 
 /*
+ * Adapts a 4:3 aspect FOV to the current aspect (Hor+)
+ */
+func adaptFov(fov, w, h float32) float32 {
+
+	if w <= 0 || h <= 0 {
+		return fov
+	}
+
+	/*
+	 * Formula:
+	 *
+	 * fov = 2.0 * atan(width / height * 3.0 / 4.0 * tan(fov43 / 2.0))
+	 *
+	 * The code below is equivalent but precalculates a few values and
+	 * converts between degrees and radians when needed.
+	 */
+	return float32(math.Atan(math.Tan(float64(fov)/360.0*math.Pi)*float64(w/h*0.75)) / math.Pi * 360.0)
+}
+
+/*
  * Sets cl.refdef view values
  */
 func (T *qClient) calcViewValues() {
-	//  int i;
-	//  float lerp, backlerp, ifov;
-	//  frame_t *oldframe;
-	//  player_state_t *ps, *ops;
 
 	/* find the previous frame to interpolate from */
 	ps := &T.cl.frame.playerstate
@@ -117,13 +133,13 @@ func (T *qClient) calcViewValues() {
 
 	shared.AngleVectors(T.cl.refdef.Viewangles[:], T.cl.v_forward[:], T.cl.v_right[:], T.cl.v_up[:])
 
-	//  /* interpolate field of view */
-	//  ifov = ops->fov + lerp * (ps->fov - ops->fov);
-	//  if (horplus->value) {
-	// 	 cl.refdef.fov_x = AdaptFov(ifov, cl.refdef.width, cl.refdef.height);
-	//  } else {
-	// 	 cl.refdef.fov_x = ifov;
-	//  }
+	/* interpolate field of view */
+	ifov := ops.Fov + lerp*(ps.Fov-ops.Fov)
+	if T.horplus.Bool() {
+		T.cl.refdef.Fov_x = adaptFov(ifov, float32(T.cl.refdef.Width), float32(T.cl.refdef.Height))
+	} else {
+		T.cl.refdef.Fov_x = ifov
+	}
 
 	/* don't interpolate blend color */
 	for i := 0; i < 4; i++ {

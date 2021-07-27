@@ -25,6 +25,10 @@
  */
 package shared
 
+const MAX_DLIGHTS = 32
+const MAX_ENTITIES = 128
+const MAX_PARTICLES = 4096
+
 type Refdef_t struct {
 	X, Y, Width, Height int /* in virtual screen coordinates */
 	Fov_x, Fov_y        float32
