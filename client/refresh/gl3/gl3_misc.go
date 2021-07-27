@@ -62,3 +62,43 @@ func (T *qGl3) setDefaultState() {
 		// glHint(GL_MULTISAMPLE_FILTER_HINT_NV, GL_NICEST); TODO what is this for?
 	}
 }
+
+var dottexture = [][]byte{
+	{0, 0, 0, 0, 0, 0, 0, 0},
+	{0, 0, 1, 1, 0, 0, 0, 0},
+	{0, 1, 1, 1, 1, 0, 0, 0},
+	{0, 1, 1, 1, 1, 0, 0, 0},
+	{0, 0, 1, 1, 0, 0, 0, 0},
+	{0, 0, 0, 0, 0, 0, 0, 0},
+	{0, 0, 0, 0, 0, 0, 0, 0},
+	{0, 0, 0, 0, 0, 0, 0, 0},
+}
+
+func (T *qGl3) initParticleTexture() {
+	// 	int x, y;
+	data := make([]byte, 8*8*4)
+
+	/* particle texture */
+	for x := 0; x < 8; x++ {
+		for y := 0; y < 8; y++ {
+			data[(y*8+x)*4+0] = 0xFF
+			data[(y*8+x)*4+1] = 0xFF
+			data[(y*8+x)*4+2] = 0xFF
+			data[(y*8+x)*4+3] = dottexture[x][y] * 255
+		}
+	}
+
+	T.gl3_particletexture = T.loadPic("***particle***", data, 8, 0, 8, 0, it_sprite, 32)
+
+	/* also use this for bad textures, but without alpha */
+	for x := 0; x < 8; x++ {
+		for y := 0; y < 8; y++ {
+			data[(y*8+x)*4+0] = dottexture[x&3][y&3] * 255
+			data[(y*8+x)*4+1] = 0
+			data[(y*8+x)*4+2] = 0
+			data[(y*8+x)*4+3] = 0xFF
+		}
+	}
+
+	T.gl3_notexture = T.loadPic("***r_notexture***", data, 8, 0, 8, 0, it_wall, 32)
+}

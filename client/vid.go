@@ -332,6 +332,13 @@ func (T *qClient) R_RegisterSkin(name string) interface{} {
 	return nil
 }
 
+func (T *qClient) R_RenderFrame(fd shared.Refdef_t) error {
+	if T.re != nil {
+		return T.re.RenderFrame(fd)
+	}
+	return nil
+}
+
 func (T *qClient) R_BeginFrame(camera_separation float32) error {
 	if T.re != nil {
 		return T.re.BeginFrame(camera_separation)

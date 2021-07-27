@@ -373,9 +373,9 @@ func (T *qGl3) Init() bool {
 
 	T.registration_sequence = 1 // from R_InitImages() (everything else from there shouldn't be needed anymore)
 
-	// 	GL3_Mod_Init();
+	T.modInit()
 
-	// 	GL3_InitParticleTexture();
+	T.initParticleTexture()
 
 	if err := T.drawInitLocal(); err != nil {
 		return false
@@ -387,14 +387,12 @@ func (T *qGl3) Init() bool {
 	return true
 }
 
-func (T *qGl3) setupFrame() {
-	// int i;
-	// mleaf_t *leaf;
+func (T *qGl3) setupFrame() error {
 
 	T.gl3_framecount++
 
 	/* build the transformation matrix for the given view angles */
-	copy(T.gl3_origin[:][:], T.gl3_newrefdef.Vieworg[:])
+	copy(T.gl3_origin[:], T.gl3_newrefdef.Vieworg[:])
 
 	shared.AngleVectors(T.gl3_newrefdef.Viewangles[:], T.vpn[:], T.vright[:], T.vup[:])
 
@@ -402,40 +400,41 @@ func (T *qGl3) setupFrame() {
 	if (T.gl3_newrefdef.Rdflags & shared.RDF_NOWORLDMODEL) == 0 {
 		T.gl3_oldviewcluster = T.gl3_viewcluster
 		T.gl3_oldviewcluster2 = T.gl3_viewcluster2
-		// 	leaf = GL3_Mod_PointInLeaf(gl3_origin, gl3_worldmodel);
-		// 	gl3_viewcluster = gl3_viewcluster2 = leaf->cluster;
+		leaf, err := T.modPointInLeaf(T.gl3_origin[:], T.gl3_worldmodel)
+		if err != nil {
+			return err
+		}
+		T.gl3_viewcluster = leaf.cluster
+		T.gl3_viewcluster2 = T.gl3_viewcluster
 
 		/* check above and below so crossing solid water doesn't draw wrong */
-		// 	if (!leaf->contents)
-		// 	{
-		// 		/* look down a bit */
-		// 		vec3_t temp;
+		if leaf.contents == 0 {
+			/* look down a bit */
+			// 		vec3_t temp;
 
-		// 		VectorCopy(gl3_origin, temp);
-		// 		temp[2] -= 16;
-		// 		leaf = GL3_Mod_PointInLeaf(temp, gl3_worldmodel);
+			// 		VectorCopy(gl3_origin, temp);
+			// 		temp[2] -= 16;
+			// 		leaf = GL3_Mod_PointInLeaf(temp, gl3_worldmodel);
 
-		// 		if (!(leaf->contents & CONTENTS_SOLID) &&
-		// 			(leaf->cluster != gl3_viewcluster2))
-		// 		{
-		// 			gl3_viewcluster2 = leaf->cluster;
-		// 		}
-		// 	}
-		// 	else
-		// 	{
-		// 		/* look up a bit */
-		// 		vec3_t temp;
+			// 		if (!(leaf->contents & CONTENTS_SOLID) &&
+			// 			(leaf->cluster != gl3_viewcluster2))
+			// 		{
+			// 			gl3_viewcluster2 = leaf->cluster;
+			// 		}
+		} else {
+			/* look up a bit */
+			// 		vec3_t temp;
 
-		// 		VectorCopy(gl3_origin, temp);
-		// 		temp[2] += 16;
-		// 		leaf = GL3_Mod_PointInLeaf(temp, gl3_worldmodel);
+			// 		VectorCopy(gl3_origin, temp);
+			// 		temp[2] += 16;
+			// 		leaf = GL3_Mod_PointInLeaf(temp, gl3_worldmodel);
 
-		// 		if (!(leaf->contents & CONTENTS_SOLID) &&
-		// 			(leaf->cluster != gl3_viewcluster2))
-		// 		{
-		// 			gl3_viewcluster2 = leaf->cluster;
-		// 		}
-		// 	}
+			// 		if (!(leaf->contents & CONTENTS_SOLID) &&
+			// 			(leaf->cluster != gl3_viewcluster2))
+			// 		{
+			// 			gl3_viewcluster2 = leaf->cluster;
+			// 		}
+		}
 	}
 
 	// for (i = 0; i < 4; i++) {
@@ -456,6 +455,7 @@ func (T *qGl3) setupFrame() {
 		// 	glClearColor(1, 0, 0.5, 0.5);
 		// 	glDisable(GL_SCISSOR_TEST);
 	}
+	return nil
 }
 
 func (T *qGl3) setGL2D() {
@@ -620,7 +620,9 @@ func (T *qGl3) renderView(fd shared.Refdef_t) error {
 	// 	 glFinish();
 	//  }
 
-	T.setupFrame()
+	if err := T.setupFrame(); err != nil {
+		return err
+	}
 
 	//  SetFrustum();
 

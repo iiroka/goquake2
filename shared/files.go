@@ -129,17 +129,31 @@ const SPRITE_VERSION = 2
 
 /* .WAL texture file format */
 
-// #define MIPLEVELS 4
-// typedef struct miptex_s
-// {
-// 	char name[32];
-// 	unsigned width, height;
-// 	unsigned offsets[MIPLEVELS]; /* four mip maps stored */
-// 	char animname[32];           /* next frame in animation chain */
-// 	int flags;
-// 	int contents;
-// 	int value;
-// } miptex_t;
+const MIPLEVELS = 4
+
+type Miptex_t struct {
+	Name     string
+	Width    uint32
+	Height   uint32
+	Offsets  [MIPLEVELS]uint32 /* four mip maps stored */
+	Animname string            /* next frame in animation chain */
+	Flags    int32
+	Contents int32
+}
+
+func Miptex(data []byte) Miptex_t {
+	d := Miptex_t{}
+	d.Name = ReadString(data, 32)
+	d.Width = ReadUint32(data[32:])
+	d.Height = ReadUint32(data[32+4:])
+	for i := 0; i < MIPLEVELS; i++ {
+		d.Offsets[i] = ReadUint32(data[32+(2+i)*4:])
+	}
+	d.Animname = ReadString(data, 32+(2+MIPLEVELS)+4)
+	d.Flags = ReadInt32(data[2*32+(2+MIPLEVELS)+4:])
+	d.Contents = ReadInt32(data[2*32+(3+MIPLEVELS)+4:])
+	return d
+}
 
 /* .BSP file format */
 
@@ -258,183 +272,297 @@ func Dmodel(data []byte) Dmodel_t {
 }
 
 type Dvertex_t struct {
-	point [3]float32
+	Point [3]float32
 }
 
 const Dvertex_size = 3 * 4
 
 func Dvertex(data []byte) Dvertex_t {
 	d := Dvertex_t{}
-	d.point[0] = ReadFloat32(data[0:])
-	d.point[1] = ReadFloat32(data[1*4:])
-	d.point[2] = ReadFloat32(data[2*4:])
+	d.Point[0] = ReadFloat32(data[0:])
+	d.Point[1] = ReadFloat32(data[1*4:])
+	d.Point[2] = ReadFloat32(data[2*4:])
 	return d
 }
 
-// /* 0-2 are axial planes */
-// #define PLANE_X 0
-// #define PLANE_Y 1
-// #define PLANE_Z 2
+/* 0-2 are axial planes */
+const PLANE_X = 0
+const PLANE_Y = 1
+const PLANE_Z = 2
 
-// /* 3-5 are non-axial planes snapped to the nearest */
-// #define PLANE_ANYX 3
-// #define PLANE_ANYY 4
-// #define PLANE_ANYZ 5
+/* 3-5 are non-axial planes snapped to the nearest */
+const PLANE_ANYX = 3
+const PLANE_ANYY = 4
+const PLANE_ANYZ = 5
 
-// /* planes (x&~1) and (x&~1)+1 are always opposites */
+/* planes (x&~1) and (x&~1)+1 are always opposites */
 
-// typedef struct
-// {
-// 	float normal[3];
-// 	float dist;
-// 	int type; /* PLANE_X - PLANE_ANYZ */
-// } dplane_t;
+type Dplane_t struct {
+	Normal [3]float32
+	Dist   float32
+	Type   int32 /* PLANE_X - PLANE_ANYZ */
+}
 
-// /* contents flags are seperate bits
-//  * - given brush can contribute multiple content bits
-//  * - multiple brushes can be in a single leaf */
+const Dplane_size = 5 * 4
 
-// /* lower bits are stronger, and will eat weaker brushes completely */
-// #define CONTENTS_SOLID 1  /* an eye is never valid in a solid */
-// #define CONTENTS_WINDOW 2 /* translucent, but not watery */
-// #define CONTENTS_AUX 4
-// #define CONTENTS_LAVA 8
-// #define CONTENTS_SLIME 16
-// #define CONTENTS_WATER 32
-// #define CONTENTS_MIST 64
-// #define LAST_VISIBLE_CONTENTS 64
+func Dplane(data []byte) Dplane_t {
+	d := Dplane_t{}
+	d.Normal[0] = ReadFloat32(data[0:])
+	d.Normal[1] = ReadFloat32(data[1*4:])
+	d.Normal[2] = ReadFloat32(data[2*4:])
+	d.Dist = ReadFloat32(data[3*4:])
+	d.Type = ReadInt32(data[4*4:])
+	return d
+}
 
-// /* remaining contents are non-visible, and don't eat brushes */
-// #define CONTENTS_AREAPORTAL 0x8000
+/* contents flags are seperate bits
+ * - given brush can contribute multiple content bits
+ * - multiple brushes can be in a single leaf */
 
-// #define CONTENTS_PLAYERCLIP 0x10000
-// #define CONTENTS_MONSTERCLIP 0x20000
+const (
+	/* lower bits are stronger, and will eat weaker brushes completely */
+	CONTENTS_SOLID        = 1 /* an eye is never valid in a solid */
+	CONTENTS_WINDOW       = 2 /* translucent, but not watery */
+	CONTENTS_AUX          = 4
+	CONTENTS_LAVA         = 8
+	CONTENTS_SLIME        = 16
+	CONTENTS_WATER        = 32
+	CONTENTS_MIST         = 64
+	LAST_VISIBLE_CONTENTS = 64
 
-// /* currents can be added to any other contents, and may be mixed */
-// #define CONTENTS_CURRENT_0 0x40000
-// #define CONTENTS_CURRENT_90 0x80000
-// #define CONTENTS_CURRENT_180 0x100000
-// #define CONTENTS_CURRENT_270 0x200000
-// #define CONTENTS_CURRENT_UP 0x400000
-// #define CONTENTS_CURRENT_DOWN 0x800000
+	/* remaining contents are non-visible, and don't eat brushes */
+	CONTENTS_AREAPORTAL = 0x8000
 
-// #define CONTENTS_ORIGIN 0x1000000       /* removed before bsping an entity */
+	CONTENTS_PLAYERCLIP  = 0x10000
+	CONTENTS_MONSTERCLIP = 0x20000
 
-// #define CONTENTS_MONSTER 0x2000000      /* should never be on a brush, only in game */
-// #define CONTENTS_DEADMONSTER 0x4000000
-// #define CONTENTS_DETAIL 0x8000000       /* brushes to be added after vis leafs */
-// #define CONTENTS_TRANSLUCENT 0x10000000 /* auto set if any surface has trans */
-// #define CONTENTS_LADDER 0x20000000
+	/* currents can be added to any other contents, and may be mixed */
+	CONTENTS_CURRENT_0    = 0x40000
+	CONTENTS_CURRENT_90   = 0x80000
+	CONTENTS_CURRENT_180  = 0x100000
+	CONTENTS_CURRENT_270  = 0x200000
+	CONTENTS_CURRENT_UP   = 0x400000
+	CONTENTS_CURRENT_DOWN = 0x800000
 
-// #define SURF_LIGHT 0x1    /* value will hold the light strength */
+	CONTENTS_ORIGIN = 0x1000000 /* removed before bsping an entity */
 
-// #define SURF_SLICK 0x2    /* effects game physics */
+	CONTENTS_MONSTER     = 0x2000000 /* should never be on a brush, only in game */
+	CONTENTS_DEADMONSTER = 0x4000000
+	CONTENTS_DETAIL      = 0x8000000  /* brushes to be added after vis leafs */
+	CONTENTS_TRANSLUCENT = 0x10000000 /* auto set if any surface has trans */
+	CONTENTS_LADDER      = 0x20000000
 
-// #define SURF_SKY 0x4      /* don't draw, but add to skybox */
-// #define SURF_WARP 0x8     /* turbulent water warp */
-// #define SURF_TRANS33 0x10
-// #define SURF_TRANS66 0x20
-// #define SURF_FLOWING 0x40 /* scroll towards angle */
-// #define SURF_NODRAW 0x80  /* don't bother referencing the texture */
+	SURF_LIGHT = 0x1 /* value will hold the light strength */
 
-// typedef struct
-// {
-// 	int planenum;
-// 	int children[2];         /* negative numbers are -(leafs+1), not nodes */
-// 	short mins[3];           /* for frustom culling */
-// 	short maxs[3];
-// 	unsigned short firstface;
-// 	unsigned short numfaces; /* counting both sides */
-// } dnode_t;
+	SURF_SLICK = 0x2 /* effects game physics */
 
-// typedef struct texinfo_s
-// {
-// 	float vecs[2][4]; /* [s/t][xyz offset] */
-// 	int flags;        /* miptex flags + overrides light emission, etc */
-// 	int value;
-// 	char texture[32]; /* texture name (textures*.wal) */
-// 	int nexttexinfo;  /* for animations, -1 = end of chain */
-// } texinfo_t;
+	SURF_SKY     = 0x4 /* don't draw, but add to skybox */
+	SURF_WARP    = 0x8 /* turbulent water warp */
+	SURF_TRANS33 = 0x10
+	SURF_TRANS66 = 0x20
+	SURF_FLOWING = 0x40 /* scroll towards angle */
+	SURF_NODRAW  = 0x80 /* don't bother referencing the texture */
+)
 
-// /* note that edge 0 is never used, because negative edge
-//    nums are used for counterclockwise use of the edge in
-//    a face */
-// typedef struct
-// {
-// 	unsigned short v[2]; /* vertex numbers */
-// } dedge_t;
+type Dnode_t struct {
+	Planenum  int32
+	Children  [2]int32 /* negative numbers are -(leafs+1), not nodes */
+	Mins      [3]int16 /* for frustom culling */
+	Maxs      [3]int16
+	Firstface uint16
+	Numfaces  uint16 /* counting both sides */
+}
+
+const Dnode_size = 3*4 + 8*2
+
+func Dnode(data []byte) Dnode_t {
+	d := Dnode_t{}
+	d.Planenum = ReadInt32(data[0:])
+	d.Children[0] = ReadInt32(data[1*4:])
+	d.Children[1] = ReadInt32(data[2*4:])
+	for i := 0; i < 3; i++ {
+		d.Mins[i] = ReadInt16(data[3*4+i*2:])
+		d.Maxs[i] = ReadInt16(data[3*4+(3+i)*2:])
+	}
+	d.Firstface = ReadUint16(data[3*4+6*2:])
+	d.Numfaces = ReadUint16(data[3*4+7*2:])
+	return d
+}
+
+type Texinfo_t struct {
+	Vecs        [2][4]float32 /* [s/t][xyz offset] */
+	Flags       int32         /* miptex flags + overrides light emission, etc */
+	Value       int32
+	Texture     string /* texture name (textures*.wal) */
+	Nexttexinfo int32  /* for animations, -1 = end of chain */
+}
+
+func Texinfo(data []byte) Texinfo_t {
+	d := Texinfo_t{}
+	for i := 0; i < 2; i++ {
+		for j := 0; j < 2; j++ {
+			d.Vecs[i][j] = ReadFloat32(data[(j+(i*4))*4:])
+		}
+	}
+	d.Flags = ReadInt32(data[8*4:])
+	d.Value = ReadInt32(data[9*4:])
+	d.Texture = ReadString(data[10*4:], 32)
+	d.Nexttexinfo = ReadInt32(data[10*4+32:])
+	return d
+}
+
+const Texinfo_size = 11*4 + 32
+
+/* note that edge 0 is never used, because negative edge
+   nums are used for counterclockwise use of the edge in
+   a face */
+type Dedge_t struct {
+	V [2]uint16 /* vertex numbers */
+}
+
+const Dedge_size = 2 * 2
+
+func Dedge(data []byte) Dedge_t {
+	d := Dedge_t{}
+	d.V[0] = ReadUint16(data[0:])
+	d.V[1] = ReadUint16(data[2:])
+	return d
+}
 
 const MAXLIGHTMAPS = 4
 
-// typedef struct
-// {
-// 	unsigned short planenum;
-// 	short side;
+type Dface_t struct {
+	Planenum uint16
+	Side     int16
 
-// 	int firstedge; /* we must support > 64k edges */
-// 	short numedges;
-// 	short texinfo;
+	Firstedge int32 /* we must support > 64k edges */
+	Numedges  int16
+	Texinfo   int16
 
-// 	/* lighting info */
-// 	byte styles[MAXLIGHTMAPS];
-// 	int lightofs; /* start of [numstyles*surfsize] samples */
-// } dface_t;
+	/* lighting info */
+	Styles   [MAXLIGHTMAPS]byte
+	Lightofs int32 /* start of [numstyles*surfsize] samples */
+}
 
-// typedef struct
-// {
-// 	int contents; /* OR of all brushes (not needed?) */
+const Dface_size = 4*2 + 2*4 + MAXLIGHTMAPS
 
-// 	short cluster;
-// 	short area;
+func Dface(data []byte) Dface_t {
+	d := Dface_t{}
+	d.Planenum = ReadUint16(data[0:])
+	d.Side = ReadInt16(data[2:])
+	d.Firstedge = ReadInt32(data[2*2:])
+	d.Numedges = ReadInt16(data[2*2+4:])
+	d.Texinfo = ReadInt16(data[3*2+4:])
+	copy(d.Styles[:], data[4*2+4:4*2+4+MAXLIGHTMAPS])
+	d.Lightofs = ReadInt32(data[4*2+4+MAXLIGHTMAPS:])
+	return d
+}
 
-// 	short mins[3]; /* for frustum culling */
-// 	short maxs[3];
+type Dleaf_t struct {
+	Contents int32 /* OR of all brushes (not needed?) */
 
-// 	unsigned short firstleafface;
-// 	unsigned short numleaffaces;
+	Cluster int16
+	Area    int16
 
-// 	unsigned short firstleafbrush;
-// 	unsigned short numleafbrushes;
-// } dleaf_t;
+	Mins [3]int16 /* for frustum culling */
+	Maxs [3]int16
 
-// typedef struct
-// {
-// 	unsigned short planenum; /* facing out of the leaf */
-// 	short texinfo;
-// } dbrushside_t;
+	Firstleafface uint16
+	Numleaffaces  uint16
 
-// typedef struct
-// {
-// 	int firstside;
-// 	int numsides;
-// 	int contents;
-// } dbrush_t;
+	Firstleafbrush uint16
+	Numleafbrushes uint16
+}
 
-// #define ANGLE_UP -1
-// #define ANGLE_DOWN -2
+const Dleaf_size = 4 + 12*2
 
-// /* the visibility lump consists of a header with a count, then
-//  * byte offsets for the PVS and PHS of each cluster, then the raw
-//  * compressed bit vectors */
-// #define DVIS_PVS 0
-// #define DVIS_PHS 1
-// typedef struct
-// {
-// 	int numclusters;
-// 	int bitofs[8][2]; /* bitofs[numclusters][2] */
-// } dvis_t;
+func Dleaf(data []byte) Dleaf_t {
+	d := Dleaf_t{}
+	d.Contents = ReadInt32(data[0:])
+	d.Cluster = ReadInt16(data[4:])
+	d.Area = ReadInt16(data[4+2:])
+	for i := 0; i < 3; i++ {
+		d.Mins[i] = ReadInt16(data[4+(i+2)*2:])
+		d.Maxs[i] = ReadInt16(data[4+(3+2+i)*2:])
+	}
+	d.Firstleafface = ReadUint16(data[4+8*2:])
+	d.Numleaffaces = ReadUint16(data[4+9*2:])
+	d.Firstleafbrush = ReadUint16(data[4+10*2:])
+	d.Numleafbrushes = ReadUint16(data[4+11*2:])
+	return d
+}
 
-// /* each area has a list of portals that lead into other areas
-//  * when portals are closed, other areas may not be visible or
-//  * hearable even if the vis info says that it should be */
-// typedef struct
-// {
-// 	int portalnum;
-// 	int otherarea;
-// } dareaportal_t;
+type Dbrushside_t struct {
+	Planenum uint16 /* facing out of the leaf */
+	Texinfo  int16
+}
 
-// typedef struct
-// {
-// 	int numareaportals;
-// 	int firstareaportal;
-// } darea_t;
+const Dbrushside_size = 2 * 2
+
+func Dbrushside(data []byte) Dbrushside_t {
+	d := Dbrushside_t{}
+	d.Planenum = ReadUint16(data[0:])
+	d.Texinfo = ReadInt16(data[2:])
+	return d
+}
+
+type Dbrush_t struct {
+	Firstside int32
+	Numsides  int32
+	Contents  int32
+}
+
+const Dbrush_size = 3 * 4
+
+func Dbrush(data []byte) Dbrush_t {
+	d := Dbrush_t{}
+	d.Firstside = ReadInt32(data[0:])
+	d.Numsides = ReadInt32(data[4:])
+	d.Contents = ReadInt32(data[2*4:])
+	return d
+}
+
+const ANGLE_UP = -1
+const ANGLE_DOWN = -2
+
+/* the visibility lump consists of a header with a count, then
+ * byte offsets for the PVS and PHS of each cluster, then the raw
+ * compressed bit vectors */
+const DVIS_PVS = 0
+const DVIS_PHS = 1
+
+type Dvis_t struct {
+	Numclusters int32
+	// 	int bitofs[8][2]; /* bitofs[numclusters][2] */
+}
+
+/* each area has a list of portals that lead into other areas
+ * when portals are closed, other areas may not be visible or
+ * hearable even if the vis info says that it should be */
+type Dareaportal_t struct {
+	Portalnum int32
+	Otherarea int32
+}
+
+func Dareaportal(data []byte) Dareaportal_t {
+	d := Dareaportal_t{}
+	d.Portalnum = ReadInt32(data[0:])
+	d.Otherarea = ReadInt32(data[4:])
+	return d
+}
+
+const Dareaportal_size = 2 * 4
+
+type Darea_t struct {
+	Numareaportals  int32
+	Firstareaportal int32
+}
+
+const Darea_size = 2 * 4
+
+func Darea(data []byte) Darea_t {
+	d := Darea_t{}
+	d.Numareaportals = ReadInt32(data[0:])
+	d.Firstareaportal = ReadInt32(data[4:])
+	return d
+}

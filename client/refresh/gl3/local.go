@@ -403,13 +403,16 @@ type qGl3 struct {
 	vsyncActive bool
 
 	// static gl3model_t *loadmodel;
-	// YQ2_ALIGNAS_TYPE(int) static byte mod_novis[MAX_MAP_LEAFS / 8];
+	mod_novis [shared.MAX_MAP_LEAFS / 8]byte
 	// gl3model_t mod_known[MAX_MOD_KNOWN];
 	mod_known  []gl3model_t
 	mod_inline []gl3model_t
 	// static int mod_numknown;
 	registration_sequence int
 	// static byte *mod_base;
+
+	gl3_particletexture *gl3image_t
+	gl3_notexture       *gl3image_t
 }
 
 func (T *qGl3) useProgram(shaderProgram uint32) {

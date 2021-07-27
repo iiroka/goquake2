@@ -113,6 +113,14 @@ const (
 	PMF_NO_PREDICTION  = 64 /* temporarily disables prediction (used for grappling hook) */
 )
 
+/* plane_t structure */
+type Cplane_t struct {
+	Normal   [3]float32
+	Dist     float32
+	Type     byte /* for fast side tests */
+	Signbits byte /* signx + (signy<<1) + (signz<<2) */
+}
+
 /* this structure needs to be communicated bit-accurate/
  * from the server to the client to guarantee that
  * prediction stays in sync, so no floats are used.
@@ -753,6 +761,10 @@ func LerpAngle(a2, a1, frac float32) float32 {
 	}
 
 	return a2 + frac*(a1-a2)
+}
+
+func DotProduct(v1, v2 []float32) float32 {
+	return v1[0]*v2[0] + v1[1]*v2[1] + v1[2]*v2[2]
 }
 
 /*

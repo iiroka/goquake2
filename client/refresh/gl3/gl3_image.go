@@ -325,6 +325,42 @@ func (T *qGl3) loadPic(name string, pic []byte, width, realwidth,
 	return image
 }
 
+func (T *qGl3) loadWal(origname string, itype imagetype_t) *gl3image_t {
+	// miptex_t *mt;
+	// int width, height, ofs, size;
+	// gl3image_t *image;
+	// char name[256];
+
+	name := origname
+
+	/* Add the extension */
+	if !strings.HasSuffix(name, "wal") {
+		name += ".wal"
+	}
+
+	buf, err := T.ri.LoadFile(name)
+	if err != nil || buf == nil {
+		T.rPrintf(shared.PRINT_ALL, "LoadWal: can't load %s\n", name)
+		return T.gl3_notexture
+	}
+
+	// if (size < sizeof(miptex_t))
+	// {
+	// 	R_Printf(PRINT_ALL, "LoadWal: can't load %s, small header\n", name);
+	// 	ri.FS_FreeFile((void *)mt);
+	// 	return gl3_notexture;
+	// }
+
+	mt := shared.Miptex(buf)
+	if (mt.Offsets[0] <= 0) || (mt.Width <= 0) || (mt.Height <= 0) ||
+		(((len(buf) - int(mt.Offsets[0])) / int(mt.Height)) < int(mt.Width)) {
+		T.rPrintf(shared.PRINT_ALL, "LoadWal: can't load %s, small body\n", name)
+		return T.gl3_notexture
+	}
+
+	return T.loadPic(name, buf[mt.Offsets[0]:], int(mt.Width), 0, int(mt.Height), 0, itype, 8)
+}
+
 /*
  * Finds or loads the given image
  */
@@ -338,10 +374,9 @@ func (T *qGl3) findImage(name string, itype imagetype_t) *gl3image_t {
 	//  int realwidth = 0, realheight = 0;
 	//  const char* ext;
 
-	//  if (!name)
-	//  {
-	// 	 return NULL;
-	//  }
+	if len(name) == 0 {
+		return nil
+	}
 
 	//  ext = COM_FileExtension(name);
 	//  if(!ext[0])
@@ -422,7 +457,7 @@ func (T *qGl3) findImage(name string, itype imagetype_t) *gl3image_t {
 
 		return T.loadPic(name, pic, width, 0, height, 0, itype, 8)
 		// 	 }
-		// } else if strings.HasSuffix(name, ".wal") {
+	} else if strings.HasSuffix(name, ".wal") {
 		//  else if (strcmp(ext, "wal") == 0 || strcmp(ext, "m8") == 0)
 		//  {
 		// 	 if (gl_retexturing->value)
@@ -479,7 +514,7 @@ func (T *qGl3) findImage(name string, itype imagetype_t) *gl3image_t {
 		// 	 }
 		// 	 else /* gl_retexture is not set */
 		// 	 {
-		// 		 image = LoadWal(name, type);
+		return T.loadWal(name, itype)
 
 		// 		 if (!image)
 		// 		 {
