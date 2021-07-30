@@ -29,6 +29,7 @@ package gl3
 import (
 	"fmt"
 	"goquake2/shared"
+	"log"
 
 	"github.com/go-gl/gl/v3.2-core/gl"
 )
@@ -125,6 +126,67 @@ func (T *qGl3) DrawStretchPic(x, y, w, h int, name string) {
 	T.bind(img.texnum)
 
 	T.drawTexturedRectangle(float32(x), float32(y), float32(w), float32(h), img.sl, img.tl, img.sh, img.th)
+}
+
+/*
+ * This repeats a 64*64 tile graphic to fill
+ * the screen around a sized down
+ * refresh window.
+ */
+func (T *qGl3) DrawTileClear(x, y, w, h int, name string) {
+	img := T.drawFindPic(name)
+	if img == nil {
+		T.rPrintf(shared.PRINT_ALL, "Can't find pic: %s\n", name)
+		return
+	}
+
+	T.useProgram(T.gl3state.si2D.shaderProgram)
+	T.bind(img.texnum)
+
+	T.drawTexturedRectangle(float32(x), float32(y), float32(w), float32(h), float32(x)/64.0, float32(y)/64.0, float32(x+w)/64.0, float32(y+h)/64.0)
+}
+
+/*
+ * Fills a box of pixels with a single color
+ */
+func (T *qGl3) DrawFill(x, y, w, h, c int) {
+	//  union
+	//  {
+	// 	 unsigned c;
+	// 	 byte v[4];
+	//  } color;
+	//  int i;
+
+	if c < 0 || c > 255 {
+		log.Fatal("Draw_Fill: bad color")
+	}
+
+	color := T.d_8to24table[c]
+
+	vBuf := []float32{
+		//  X,   Y
+		float32(x), float32(y + h),
+		float32(x), float32(y),
+		float32(x + w), float32(y + h),
+		float32(x + w), float32(y)}
+
+	//  for(i=0; i<3; ++i)
+	//  {
+	// 	 gl3state.uniCommonData.color.Elements[i] = color.v[i] * (1.0f/255.0f);
+	//  }
+	//  gl3state.uniCommonData.color.A = 1.0f;
+	T.gl3state.uniCommonData.setColor(1.0, float32((color>>16)&0xFF)/255,
+		float32((color>>8)&0xFF)/255, float32((color>>0)&0xFF)/255)
+
+	T.updateUBOCommon()
+
+	T.useProgram(T.gl3state.si2Dcolor.shaderProgram)
+	T.bindVAO(T.vao2Dcolor)
+
+	T.bindVBO(T.vbo2D)
+	gl.BufferData(gl.ARRAY_BUFFER, len(vBuf)*4, gl.Ptr(vBuf), gl.STREAM_DRAW)
+
+	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
 }
 
 func (T *qGl3) drawGetPalette() error {

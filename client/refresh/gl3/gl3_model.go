@@ -29,10 +29,65 @@ package gl3
 import (
 	"fmt"
 	"goquake2/shared"
+	"math"
 	"strconv"
 )
 
 const MAX_MOD_KNOWN = 512
+
+const (
+	SURF_PLANEBACK      = 2
+	SURF_DRAWSKY        = 4
+	SURF_DRAWTURB       = 0x10
+	SURF_DRAWBACKGROUND = 0x40
+	SURF_UNDERWATER     = 0x80
+)
+
+// used for vertex array elements when drawing brushes, sprites, sky and more
+// (ok, it has the layout used for rendering brushes, but is not used there)
+type gl3_3D_vtx_t struct {
+	// vec3_t pos;
+	// float texCoord[2];
+	// float lmTexCoord[2]; // lightmap texture coordinate (sometimes unused)
+	// vec3_t normal;
+	// GLuint lightFlags; // bit i set means: dynlight i affects surface
+	data []uint32
+}
+
+const gl3_3D_vtx_size = 12
+
+func (T *gl3_3D_vtx_t) setPos(v []float32) {
+	T.data[0] = math.Float32bits(v[0])
+	T.data[1] = math.Float32bits(v[1])
+	T.data[2] = math.Float32bits(v[2])
+}
+
+func (T *gl3_3D_vtx_t) setTexCoord(s, t float32) {
+	T.data[3] = math.Float32bits(s)
+	T.data[4] = math.Float32bits(t)
+}
+
+func (T *gl3_3D_vtx_t) setLmTexCoord(s, t float32) {
+	T.data[5] = math.Float32bits(s)
+	T.data[6] = math.Float32bits(t)
+}
+
+func (T *gl3_3D_vtx_t) setNormal(v []float32) {
+	T.data[7] = math.Float32bits(v[0])
+	T.data[8] = math.Float32bits(v[1])
+	T.data[9] = math.Float32bits(v[2])
+}
+
+func (T *gl3_3D_vtx_t) setLightFlags(v uint32) {
+	T.data[10] = v
+}
+
+// used for vertex array elements when drawing models
+type gl3_alias_vtx_t struct {
+	// GLfloat pos[3];
+	// GLfloat texCoord[2];
+	// GLfloat color[4];
+}
 
 /* in memory representation */
 type mvertex_t struct {
@@ -68,38 +123,45 @@ type glpoly_t struct {
 	numverts int
 	flags    int /* for SURF_UNDERWATER (not needed anymore?) */
 	// gl3_3D_vtx_t vertices[4]; /* variable sized */
+	verticesData []uint32
+}
+
+func (T *glpoly_t) vertices(index int) *gl3_3D_vtx_t {
+	d := &gl3_3D_vtx_t{}
+	d.data = T.verticesData[index*gl3_3D_vtx_size:]
+	return d
 }
 
 type msurface_t struct {
 	visframe int /* should be drawn when node is crossed */
 
-	// cplane_t *plane;
-	// int flags;
+	plane *shared.Cplane_t
+	flags int
 
-	// int firstedge;          /* look up in model->surfedges[], negative numbers */
-	// int numedges;           /* are backwards edges */
+	firstedge int /* look up in model->surfedges[], negative numbers */
+	numedges  int /* are backwards edges */
 
-	// short texturemins[2];
-	// short extents[2];
+	texturemins [2]int16
+	extents     [2]int16
 
-	// int light_s, light_t;           /* gl lightmap coordinates */
-	// int dlight_s, dlight_t;         /* gl lightmap coordinates for dynamic lightmaps */
+	light_s, light_t   int /* gl lightmap coordinates */
+	dlight_s, dlight_t int /* gl lightmap coordinates for dynamic lightmaps */
 
-	// glpoly_t *polys;                /* multiple if warped */
-	// struct  msurface_s *texturechain;
-	// // struct  msurface_s *lightmapchain; not used/needed anymore
+	polys        *glpoly_t /* multiple if warped */
+	texturechain *msurface_t
+	// struct  msurface_s *lightmapchain; not used/needed anymore
 
-	// mtexinfo_t *texinfo;
+	texinfo *mtexinfo_t
 
-	// /* lighting info */
-	// int dlightframe;
-	// int dlightbits;
+	/* lighting info */
+	dlightframe int
+	dlightbits  int
 
-	// int lightmaptexturenum;
-	// byte styles[MAXLIGHTMAPS]; // MAXLIGHTMAPS = MAX_LIGHTMAPS_PER_SURFACE (defined in local.h)
-	// // I think cached_light is not used/needed anymore
+	lightmaptexturenum int
+	styles             [shared.MAXLIGHTMAPS]byte // MAXLIGHTMAPS = MAX_LIGHTMAPS_PER_SURFACE (defined in local.h)
+	// I think cached_light is not used/needed anymore
 	// //float cached_light[MAXLIGHTMAPS];       /* values currently used in lightmap */
-	// byte *samples;                          /* [numstyles*surfsize] */
+	samples []byte /* [numstyles*surfsize] */
 }
 
 type mnode_or_leaf interface {
@@ -538,6 +600,136 @@ func (T *qGl3) modLoadSubmodels(l shared.Lump_t, mod *gl3model_t, buffer []byte)
 	return nil
 }
 
+/*
+ * Fills in s->texturemins[] and s->extents[]
+ */
+func mod_CalcSurfaceExtents(s *msurface_t, mod *gl3model_t) {
+
+	mins := []float32{999999, 999999}
+	maxs := []float32{-99999, -99999}
+
+	tex := s.texinfo
+
+	for i := 0; i < s.numedges; i++ {
+		e := mod.surfedges[s.firstedge+i]
+
+		var v *mvertex_t
+		if e >= 0 {
+			v = &mod.vertexes[mod.edges[e].v[0]]
+		} else {
+			v = &mod.vertexes[mod.edges[-e].v[1]]
+		}
+
+		for j := 0; j < 2; j++ {
+			value := v.position[0]*tex.vecs[j][0] +
+				v.position[1]*tex.vecs[j][1] +
+				v.position[2]*tex.vecs[j][2] +
+				tex.vecs[j][3]
+
+			if value < mins[j] {
+				mins[j] = value
+			}
+
+			if value > maxs[j] {
+				maxs[j] = value
+			}
+		}
+	}
+
+	for i := 0; i < 2; i++ {
+		bmins := int(math.Floor(float64(mins[i]) / 16))
+		bmaxs := int(math.Ceil(float64(maxs[i]) / 16))
+
+		s.texturemins[i] = int16(bmins * 16)
+		s.extents[i] = int16((bmaxs - bmins) * 16)
+	}
+}
+
+func (T *qGl3) modLoadFaces(l shared.Lump_t, mod *gl3model_t, buffer []byte) error {
+
+	if (l.Filelen % shared.Dface_size) != 0 {
+		return T.ri.Sys_Error(shared.ERR_DROP, "modLoadFaces: funny lump size in %s", mod.name)
+	}
+
+	count := l.Filelen / shared.Dface_size
+
+	mod.surfaces = make([]msurface_t, count)
+
+	T.lmBeginBuildingLightmaps(mod)
+
+	for surfnum := 0; surfnum < int(count); surfnum++ {
+		src := shared.Dface(buffer[int(l.Fileofs)+surfnum*shared.Dface_size:])
+		out := &mod.surfaces[surfnum]
+
+		out.firstedge = int(src.Firstedge)
+		out.numedges = int(src.Numedges)
+		out.flags = 0
+		out.polys = nil
+
+		planenum := src.Planenum
+		side := src.Side
+
+		if side != 0 {
+			out.flags |= SURF_PLANEBACK
+		}
+
+		out.plane = &mod.planes[planenum]
+
+		ti := int(src.Texinfo)
+		if (ti < 0) || (ti >= len(mod.texinfo)) {
+			return T.ri.Sys_Error(shared.ERR_DROP, "modLoadFaces: bad texinfo number")
+		}
+
+		out.texinfo = &mod.texinfo[ti]
+
+		mod_CalcSurfaceExtents(out, mod)
+
+		/* lighting info */
+		for i := 0; i < MAX_LIGHTMAPS_PER_SURFACE; i++ {
+			out.styles[i] = src.Styles[i]
+		}
+
+		i := src.Lightofs
+
+		if i == -1 {
+			out.samples = nil
+		} else {
+			out.samples = mod.lightdata[i:]
+		}
+
+		/* set the drawing flags */
+		if (out.texinfo.flags & shared.SURF_WARP) != 0 {
+			out.flags |= SURF_DRAWTURB
+
+			for i := 0; i < 2; i++ {
+				out.extents[i] = 16384
+				out.texturemins[i] = -8192
+			}
+
+			gl3SubdivideSurface(out, mod) /* cut up polygon for warps */
+		}
+
+		if T.r_fixsurfsky.Bool() {
+			if (out.texinfo.flags & shared.SURF_SKY) != 0 {
+				out.flags |= SURF_DRAWSKY
+			}
+		}
+
+		/* create lightmaps and polygons */
+		if (out.texinfo.flags & (shared.SURF_SKY | shared.SURF_TRANS33 | shared.SURF_TRANS66 | shared.SURF_WARP)) == 0 {
+			if err := T.lmCreateSurfaceLightmap(out); err != nil {
+				return err
+			}
+		}
+
+		if (out.texinfo.flags & shared.SURF_WARP) == 0 {
+			T.lmBuildPolygonFromSurface(out, mod)
+		}
+	}
+
+	return T.lmEndBuildingLightmaps()
+}
+
 func (T *qGl3) modLoadSurfedges(l shared.Lump_t, mod *gl3model_t, buffer []byte) error {
 
 	if (l.Filelen % 4) != 0 {
@@ -549,7 +741,7 @@ func (T *qGl3) modLoadSurfedges(l shared.Lump_t, mod *gl3model_t, buffer []byte)
 	mod.surfedges = make([]int, count)
 
 	for i := 0; i < int(count); i++ {
-		mod.surfedges[i] = int(shared.ReadInt32(buffer[int(l.Fileofs)+i*shared.Dplane_size:]))
+		mod.surfedges[i] = int(shared.ReadInt32(buffer[int(l.Fileofs)+i*4:]))
 	}
 	return nil
 }
@@ -638,9 +830,9 @@ func (T *qGl3) modLoadBrushModel(mod *gl3model_t, buffer []byte) error {
 	if err := T.modLoadTexinfo(header.Lumps[shared.LUMP_TEXINFO], mod, buffer); err != nil {
 		return err
 	}
-	// if err := T.modLoadFaces(header.Lumps[shared.LUMP_FACES], mod, buffer); err != nil {
-	// 	return err
-	// }
+	if err := T.modLoadFaces(header.Lumps[shared.LUMP_FACES], mod, buffer); err != nil {
+		return err
+	}
 	// if err := T.modLoadMarksurfaces(header.Lumps[shared.LUMP_LEAFFACES], mod, buffer); err != nil {
 	// 	return err
 	// }
@@ -828,4 +1020,18 @@ func (T *qGl3) RegisterModel(name string) (interface{}, error) {
 	}
 
 	return mod, nil
+}
+
+func modRadiusFromBounds(mins, maxs []float32) float32 {
+
+	var corner [3]float32
+	for i := 0; i < 3; i++ {
+		if math.Abs(float64(mins[i])) > math.Abs(float64(maxs[i])) {
+			corner[i] = float32(math.Abs(float64(mins[i])))
+		} else {
+			corner[i] = float32(math.Abs(float64(maxs[i])))
+		}
+	}
+
+	return shared.VectorLength(corner[:])
 }

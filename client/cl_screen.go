@@ -90,7 +90,7 @@ func (T *qClient) scrDrawConsole() {
 	if (T.cls.state != ca_active) || !T.cl.refresh_prepped {
 		/* connected, but can't render */
 		T.conDrawConsole(0.5)
-		// Draw_Fill(0, viddef.height/2, viddef.width, viddef.height/2, 0)
+		T.Draw_Fill(0, T.viddef.height/2, T.viddef.width, T.viddef.height/2, 0)
 		return
 	}
 
@@ -100,6 +100,141 @@ func (T *qClient) scrDrawConsole() {
 		// if (cls.key_dest == key_game) || (cls.key_dest == key_message) {
 		// 	Con_DrawNotify() /* only draw notify in game */
 		// }
+	}
+}
+
+func (T *qClient) scrAddDirtyPoint(x, y int) {
+	if x < T.scr_dirty.x1 {
+		T.scr_dirty.x1 = x
+	}
+
+	if x > T.scr_dirty.x2 {
+		T.scr_dirty.x2 = x
+	}
+
+	if y < T.scr_dirty.y1 {
+		T.scr_dirty.y1 = y
+	}
+
+	if y > T.scr_dirty.y2 {
+		T.scr_dirty.y2 = y
+	}
+}
+
+func (T *qClient) scrDirtyScreen() {
+	T.scrAddDirtyPoint(0, 0)
+	T.scrAddDirtyPoint(T.viddef.width-1, T.viddef.height-1)
+}
+
+/*
+ * Clear any parts of the tiled background that were drawn on last frame
+ */
+func (T *qClient) scrTileClear() {
+	// int i;
+	// int top, bottom, left, right;
+	// dirty_t clear;
+
+	if T.scr_con_current == 1.0 {
+		return /* full screen console */
+	}
+
+	if T.scr_viewsize.Int() == 100 {
+		return /* full screen rendering */
+	}
+
+	// if T.cl.cinematictime > 0 {
+	// 	return /* full screen cinematic */
+	// }
+
+	/* erase rect will be the union of the past three
+	   frames so tripple buffering works properly */
+	clear := dirty_t{}
+	clear = T.scr_dirty
+
+	for i := 0; i < 2; i++ {
+		if T.scr_old_dirty[i].x1 < clear.x1 {
+			clear.x1 = T.scr_old_dirty[i].x1
+		}
+
+		if T.scr_old_dirty[i].x2 > clear.x2 {
+			clear.x2 = T.scr_old_dirty[i].x2
+		}
+
+		if T.scr_old_dirty[i].y1 < clear.y1 {
+			clear.y1 = T.scr_old_dirty[i].y1
+		}
+
+		if T.scr_old_dirty[i].y2 > clear.y2 {
+			clear.y2 = T.scr_old_dirty[i].y2
+		}
+	}
+
+	T.scr_old_dirty[1] = T.scr_old_dirty[0]
+	T.scr_old_dirty[0] = T.scr_dirty
+
+	T.scr_dirty.x1 = 9999
+	T.scr_dirty.x2 = -9999
+	T.scr_dirty.y1 = 9999
+	T.scr_dirty.y2 = -9999
+
+	/* don't bother with anything convered by the console */
+	top := int(T.scr_con_current * float32(T.viddef.height))
+
+	if top >= clear.y1 {
+		clear.y1 = top
+	}
+
+	if clear.y2 <= clear.y1 {
+		return /* nothing disturbed */
+	}
+
+	top = T.scr_vrect.y
+	bottom := top + T.scr_vrect.height - 1
+	left := T.scr_vrect.x
+	right := left + T.scr_vrect.width - 1
+
+	if clear.y1 < top {
+		/* clear above view screen */
+		i := top - 1
+		if clear.y2 < top-1 {
+			i = clear.y2
+		}
+		T.Draw_TileClear(clear.x1, clear.y1,
+			clear.x2-clear.x1+1, i-clear.y1+1, "backtile")
+		clear.y1 = top
+	}
+
+	if clear.y2 > bottom {
+		/* clear below view screen */
+		i := bottom + 1
+		if clear.y1 > bottom+1 {
+			i = clear.y1
+		}
+		T.Draw_TileClear(clear.x1, i,
+			clear.x2-clear.x1+1, clear.y2-i+1, "backtile")
+		clear.y2 = bottom
+	}
+
+	if clear.x1 < left {
+		/* clear left of view screen */
+		i := left - 1
+		if clear.x2 < left-1 {
+			i = clear.x2
+		}
+		T.Draw_TileClear(clear.x1, clear.y1,
+			i-clear.x1+1, clear.y2-clear.y1+1, "backtile")
+		clear.x1 = left
+	}
+
+	if clear.x2 > right {
+		/* clear left of view screen */
+		i := right + 1
+		if clear.x1 > right+1 {
+			i = clear.x1
+		}
+		T.Draw_TileClear(i, clear.y1,
+			clear.x2-i+1, clear.y2-clear.y1+1, "backtile")
+		clear.x2 = right
 	}
 }
 
@@ -213,8 +348,8 @@ func (T *qClient) scrUpdateScreen() error {
 		/* do 3D refresh drawing, and then update the screen */
 		T.scrCalcVrect()
 
-		// 		 /* clear any dirty part of the background */
-		// 		 SCR_TileClear();
+		/* clear any dirty part of the background */
+		T.scrTileClear()
 
 		if err := T.renderView(separation[i]); err != nil {
 			return err

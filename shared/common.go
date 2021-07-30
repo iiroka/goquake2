@@ -193,7 +193,7 @@ func ReadInt32(b []byte) int32 {
 }
 
 func ReadUint32(b []byte) uint32 {
-	return uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24
+	return (uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24) & 0xFFFFFFFF
 }
 
 func ReadFloat32(b []byte) float32 {
@@ -206,7 +206,7 @@ func ReadInt16(b []byte) int16 {
 }
 
 func ReadUint16(b []byte) uint16 {
-	return uint16(b[0]) | uint16(b[1])<<8
+	return (uint16(b[0]) | uint16(b[1])<<8) & 0xFFFF
 }
 
 func ReadString(b []byte, maxLen int) string {

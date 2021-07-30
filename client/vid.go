@@ -352,6 +352,18 @@ func (T *qClient) R_EndFrame() {
 	}
 }
 
+func (T *qClient) Draw_TileClear(x, y, w, h int, name string) {
+	if T.re != nil {
+		T.re.DrawTileClear(x, y, w, h, name)
+	}
+}
+
+func (T *qClient) Draw_Fill(x, y, w, h, c int) {
+	if T.re != nil {
+		T.re.DrawFill(x, y, w, h, c)
+	}
+}
+
 func (T *qClient) Draw_StretchPic(x, y, w, h int, name string) {
 	if T.re != nil {
 		T.re.DrawStretchPic(x, y, w, h, name)

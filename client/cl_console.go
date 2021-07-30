@@ -169,8 +169,8 @@ func (T *qClient) conDrawConsole(frac float32) {
 	/* draw the background */
 	T.Draw_StretchPic(0, -T.viddef.height+lines, T.viddef.width,
 		T.viddef.height, "conback")
-	// 	 SCR_AddDirtyPoint(0, 0);
-	// 	 SCR_AddDirtyPoint(viddef.width - 1, lines - 1);
+	T.scrAddDirtyPoint(0, 0)
+	T.scrAddDirtyPoint(T.viddef.width-1, lines-1)
 
 	// 	 Com_sprintf(version, sizeof(version), "Yamagi Quake II v%s", YQ2VERSION);
 

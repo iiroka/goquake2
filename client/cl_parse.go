@@ -245,8 +245,8 @@ func (T *qClient) deltaEntity(msg *shared.QReadbuf, frame *frame_t, newnum int, 
 		// 	 }
 		// 	 else
 		// 	 {
-		// 		 VectorCopy(state->old_origin, ent->prev.origin);
-		// 		 VectorCopy(state->old_origin, ent->lerp_origin);
+		copy(ent.prev.Origin[:], state.Old_origin[:])
+		copy(ent.lerp_origin[:], state.Old_origin[:])
 		// 	 }
 	} else {
 		/* shuffle the last state to previous */
@@ -263,11 +263,6 @@ func (T *qClient) deltaEntity(msg *shared.QReadbuf, frame *frame_t, newnum int, 
  * data stream.
  */
 func (T *qClient) parsePacketEntities(msg *shared.QReadbuf, oldframe, newframe *frame_t) error {
-	//  unsigned int newnum;
-	//  unsigned bits;
-	//  entity_state_t
-	//  *oldstate = NULL;
-	//  int oldindex, oldnum;
 
 	newframe.parse_entities = T.cl.parse_entities
 	newframe.num_entities = 0

@@ -29,6 +29,34 @@ const MAX_DLIGHTS = 32
 const MAX_ENTITIES = 128
 const MAX_PARTICLES = 4096
 
+type Entity_t struct {
+	Model  interface{} /* opaque type outside refresh */
+	Angles [3]float32
+
+	/* most recent data */
+	Origin [3]float32 /* also used as RF_BEAM's "from" */
+	Frame  int        /* also used as RF_BEAM's diameter */
+
+	/* previous data for lerping */
+	Oldorigin [3]float32 /* also used as RF_BEAM's "to" */
+	Oldframe  int
+
+	/* misc */
+	Backlerp float32 /* 0.0 = current, 1.0 = old */
+	Skinnum  int     /* also used as RF_BEAM's palette index */
+
+	Lightstyle int     /* for flashing entities */
+	Alpha      float32 /* ignore if RF_TRANSLUCENT isn't set */
+
+	Skin  interface{} /* NULL for inline skin */
+	Flags int
+}
+
+type Lightstyle_t struct {
+	Rgb   [3]float32 /* 0.0 - 2.0 */
+	White float32    /* r+g+b */
+}
+
 type Refdef_t struct {
 	X, Y, Width, Height int /* in virtual screen coordinates */
 	Fov_x, Fov_y        float32
@@ -38,12 +66,11 @@ type Refdef_t struct {
 	Time                float32    /* time is used to auto animate */
 	Rdflags             int        /* RDF_UNDERWATER, etc */
 
-	// byte		*areabits; /* if not NULL, only areas with set bits will be drawn */
+	Areabits []byte /* if not NULL, only areas with set bits will be drawn */
 
-	// lightstyle_t	*lightstyles; /* [MAX_LIGHTSTYLES] */
+	Lightstyles []Lightstyle_t /* [MAX_LIGHTSTYLES] */
 
-	// int			num_entities;
-	// entity_t	*entities;
+	Entities []Entity_t
 
 	// int			num_dlights; // <= 32 (MAX_DLIGHTS)
 	// dlight_t	*dlights;
@@ -89,6 +116,8 @@ type Refexport_t interface {
 	RenderFrame(fd Refdef_t) error
 
 	DrawStretchPic(x, y, w, h int, name string)
+	DrawTileClear(x, y, w, h int, name string)
+	DrawFill(x, y, w, h, c int)
 
 	BeginFrame(camera_separation float32) error
 	EndFrame()

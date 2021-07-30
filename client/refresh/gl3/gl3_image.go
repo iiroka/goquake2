@@ -130,6 +130,27 @@ func (T *qGl3) bind(texnum uint32) {
 	gl.BindTexture(gl.TEXTURE_2D, texnum)
 }
 
+func (T *qGl3) bindLightmap(lightmapnum int) {
+
+	if lightmapnum < 0 || lightmapnum >= MAX_LIGHTMAPS {
+		T.rPrintf(shared.PRINT_ALL, "WARNING: Invalid lightmapnum %v used!\n", lightmapnum)
+		return
+	}
+
+	if T.gl3state.currentlightmap == lightmapnum {
+		return
+	}
+
+	T.gl3state.currentlightmap = lightmapnum
+	lmindex := lightmapnum * MAX_LIGHTMAPS_PER_SURFACE
+	for i := 0; i < MAX_LIGHTMAPS_PER_SURFACE; i++ {
+		// this assumes that GL_TEXTURE<i+1> = GL_TEXTURE<i> + 1
+		// at least for GL_TEXTURE0 .. GL_TEXTURE31 that's true
+		T.selectTMU(gl.TEXTURE1 + uint32(i))
+		gl.BindTexture(gl.TEXTURE_2D, T.gl3state.lightmap_textureIDs[lmindex+i])
+	}
+}
+
 /*
  * Returns has_alpha
  */

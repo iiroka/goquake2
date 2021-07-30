@@ -31,6 +31,23 @@ import (
 )
 
 /*
+ * Specifies the model that will be used as the world
+ */
+func (T *qClient) clearScene() {
+	//  r_numdlights = 0;
+	//  r_numparticles = 0;
+	T.r_entities = make([]shared.Entity_t, 0)
+}
+
+func (T *qClient) addEntity(ent shared.Entity_t) {
+	if len(T.r_entities) >= shared.MAX_ENTITIES {
+		return
+	}
+
+	T.r_entities = append(T.r_entities, ent)
+}
+
+/*
  * Call before entering a new level, or after changing dlls
  */
 func (T *qClient) prepRefresh() error {
@@ -181,7 +198,7 @@ func (T *qClient) renderView(stereo_separation float32) error {
 	if T.cl.frame.valid && (T.cl.force_refdef || !T.cl_paused.Bool()) {
 		T.cl.force_refdef = false
 
-		// 	V_ClearScene();
+		T.clearScene()
 
 		/* build a refresh entity list and calc cl.sim*
 		   this also calls CL_CalcViewValues which loads
@@ -234,46 +251,42 @@ func (T *qClient) renderView(stereo_separation float32) error {
 
 		T.cl.refdef.Time = float32(T.cl.time) * 0.001
 
-		// 	cl.refdef.areabits = cl.frame.areabits;
+		T.cl.refdef.Areabits = T.cl.frame.areabits[:]
 
-		// 	if (!cl_add_entities->value)
-		// 	{
+		// 	if (!cl_add_entities->value) {
 		// 		r_numentities = 0;
 		// 	}
 
-		// 	if (!cl_add_particles->value)
-		// 	{
+		// 	if (!cl_add_particles->value) {
 		// 		r_numparticles = 0;
 		// 	}
 
-		// 	if (!cl_add_lights->value)
-		// 	{
+		// 	if (!cl_add_lights->value) {
 		// 		r_numdlights = 0;
 		// 	}
 
-		// 	if (!cl_add_blend->value)
-		// 	{
+		// 	if (!cl_add_blend->value) {
 		// 		VectorClear(cl.refdef.blend);
 		// 	}
 
 		// 	cl.refdef.num_entities = r_numentities;
-		// 	cl.refdef.entities = r_entities;
+		T.cl.refdef.Entities = T.r_entities
 		// 	cl.refdef.num_particles = r_numparticles;
 		// 	cl.refdef.particles = r_particles;
 		// 	cl.refdef.num_dlights = r_numdlights;
 		// 	cl.refdef.dlights = r_dlights;
 		// 	cl.refdef.lightstyles = r_lightstyles;
 
-		// 	cl.refdef.rdflags = cl.frame.playerstate.rdflags;
+		T.cl.refdef.Rdflags = T.cl.frame.playerstate.Rdflags
 
 		// 	/* sort entities for better cache locality */
 		// 	qsort(cl.refdef.entities, cl.refdef.num_entities,
 		// 			sizeof(cl.refdef.entities[0]), (int (*)(const void *, const void *))
 		// 			entitycmpfnc);
 	} else if T.cl.frame.valid && T.cl_paused.Bool() && T.gl1_stereo.Bool() {
-		// 	// We need to adjust the refdef in stereo mode when paused.
+		// We need to adjust the refdef in stereo mode when paused.
 		// 	vec3_t tmp;
-		// 	CL_CalcViewValues();
+		T.calcViewValues()
 		// 	VectorScale( cl.v_right, stereo_separation, tmp );
 		// 	VectorAdd( cl.refdef.vieworg, tmp, cl.refdef.vieworg );
 
@@ -281,7 +294,7 @@ func (T *qClient) renderView(stereo_separation float32) error {
 		// 	cl.refdef.vieworg[1] += 1.0/16;
 		// 	cl.refdef.vieworg[2] += 1.0/16;
 
-		// 	cl.refdef.time = cl.time*0.001;
+		T.cl.refdef.Time = float32(T.cl.time) * 0.001
 	}
 
 	T.cl.refdef.X = T.scr_vrect.x
@@ -298,10 +311,10 @@ func (T *qClient) renderView(stereo_separation float32) error {
 		return err
 	}
 
-	// if (cl_stats->value)
+	// if (T.cl_stats)
 	// {
-	// 	Com_Printf("ent:%i  lt:%i  part:%i\n", r_numentities,
-	// 			r_numdlights, r_numparticles);
+	T.common.Com_Printf("ent:%v  lt:%v  part:%v\n", len(T.r_entities), 0, 0)
+	// r_numdlights, r_numparticles)
 	// }
 
 	// if (log_stats->value && (log_stats_file != 0))
@@ -310,9 +323,9 @@ func (T *qClient) renderView(stereo_separation float32) error {
 	// 			r_numdlights, r_numparticles);
 	// }
 
-	// SCR_AddDirtyPoint(scr_vrect.x, scr_vrect.y);
-	// SCR_AddDirtyPoint(scr_vrect.x + scr_vrect.width - 1,
-	// 		scr_vrect.y + scr_vrect.height - 1);
+	T.scrAddDirtyPoint(T.scr_vrect.x, T.scr_vrect.y)
+	T.scrAddDirtyPoint(T.scr_vrect.x+T.scr_vrect.width-1,
+		T.scr_vrect.y+T.scr_vrect.height-1)
 
 	// SCR_DrawCrosshair();
 	return nil

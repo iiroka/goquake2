@@ -720,6 +720,66 @@ func (T *CvarT) Float() float32 {
 	return 0.0
 }
 
+func DEG2RAD(a float32) float32 {
+	return (a * math.Pi) / 180.0
+}
+
+/* ============================================================================ */
+
+func RotatePointAroundVector(dst, dir, point []float32, degrees float32) {
+
+	vf := []float32{dir[0], dir[1], dir[2]}
+
+	vr := perpendicularVector(dir)
+	vup := make([]float32, 3)
+	CrossProduct(vr, vf, vup)
+
+	var m [3][3]float32
+	m[0][0] = vr[0]
+	m[1][0] = vr[1]
+	m[2][0] = vr[2]
+
+	m[0][1] = vup[0]
+	m[1][1] = vup[1]
+	m[2][1] = vup[2]
+
+	m[0][2] = vf[0]
+	m[1][2] = vf[1]
+	m[2][2] = vf[2]
+
+	var im [3][3]float32
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			im[i][j] = m[i][j]
+		}
+	}
+
+	im[0][1] = m[1][0]
+	im[0][2] = m[2][0]
+	im[1][0] = m[0][1]
+	im[1][2] = m[2][1]
+	im[2][0] = m[0][2]
+	im[2][1] = m[1][2]
+
+	var zrot [3][3]float32
+	zrot[2][2] = 1.0
+
+	zrot[0][0] = float32(math.Cos(float64(DEG2RAD(degrees))))
+	zrot[0][1] = float32(math.Sin(float64(DEG2RAD(degrees))))
+	zrot[1][0] = float32(-math.Sin(float64(DEG2RAD(degrees))))
+	zrot[1][1] = float32(math.Cos(float64(DEG2RAD(degrees))))
+
+	var tmpmat [3][3]float32
+	R_ConcatRotations(m, zrot, tmpmat)
+	var rot [3][3]float32
+	R_ConcatRotations(tmpmat, im, rot)
+
+	for i := 0; i < 3; i++ {
+		dst[i] = rot[i][0]*point[0] + rot[i][1]*point[1] + rot[i][2]*
+			point[2]
+	}
+}
+
 func AngleVectors(angles, forward, right, up []float32) {
 
 	angle := float64(angles[YAW]) * (math.Pi * 2 / 360)
@@ -751,6 +811,65 @@ func AngleVectors(angles, forward, right, up []float32) {
 	}
 }
 
+func projectPointOnPlane(p, normal []float32) []float32 {
+	// float d;
+	// vec3_t n;
+	// float inv_denom;
+
+	inv_denom := 1.0 / DotProduct(normal, normal)
+
+	d := DotProduct(normal, p) * inv_denom
+
+	n := []float32{normal[0] * inv_denom, normal[1] * inv_denom, normal[2] * inv_denom}
+
+	return []float32{p[0] - d*n[0], p[1] - d*n[1], p[2] - d*n[2]}
+}
+
+/* assumes "src" is normalized */
+func perpendicularVector(src []float32) []float32 {
+
+	/* find the smallest magnitude axially aligned vector */
+	pos := 0
+	minelem := 1.0
+	for i := 0; i < 3; i++ {
+		if math.Abs(float64(src[i])) < minelem {
+			pos = i
+			minelem = math.Abs(float64(src[i]))
+		}
+	}
+
+	tempvec := []float32{0, 0, 0}
+	tempvec[pos] = 1.0
+
+	/* project the point onto the plane defined by src */
+	dst := projectPointOnPlane(tempvec, src)
+
+	/* normalize the result */
+	VectorNormalize(dst)
+	return dst
+}
+
+func R_ConcatRotations(in1, in2, out [3][3]float32) {
+	out[0][0] = in1[0][0]*in2[0][0] + in1[0][1]*in2[1][0] +
+		in1[0][2]*in2[2][0]
+	out[0][1] = in1[0][0]*in2[0][1] + in1[0][1]*in2[1][1] +
+		in1[0][2]*in2[2][1]
+	out[0][2] = in1[0][0]*in2[0][2] + in1[0][1]*in2[1][2] +
+		in1[0][2]*in2[2][2]
+	out[1][0] = in1[1][0]*in2[0][0] + in1[1][1]*in2[1][0] +
+		in1[1][2]*in2[2][0]
+	out[1][1] = in1[1][0]*in2[0][1] + in1[1][1]*in2[1][1] +
+		in1[1][2]*in2[2][1]
+	out[1][2] = in1[1][0]*in2[0][2] + in1[1][1]*in2[1][2] +
+		in1[1][2]*in2[2][2]
+	out[2][0] = in1[2][0]*in2[0][0] + in1[2][1]*in2[1][0] +
+		in1[2][2]*in2[2][0]
+	out[2][1] = in1[2][0]*in2[0][1] + in1[2][1]*in2[1][1] +
+		in1[2][2]*in2[2][1]
+	out[2][2] = in1[2][0]*in2[0][2] + in1[2][1]*in2[1][2] +
+		in1[2][2]*in2[2][2]
+}
+
 func LerpAngle(a2, a1, frac float32) float32 {
 	if a1-a2 > 180 {
 		a1 -= 360
@@ -763,8 +882,147 @@ func LerpAngle(a2, a1, frac float32) float32 {
 	return a2 + frac*(a1-a2)
 }
 
+/*
+ * Returns 1, 2, or 1 + 2
+ */
+func BoxOnPlaneSide(emins, emaxs []float32, p *Cplane_t) int {
+	//  float dist1, dist2;
+	//  int sides;
+
+	/* fast axial cases */
+	if p.Type < 3 {
+		if p.Dist <= emins[p.Type] {
+			return 1
+		}
+
+		if p.Dist >= emaxs[p.Type] {
+			return 2
+		}
+
+		return 3
+	}
+
+	/* general case */
+	var dist1, dist2 float32
+	switch p.Signbits {
+	case 0:
+		dist1 = p.Normal[0]*emaxs[0] + p.Normal[1]*emaxs[1] +
+			p.Normal[2]*emaxs[2]
+		dist2 = p.Normal[0]*emins[0] + p.Normal[1]*emins[1] +
+			p.Normal[2]*emins[2]
+		break
+	case 1:
+		dist1 = p.Normal[0]*emins[0] + p.Normal[1]*emaxs[1] +
+			p.Normal[2]*emaxs[2]
+		dist2 = p.Normal[0]*emaxs[0] + p.Normal[1]*emins[1] +
+			p.Normal[2]*emins[2]
+		break
+	case 2:
+		dist1 = p.Normal[0]*emaxs[0] + p.Normal[1]*emins[1] +
+			p.Normal[2]*emaxs[2]
+		dist2 = p.Normal[0]*emins[0] + p.Normal[1]*emaxs[1] +
+			p.Normal[2]*emins[2]
+		break
+	case 3:
+		dist1 = p.Normal[0]*emins[0] + p.Normal[1]*emins[1] +
+			p.Normal[2]*emaxs[2]
+		dist2 = p.Normal[0]*emaxs[0] + p.Normal[1]*emaxs[1] +
+			p.Normal[2]*emins[2]
+		break
+	case 4:
+		dist1 = p.Normal[0]*emaxs[0] + p.Normal[1]*emaxs[1] +
+			p.Normal[2]*emins[2]
+		dist2 = p.Normal[0]*emins[0] + p.Normal[1]*emins[1] +
+			p.Normal[2]*emaxs[2]
+		break
+	case 5:
+		dist1 = p.Normal[0]*emins[0] + p.Normal[1]*emaxs[1] +
+			p.Normal[2]*emins[2]
+		dist2 = p.Normal[0]*emaxs[0] + p.Normal[1]*emins[1] +
+			p.Normal[2]*emaxs[2]
+		break
+	case 6:
+		dist1 = p.Normal[0]*emaxs[0] + p.Normal[1]*emins[1] +
+			p.Normal[2]*emins[2]
+		dist2 = p.Normal[0]*emins[0] + p.Normal[1]*emaxs[1] +
+			p.Normal[2]*emaxs[2]
+		break
+	case 7:
+		dist1 = p.Normal[0]*emins[0] + p.Normal[1]*emins[1] +
+			p.Normal[2]*emins[2]
+		dist2 = p.Normal[0]*emaxs[0] + p.Normal[1]*emaxs[1] +
+			p.Normal[2]*emaxs[2]
+		break
+	default:
+		break
+	}
+
+	sides := 0
+
+	if dist1 >= p.Dist {
+		sides = 1
+	}
+
+	if dist2 < p.Dist {
+		sides |= 2
+	}
+
+	return sides
+}
+
+func VectorNormalize(v []float32) float32 {
+
+	dlength := float64(v[0])*float64(v[0]) + float64(v[1])*float64(v[1]) + float64(v[2])*float64(v[2])
+	length := float32(math.Sqrt(dlength))
+
+	if length != 0.0 {
+		ilength := 1 / length
+		v[0] *= ilength
+		v[1] *= ilength
+		v[2] *= ilength
+	}
+
+	return length
+}
+
+func VectorAdd(veca, vecb, out []float32) {
+	out[0] = veca[0] + vecb[0]
+	out[1] = veca[1] + vecb[1]
+	out[2] = veca[2] + vecb[2]
+}
+
+func VectorSubtract(veca, vecb, out []float32) {
+	out[0] = veca[0] - vecb[0]
+	out[1] = veca[1] - vecb[1]
+	out[2] = veca[2] - vecb[2]
+}
+
+func VectorScaled(in []float32, scale float32) []float32 {
+	return []float32{
+		in[0] * scale,
+		in[1] * scale,
+		in[2] * scale}
+}
+
+func VectorLength(v []float32) float32 {
+
+	var length float32 = 0
+
+	for i := 0; i < 3; i++ {
+		length += v[i] * v[i]
+	}
+
+	return float32(math.Sqrt(float64(length)))
+}
+
 func DotProduct(v1, v2 []float32) float32 {
 	return v1[0]*v2[0] + v1[1]*v2[1] + v1[2]*v2[2]
+}
+
+func CrossProduct(v1, v2, cross []float32) {
+	cross[0] = v1[1]*v2[2] - v1[2]*v2[1]
+	cross[1] = v1[2]*v2[0] - v1[0]*v2[2]
+	cross[2] = v1[0]*v2[1] - v1[1]*v2[0]
 }
 
 /*

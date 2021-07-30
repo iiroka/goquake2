@@ -93,10 +93,10 @@ func (T *gl3UniCommon_t) setIntensity2D(v float32) {
 }
 
 func (T *gl3UniCommon_t) setColor(a float32, r float32, g float32, b float32) {
-	T.data[4] = a
-	T.data[5] = r
-	T.data[6] = g
-	T.data[7] = b
+	T.data[4] = r
+	T.data[5] = g
+	T.data[6] = b
+	T.data[7] = a
 }
 
 type gl3Uni2D_t struct {
@@ -131,6 +131,12 @@ func (T *gl3Uni3D_t) setTransViewMat4(v []float32) {
 
 func (T *gl3Uni3D_t) setTransModelMat4(v []float32) {
 	copy(T.data[2*16:3*16], v)
+}
+
+func (T *gl3Uni3D_t) getTransModelMat4() []float32 {
+	r := make([]float32, 16)
+	copy(r, T.data[2*16:3*16])
+	return r
 }
 
 func (T *gl3Uni3D_t) setScroll(v float32) {
@@ -202,9 +208,9 @@ type gl3state_t struct {
 	// most surfaces only have one really and the remaining for are filled with dummy data
 	lightmap_textureIDs []uint32
 
-	currenttexture uint32 // bound to GL_TEXTURE0
-	// int currentlightmap; // lightmap_textureIDs[currentlightmap] bound to GL_TEXTURE1
-	currenttmu uint32 // GL_TEXTURE0 or GL_TEXTURE1
+	currenttexture  uint32 // bound to GL_TEXTURE0
+	currentlightmap int    // lightmap_textureIDs[currentlightmap] bound to GL_TEXTURE1 // [MAX_LIGHTMAPS][MAX_LIGHTMAPS_PER_SURFACE];
+	currenttmu      uint32 // GL_TEXTURE0 or GL_TEXTURE1
 
 	//float camera_separation;
 	//enum stereo_modes stereo_mode;
@@ -320,6 +326,19 @@ const gl3_alpha_format = gl.RGBA
 const gl3_tex_solid_format = gl.RGB
 const gl3_tex_alpha_format = gl.RGBA
 
+type gl3lightmapstate_t struct {
+	internal_format          int
+	current_lightmap_texture int // index into gl3state.lightmap_textureIDs[]
+
+	//msurface_t *lightmap_surfaces[MAX_LIGHTMAPS]; - no more lightmap chains, lightmaps are rendered multitextured
+
+	allocated [BLOCK_WIDTH]int
+
+	/* the lightmap texture data needs to be kept in
+	   main memory so texsubimage can update properly */
+	lightmap_buffers [MAX_LIGHTMAPS_PER_SURFACE][]byte
+}
+
 type qGl3 struct {
 	ri                       shared.Refimport_t
 	gl3config                gl3config_t
@@ -387,6 +406,9 @@ type qGl3 struct {
 	draw_chars               *gl3image_t
 	vbo2D, vao2D, vao2Dcolor uint32
 
+	c_brush_polys, c_alias_polys            int
+	c_visible_lightmaps, c_visible_textures int
+
 	/* view origin */
 	vup        [3]float32
 	vpn        [3]float32
@@ -411,9 +433,21 @@ type qGl3 struct {
 	registration_sequence int
 	// static byte *mod_base;
 
+	frustum [4]shared.Cplane_t
+
 	gl3_particletexture *gl3image_t
 	gl3_notexture       *gl3image_t
+
+	_surf_modelorg [3]float32
+
+	currententity *shared.Entity_t
+	currentmodel  *gl3model_t
+
+	gl3_lms gl3lightmapstate_t
 }
+
+// gl3_lightmap.c
+const GL_LIGHTMAP_FORMAT = gl.RGBA
 
 func (T *qGl3) useProgram(shaderProgram uint32) {
 	if shaderProgram != T.gl3state.currentShaderProgram {

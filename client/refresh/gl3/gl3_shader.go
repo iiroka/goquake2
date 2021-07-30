@@ -553,7 +553,11 @@ func (T *qGl3) updateUBOCommon() {
 }
 
 func (T *qGl3) updateUBO2D() {
-	T.updateUBO(T.gl3state.uni2DUBO, len(T.gl3state.uni2DData.data)*5, gl.Ptr(T.gl3state.uni2DData.data))
+	T.updateUBO(T.gl3state.uni2DUBO, len(T.gl3state.uni2DData.data)*4, gl.Ptr(T.gl3state.uni2DData.data))
+}
+
+func (T *qGl3) updateUBO3D() {
+	T.updateUBO(T.gl3state.uni2DUBO, len(T.gl3state.uni3DData.data)*4, gl.Ptr(T.gl3state.uni3DData.data))
 }
 
 // ############## shaders for 2D rendering (HUD, menus, console, videos, ..) #####################

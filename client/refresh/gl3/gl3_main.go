@@ -28,6 +28,8 @@ package gl3
 
 import (
 	"goquake2/shared"
+	"math"
+	"unsafe"
 
 	"github.com/go-gl/gl/v3.2-core/gl"
 )
@@ -45,6 +47,9 @@ func QGl3Create(ri shared.Refimport_t) shared.Refexport_t {
 	r.gl3textures = make([]gl3image_t, MAX_GL3TEXTURES)
 	r.mod_inline = make([]gl3model_t, MAX_MOD_KNOWN)
 	r.mod_known = make([]gl3model_t, MAX_MOD_KNOWN)
+	for i := range r.gl3_lms.lightmap_buffers {
+		r.gl3_lms.lightmap_buffers[i] = make([]byte, 4*BLOCK_WIDTH*BLOCK_HEIGHT)
+	}
 	return r
 }
 
@@ -387,6 +392,131 @@ func (T *qGl3) Init() bool {
 	return true
 }
 
+func (T *qGl3) drawEntitiesOnList() {
+	// int i;
+
+	if !T.r_drawentities.Bool() {
+		return
+	}
+
+	// GL3_ResetShadowAliasModels();
+
+	// /* draw non-transparent first */
+	for i := range T.gl3_newrefdef.Entities {
+		T.currententity = &T.gl3_newrefdef.Entities[i]
+
+		if (T.currententity.Flags & shared.RF_TRANSLUCENT) != 0 {
+			continue /* solid */
+		}
+
+		if (T.currententity.Flags & shared.RF_BEAM) != 0 {
+			// 		GL3_DrawBeam(currententity);
+		} else {
+			T.currentmodel = T.currententity.Model.(*gl3model_t)
+
+			if T.currentmodel == nil {
+				// GL3_DrawNullModel()
+				continue
+			}
+
+			switch T.currentmodel.mtype {
+			case mod_alias:
+				// 				GL3_DrawAliasModel(currententity);
+				// 				break;
+			case mod_brush:
+				T.drawBrushModel(T.currententity)
+				break
+			case mod_sprite:
+			// 				GL3_DrawSpriteModel(currententity);
+			// 				break;
+			default:
+				T.ri.Sys_Error(shared.ERR_DROP, "Bad modeltype %v", T.currentmodel.mtype)
+				break
+			}
+		}
+	}
+
+	/* draw transparent entities
+	   we could sort these if it ever
+	   becomes a problem... */
+	gl.DepthMask(false)
+
+	for i := range T.gl3_newrefdef.Entities {
+		T.currententity = &T.gl3_newrefdef.Entities[i]
+
+		if (T.currententity.Flags & shared.RF_TRANSLUCENT) == 0 {
+			continue /* solid */
+		}
+
+		if (T.currententity.Flags & shared.RF_BEAM) != 0 {
+			// 		GL3_DrawBeam(currententity);
+		} else {
+			T.currentmodel = T.currententity.Model.(*gl3model_t)
+
+			if T.currentmodel == nil {
+				// GL3_DrawNullModel()
+				continue
+			}
+
+			switch T.currentmodel.mtype {
+			case mod_alias:
+				// 				GL3_DrawAliasModel(currententity);
+				// 				break;
+			case mod_brush:
+				T.drawBrushModel(T.currententity)
+				break
+			case mod_sprite:
+			// 				GL3_DrawSpriteModel(currententity);
+			// 				break;
+			default:
+				T.ri.Sys_Error(shared.ERR_DROP, "Bad modeltype %v", T.currentmodel.mtype)
+				break
+			}
+		}
+	}
+
+	// GL3_DrawAliasShadows();
+
+	gl.DepthMask(true) /* back to writing */
+
+}
+
+func signbitsForPlane(out *shared.Cplane_t) int {
+
+	/* for fast box on planeside test */
+	bits := 0
+
+	for j := 0; j < 3; j++ {
+		if out.Normal[j] < 0 {
+			bits |= 1 << j
+		}
+	}
+
+	return bits
+}
+
+func (T *qGl3) setFrustum() {
+
+	/* rotate VPN right by FOV_X/2 degrees */
+	shared.RotatePointAroundVector(T.frustum[0].Normal[:], T.vup[:], T.vpn[:],
+		-(90 - T.gl3_newrefdef.Fov_x/2))
+	/* rotate VPN left by FOV_X/2 degrees */
+	shared.RotatePointAroundVector(T.frustum[1].Normal[:],
+		T.vup[:], T.vpn[:], 90-T.gl3_newrefdef.Fov_x/2)
+	/* rotate VPN up by FOV_X/2 degrees */
+	shared.RotatePointAroundVector(T.frustum[2].Normal[:],
+		T.vright[:], T.vpn[:], 90-T.gl3_newrefdef.Fov_y/2)
+	/* rotate VPN down by FOV_X/2 degrees */
+	shared.RotatePointAroundVector(T.frustum[3].Normal[:], T.vright[:], T.vpn[:],
+		-(90 - T.gl3_newrefdef.Fov_y/2))
+
+	for i := 0; i < 4; i++ {
+		T.frustum[i].Type = shared.PLANE_ANYZ
+		T.frustum[i].Dist = shared.DotProduct(T.gl3_origin[:], T.frustum[i].Normal[:])
+		T.frustum[i].Signbits = byte(signbitsForPlane(&T.frustum[i]))
+	}
+}
+
 func (T *qGl3) setupFrame() error {
 
 	T.gl3_framecount++
@@ -441,8 +571,8 @@ func (T *qGl3) setupFrame() error {
 	// 	v_blend[i] = gl3_newrefdef.blend[i];
 	// }
 
-	// c_brush_polys = 0;
-	// c_alias_polys = 0;
+	T.c_brush_polys = 0
+	T.c_alias_polys = 0
 
 	/* clear out the portion of the screen that the NOWORLDMODEL defines */
 	if (T.gl3_newrefdef.Rdflags & shared.RDF_NOWORLDMODEL) != 0 {
@@ -505,12 +635,11 @@ func (T *qGl3) clear() {
 	// 		}
 	// 	}
 
-	// 	/* stencilbuffer shadows */
-	// 	if (gl_shadows->value && gl3config.stencil)
-	// 	{
-	// 		glClearStencil(1);
-	// 		glClear(GL_STENCIL_BUFFER_BIT);
-	// 	}
+	/* stencilbuffer shadows */
+	if T.gl_shadows.Bool() && T.gl3config.stencil {
+		gl.ClearStencil(1)
+		gl.Clear(gl.STENCIL_BUFFER_BIT)
+	}
 }
 
 func (T *qGl3) BeginFrame(camera_separation float32) error {
@@ -530,19 +659,21 @@ func (T *qGl3) BeginFrame(camera_separation float32) error {
 		T.updateUBOCommon()
 	}
 
-	// // in GL3, overbrightbits can have any positive value
-	// if (gl3_overbrightbits->modified)
-	// {
-	// 	gl3_overbrightbits->modified = false;
+	// in GL3, overbrightbits can have any positive value
+	if T.gl3_overbrightbits.Modified {
+		T.gl3_overbrightbits.Modified = false
 
-	// 	if(gl3_overbrightbits->value < 0.0f)
-	// 	{
-	// 		ri.Cvar_Set("gl3_overbrightbits", "0");
-	// 	}
+		if T.gl3_overbrightbits.Float() < 0.0 {
+			T.ri.Cvar_Set("gl3_overbrightbits", "0")
+		}
 
-	// 	gl3state.uni3DData.overbrightbits = (gl3_overbrightbits->value <= 0.0f) ? 1.0f : gl3_overbrightbits->value;
-	// 	GL3_UpdateUBO3D();
-	// }
+		if T.gl3_overbrightbits.Float() <= 0.0 {
+			T.gl3state.uni3DData.setOverbrightbits(1.0)
+		} else {
+			T.gl3state.uni3DData.setOverbrightbits(T.gl3_overbrightbits.Float())
+		}
+		T.updateUBO3D()
+	}
 
 	// if(gl3_particle_fade_factor->modified)
 	// {
@@ -594,6 +725,117 @@ func (T *qGl3) BeginFrame(camera_separation float32) error {
 	return nil
 }
 
+// equivalent to R_x * R_y * R_z where R_x is the trans matrix for rotating around X axis for aroundXdeg
+func rotAroundAxisXYZ(aroundXdeg, aroundYdeg, aroundZdeg float32) []float32 {
+	alpha := HMM_ToRadians(aroundXdeg)
+	beta := HMM_ToRadians(aroundYdeg)
+	gamma := HMM_ToRadians(aroundZdeg)
+
+	sinA := float32(math.Sin(alpha))
+	cosA := float32(math.Cos(alpha))
+	sinB := float32(math.Sin(beta))
+	cosB := float32(math.Cos(beta))
+	sinG := float32(math.Sin(gamma))
+	cosG := float32(math.Cos(gamma))
+
+	return []float32{
+		cosB * cosG, sinA*sinB*cosG + cosA*sinG, -cosA*sinB*cosG + sinA*sinG, 0, // first *column*
+		-cosB * sinG, -sinA*sinB*sinG + cosA*cosG, cosA*sinB*sinG + sinA*cosG, 0,
+		sinB, -sinA * cosB, cosA * cosB, 0,
+		0, 0, 0, 1,
+	}
+}
+
+// equivalent to R_MYgluPerspective() but returning a matrix instead of setting internal OpenGL state
+func GL3_MYgluPerspective(fovy, aspect, zNear, zFar float32) []float32 {
+	// calculation of left, right, bottom, top is from R_MYgluPerspective() of old gl backend
+	// which seems to be slightly different from the real gluPerspective()
+	// and thus also from HMM_Perspective()
+	// GLdouble left, right, bottom, top;
+	// float A, B, C, D;
+
+	top := zNear * float32(math.Tan(float64(fovy)*math.Pi/360.0))
+	bottom := -top
+
+	left := bottom * aspect
+	right := top * aspect
+
+	// TODO:  stereo stuff
+	// left += - gl1_stereo_convergence->value * (2 * gl_state.camera_separation) / zNear;
+	// right += - gl1_stereo_convergence->value * (2 * gl_state.camera_separation) / zNear;
+
+	// the following emulates glFrustum(left, right, bottom, top, zNear, zFar)
+	// see https://www.khronos.org/registry/OpenGL-Refpages/gl2.1/xhtml/glFrustum.xml
+	A := (right + left) / (right - left)
+	B := (top + bottom) / (top - bottom)
+	C := -(zFar + zNear) / (zFar - zNear)
+	D := -(2.0 * zFar * zNear) / (zFar - zNear)
+
+	return []float32{
+		(2.0 * zNear) / (right - left), 0, 0, 0, // first *column*
+		0, (2.0 * zNear) / (top - bottom), 0, 0,
+		A, B, C, -1.0,
+		0, 0, D, 0}
+}
+
+func (T *qGl3) setupGL() {
+
+	/* set up viewport */
+	x := int32(math.Floor(float64(T.gl3_newrefdef.X*T.vid.width) / float64(T.vid.width)))
+	x2 := int32(math.Ceil(float64(T.gl3_newrefdef.X+T.gl3_newrefdef.Width) * float64(T.vid.width) / float64(T.vid.width)))
+	y := int32(math.Floor(float64(T.vid.height) - float64(T.gl3_newrefdef.Y*T.vid.height)/float64(T.vid.height)))
+	y2 := int32(math.Ceil(float64(T.vid.height) - float64(T.gl3_newrefdef.Y+T.gl3_newrefdef.Height)*float64(T.vid.height)/float64(T.vid.height)))
+
+	w := x2 - x
+	h := y - y2
+
+	gl.Viewport(x, y2, w, h)
+
+	/* set up projection matrix (eye coordinates -> clip coordinates) */
+	screenaspect := float32(T.gl3_newrefdef.Width) / float32(T.gl3_newrefdef.Height)
+	var dist float32 = 8192.0
+	if !T.r_farsee.Bool() {
+		dist = 4096.0
+	}
+	T.gl3state.uni3DData.setTransProjMat4(GL3_MYgluPerspective(T.gl3_newrefdef.Fov_y, screenaspect, 4, dist))
+
+	gl.CullFace(gl.FRONT)
+
+	/* set up view matrix (world coordinates -> eye coordinates) */
+	// first put Z axis going up
+	viewMat := []float32{
+		0, 0, -1, 0, // first *column* (the matrix is colum-major)
+		-1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 0, 1}
+
+	// now rotate by view angles
+	rotMat := rotAroundAxisXYZ(-T.gl3_newrefdef.Viewangles[2], -T.gl3_newrefdef.Viewangles[0], -T.gl3_newrefdef.Viewangles[1])
+
+	viewMat = HMM_MultiplyMat4(viewMat, rotMat)
+
+	// .. and apply translation for current position
+	trans := []float32{-T.gl3_newrefdef.Vieworg[0], -T.gl3_newrefdef.Vieworg[1], -T.gl3_newrefdef.Vieworg[2]}
+	viewMat = HMM_MultiplyMat4(viewMat, HMM_Translate(trans))
+
+	T.gl3state.uni3DData.setTransViewMat4(viewMat)
+
+	T.gl3state.uni3DData.setTransModelMat4(gl3_identityMat4)
+
+	T.gl3state.uni3DData.setTime(T.gl3_newrefdef.Time)
+
+	T.updateUBO3D()
+
+	/* set drawing parms */
+	if T.gl_cull.Bool() {
+		gl.Enable(gl.CULL_FACE)
+	} else {
+		gl.Disable(gl.CULL_FACE)
+	}
+
+	gl.Enable(gl.DEPTH_TEST)
+}
+
 /*
  * gl3_newrefdef must be set before the first call
  */
@@ -610,8 +852,8 @@ func (T *qGl3) renderView(fd shared.Refdef_t) error {
 	}
 
 	//  if (r_speeds->value) {
-	// 	 c_brush_polys = 0;
-	// 	 c_alias_polys = 0;
+	T.c_brush_polys = 0
+	T.c_alias_polys = 0
 	//  }
 
 	//  GL3_PushDlights();
@@ -624,15 +866,15 @@ func (T *qGl3) renderView(fd shared.Refdef_t) error {
 		return err
 	}
 
-	//  SetFrustum();
+	T.setFrustum()
 
-	//  SetupGL();
+	T.setupGL()
 
 	//  GL3_MarkLeaves(); /* done here so we know if we're in water */
 
-	//  GL3_DrawWorld();
+	T.drawWorld()
 
-	//  GL3_DrawEntitiesOnList();
+	T.drawEntitiesOnList()
 
 	//  // kick the silly gl1_flashblend poly lights
 	//  // GL3_RenderDlights();
@@ -644,9 +886,9 @@ func (T *qGl3) renderView(fd shared.Refdef_t) error {
 	//  // Note: R_Flash() is now GL3_Draw_Flash() and called from GL3_RenderFrame()
 
 	//  if (r_speeds->value) {
-	// 	 R_Printf(PRINT_ALL, "%4i wpoly %4i epoly %i tex %i lmaps\n",
-	// 			 c_brush_polys, c_alias_polys, c_visible_textures,
-	// 			 c_visible_lightmaps);
+	T.rPrintf(shared.PRINT_ALL, "%4v wpoly %4v epoly %v tex %v lmaps\n",
+		T.c_brush_polys, T.c_alias_polys, T.c_visible_textures,
+		T.c_visible_lightmaps)
 	//  }
 
 	return nil
@@ -658,7 +900,7 @@ func (T *qGl3) RenderFrame(fd shared.Refdef_t) error {
 		return err
 	}
 	// GL3_SetLightLevel();
-	// GL3_SetGL2D();
+	T.setGL2D()
 
 	// if(v_blend[3] != 0.0f) {
 	// 	int x = (vid.width - gl3_newrefdef.width)/2;
@@ -667,6 +909,78 @@ func (T *qGl3) RenderFrame(fd shared.Refdef_t) error {
 	// 	GL3_Draw_Flash(v_blend, x, y, gl3_newrefdef.width, gl3_newrefdef.height);
 	// }
 	return nil
+}
+
+// assumes gl3state.v[ab]o3D are bound
+// buffers and draws gl3_3D_vtx_t vertices
+// drawMode is something like GL_TRIANGLE_STRIP or GL_TRIANGLE_FAN or whatever
+func (T *qGl3) bufferAndDraw3D(verts unsafe.Pointer, numVerts int, drawMode uint32) {
+	// if(!gl3config.useBigVBO)
+	// {
+	gl.BufferData(gl.ARRAY_BUFFER, gl3_3D_vtx_size*numVerts, verts, gl.STREAM_DRAW)
+	gl.DrawArrays(drawMode, 0, int32(numVerts))
+	// 	}
+	// 	else // gl3config.useBigVBO == true
+	// 	{
+	// 		/*
+	// 		 * For some reason, AMD's Windows driver doesn't seem to like lots of
+	// 		 * calls to glBufferData() (some of them seem to take very long then).
+	// 		 * GL3_BufferAndDraw3D() is called a lot when drawing world geometry
+	// 		 * (once for each visible face I think?).
+	// 		 * The simple code above caused noticeable slowdowns - even a fast
+	// 		 * quadcore CPU and a Radeon RX580 weren't able to maintain 60fps..
+	// 		 * The workaround is to not call glBufferData() with small data all the time,
+	// 		 * but to allocate a big buffer and on each call to GL3_BufferAndDraw3D()
+	// 		 * to use a different region of that buffer, resulting in a lot less calls
+	// 		 * to glBufferData() (=> a lot less buffer allocations in the driver).
+	// 		 * Only when the buffer is full and at the end of a frame (=> GL3_EndFrame())
+	// 		 * we get a fresh buffer.
+	// 		 *
+	// 		 * BTW, we couldn't observe this kind of problem with any other driver:
+	// 		 * Neither nvidias driver, nor AMDs or Intels Open Source Linux drivers,
+	// 		 * not even Intels Windows driver seem to care that much about the
+	// 		 * glBufferData() calls.. However, at least nvidias driver doesn't like
+	// 		 * this workaround (with glMapBufferRange()), the framerate dropped
+	// 		 * significantly - that's why both methods are available and
+	// 		 * selectable at runtime.
+	// 		 */
+	// #if 0
+	// 		// I /think/ doing it with glBufferSubData() didn't really help
+	// 		const int bufSize = gl3state.vbo3Dsize;
+	// 		int neededSize = numVerts*sizeof(gl3_3D_vtx_t);
+	// 		int curOffset = gl3state.vbo3DcurOffset;
+	// 		if(curOffset + neededSize > gl3state.vbo3Dsize)
+	// 			curOffset = 0;
+	// 		int curIdx = curOffset / sizeof(gl3_3D_vtx_t);
+
+	// 		gl3state.vbo3DcurOffset = curOffset + neededSize;
+
+	// 		glBufferSubData( GL_ARRAY_BUFFER, curOffset, neededSize, verts );
+	// 		glDrawArrays( drawMode, curIdx, numVerts );
+	// #else
+	// 		int curOffset = gl3state.vbo3DcurOffset;
+	// 		int neededSize = numVerts*sizeof(gl3_3D_vtx_t);
+	// 		if(curOffset+neededSize > gl3state.vbo3Dsize)
+	// 		{
+	// 			// buffer is full, need to start again from the beginning
+	// 			// => need to sync or get fresh buffer
+	// 			// (getting fresh buffer seems easier)
+	// 			glBufferData(GL_ARRAY_BUFFER, gl3state.vbo3Dsize, NULL, GL_STREAM_DRAW);
+	// 			curOffset = 0;
+	// 		}
+
+	// 		// as we make sure to use a previously unused part of the buffer,
+	// 		// doing it unsynchronized should be safe..
+	// 		GLbitfield accessBits = GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_RANGE_BIT | GL_MAP_UNSYNCHRONIZED_BIT;
+	// 		void* data = glMapBufferRange(GL_ARRAY_BUFFER, curOffset, neededSize, accessBits);
+	// 		memcpy(data, verts, neededSize);
+	// 		glUnmapBuffer(GL_ARRAY_BUFFER);
+
+	// 		glDrawArrays(drawMode, curOffset/sizeof(gl3_3D_vtx_t), numVerts);
+
+	// 		gl3state.vbo3DcurOffset = curOffset + neededSize; // TODO: padding or sth needed?
+	// #endif
+	// 	}
 }
 
 func (T *qGl3) rPrintf(level int, format string, a ...interface{}) {

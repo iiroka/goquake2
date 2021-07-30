@@ -194,6 +194,26 @@
 */
 package gl3
 
+import "math"
+
+/*
+ * Utility functions
+ */
+func HMM_ToRadians(Degrees float32) float64 {
+	return float64(Degrees) * (math.Pi / 180.0)
+}
+
+func HMM_Mat4d(Diagonal float32) []float32 {
+	Result := make([]float32, 16)
+
+	Result[0*4+0] = Diagonal
+	Result[1*4+1] = Diagonal
+	Result[2*4+2] = Diagonal
+	Result[3*4+3] = Diagonal
+
+	return (Result)
+}
+
 /*
  * Common graphics transformations
  */
@@ -211,4 +231,30 @@ func HMM_Orthographic(Left, Right, Bottom, Top, Near, Far float32) []float32 {
 	result[3*4+2] = (Far + Near) / (Near - Far)
 
 	return result
+}
+
+func HMM_Translate(Translation []float32) []float32 {
+	Result := HMM_Mat4d(1.0)
+
+	Result[3*4+0] = Translation[0]
+	Result[3*4+1] = Translation[1]
+	Result[3*4+2] = Translation[2]
+
+	return (Result)
+}
+
+func HMM_MultiplyMat4(Left, Right []float32) []float32 {
+	Result := make([]float32, 16)
+
+	for Columns := 0; Columns < 4; Columns++ {
+		for Rows := 0; Rows < 4; Rows++ {
+			var Sum float32 = 0
+			for CurrentMatrice := 0; CurrentMatrice < 4; CurrentMatrice++ {
+				Sum += Left[CurrentMatrice*4+Rows] * Right[Columns*4+CurrentMatrice]
+			}
+
+			Result[Columns*4+Rows] = Sum
+		}
+	}
+	return Result
 }
