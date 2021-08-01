@@ -180,6 +180,35 @@ func (T *Usercmd_t) Copy(other Usercmd_t) {
 	T.Lightlevel = other.Lightlevel
 }
 
+const MAXTOUCH = 32
+
+type Pmove_t struct {
+	/* state (in / out) */
+	S Pmove_state_t
+
+	/* command (in) */
+	Cmd         Usercmd_t
+	Snapinitial bool /* if s has been changed outside pmove */
+
+	/* results (out) */
+	Numtouch int
+	// struct edict_s *touchents[MAXTOUCH];
+
+	Viewangles [3]float32 /* clamped */
+	Viewheight float32
+
+	Mins [3]float32
+	Maxs [3]float32 /* bounding box size */
+
+	// struct edict_s *groundentity;
+	Watertype  int
+	Waterlevel int
+
+	/* callbacks to test the world */
+	// trace_t (*trace)(vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end);
+	// int (*pointcontents)(vec3_t point);
+}
+
 const (
 	/* entity_state_t->effects
 	 * Effects are things handled on the client side (lights, particles,
@@ -1078,6 +1107,12 @@ func VectorNormalize(v []float32) float32 {
 	return length
 }
 
+func VectorMA(veca []float32, scale float32, vecb, vecc []float32) {
+	vecc[0] = veca[0] + scale*vecb[0]
+	vecc[1] = veca[1] + scale*vecb[1]
+	vecc[2] = veca[2] + scale*vecb[2]
+}
+
 func VectorAdd(veca, vecb, out []float32) {
 	out[0] = veca[0] + vecb[0]
 	out[1] = veca[1] + vecb[1]
@@ -1265,6 +1300,8 @@ type QCommon interface {
 
 	FS_FOpenFile(name string, gamedir_only bool) (QFileHandle, error)
 	LoadFile(path string) ([]byte, error)
+
+	Pmove(pmove *Pmove_t)
 }
 
 type QClient interface {
@@ -1272,6 +1309,7 @@ type QClient interface {
 	Frame(packetdelta, renderdelta, timedelta int, packetframe, renderframe bool) error
 	IsVSyncActive() bool
 	GetRefreshRate() int
+	IsAttractloop() bool
 }
 
 type QServer interface {

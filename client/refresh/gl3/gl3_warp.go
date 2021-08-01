@@ -262,3 +262,326 @@ func (T *qGl3) SetSky(name string, rotate float32, axis []float32) {
 		T.sky_max = 511.0 / 512
 	}
 }
+
+func (T *qGl3) drawSkyPolygon(nump int, vecs [][3]float32) {
+	// int i, j;
+	// vec3_t v, av;
+	// float s, t, dv;
+	// int axis;
+	// float *vp;
+
+	T.c_sky++
+
+	/* decide which face it maps to */
+	v := make([]float32, 3)
+
+	for i := 0; i < nump; i++ {
+		shared.VectorAdd(vecs[i][:], v, v)
+	}
+
+	av := []float32{
+		float32(math.Abs(float64(v[0]))),
+		float32(math.Abs(float64(v[1]))),
+		float32(math.Abs(float64(v[2])))}
+
+	var axis int
+	if (av[0] > av[1]) && (av[0] > av[2]) {
+		if v[0] < 0 {
+			axis = 1
+		} else {
+			axis = 0
+		}
+	} else if (av[1] > av[2]) && (av[1] > av[0]) {
+		if v[1] < 0 {
+			axis = 3
+		} else {
+			axis = 2
+		}
+	} else {
+		if v[2] < 0 {
+			axis = 5
+		} else {
+			axis = 4
+		}
+	}
+
+	/* project new texture coords */
+	for i := 0; i < nump; i++ {
+		j := vec_to_st[axis][2]
+
+		var dv float32
+		if j > 0 {
+			dv = vecs[i][j-1]
+		} else {
+			dv = -vecs[i][-j-1]
+		}
+
+		if dv < 0.001 {
+			continue /* don't divide by zero */
+		}
+
+		j = vec_to_st[axis][0]
+
+		var s float32
+		if j < 0 {
+			s = -vecs[i][-j-1] / dv
+		} else {
+			s = vecs[i][j-1] / dv
+		}
+
+		j = vec_to_st[axis][1]
+
+		var t float32
+		if j < 0 {
+			t = -vecs[i][-j-1] / dv
+		} else {
+			t = vecs[i][j-1] / dv
+		}
+
+		if s < T.skymins[0][axis] {
+			T.skymins[0][axis] = s
+		}
+
+		if t < T.skymins[1][axis] {
+			T.skymins[1][axis] = t
+		}
+
+		if s > T.skymaxs[0][axis] {
+			T.skymaxs[0][axis] = s
+		}
+
+		if t > T.skymaxs[1][axis] {
+			T.skymaxs[1][axis] = t
+		}
+	}
+}
+
+func (T *qGl3) clipSkyPolygon(nump int, vecs [][3]float32, stage int) {
+	// float *norm;
+	// float *v;
+	// qboolean front, back;
+	// float d, e;
+	// float dists[MAX_CLIP_VERTS];
+	// int sides[MAX_CLIP_VERTS];
+	// vec3_t newv[2][MAX_CLIP_VERTS];
+	// int newc[2];
+	// int i, j;
+
+	if nump > MAX_CLIP_VERTS-2 {
+		T.ri.Sys_Error(shared.ERR_DROP, "R_ClipSkyPolygon: MAX_CLIP_VERTS")
+		return
+	}
+
+	if stage == 6 {
+		/* fully clipped, so draw it */
+		T.drawSkyPolygon(nump, vecs)
+		return
+	}
+
+	// front = back = false;
+	front := false
+	back := false
+	norm := skyclip[stage]
+
+	var dists [MAX_CLIP_VERTS]float32
+	var sides [MAX_CLIP_VERTS]int
+
+	for i := 0; i < nump; i++ {
+		d := shared.DotProduct(vecs[i][:], norm[:])
+
+		if d > ON_EPSILON {
+			front = true
+			sides[i] = SIDE_FRONT
+		} else if d < -ON_EPSILON {
+			back = true
+			sides[i] = SIDE_BACK
+		} else {
+			sides[i] = SIDE_ON
+		}
+
+		dists[i] = d
+	}
+
+	if !front || !back {
+		/* not clipped */
+		T.clipSkyPolygon(nump, vecs, stage+1)
+		return
+	}
+
+	/* clip it */
+	sides[nump] = sides[0]
+	dists[nump] = dists[0]
+	copy(vecs[nump][:], vecs[0][:])
+	var newc [2]int
+	var newv [2][MAX_CLIP_VERTS][3]float32
+
+	for i := 0; i < nump; i++ {
+		switch sides[i] {
+		case SIDE_FRONT:
+			copy(newv[0][newc[0]][:], vecs[i][:])
+			newc[0]++
+		case SIDE_BACK:
+			copy(newv[1][newc[1]][:], vecs[i][:])
+			newc[1]++
+		case SIDE_ON:
+			copy(newv[0][newc[0]][:], vecs[i][:])
+			newc[0]++
+			copy(newv[1][newc[1]][:], vecs[i][:])
+			newc[1]++
+		}
+
+		if (sides[i] == SIDE_ON) ||
+			(sides[i+1] == SIDE_ON) ||
+			(sides[i+1] == sides[i]) {
+			continue
+		}
+
+		d := dists[i] / (dists[i] - dists[i+1])
+
+		for j := 0; j < 3; j++ {
+			e := vecs[i][j] + d*(vecs[i+1][j]-vecs[i][j])
+			newv[0][newc[0]][j] = e
+			newv[1][newc[1]][j] = e
+		}
+
+		newc[0]++
+		newc[1]++
+	}
+
+	/* continue */
+	T.clipSkyPolygon(newc[0], newv[0][:], stage+1)
+	T.clipSkyPolygon(newc[1], newv[1][:], stage+1)
+}
+
+func (T *qGl3) addSkySurface(fa *msurface_t) {
+	var verts [MAX_CLIP_VERTS][3]float32
+
+	/* calculate vertex values for sky box */
+	for p := fa.polys; p != nil; p = p.next {
+		for i := 0; i < p.numverts; i++ {
+			shared.VectorSubtract(p.vertices(i).getPos(), T.gl3_origin[:], verts[i][:])
+		}
+
+		T.clipSkyPolygon(p.numverts, verts[:], 0)
+	}
+}
+
+func (T *qGl3) clearSkyBox() {
+
+	for i := 0; i < 6; i++ {
+		T.skymins[0][i] = 9999
+		T.skymins[1][i] = 9999
+		T.skymaxs[0][i] = -9999
+		T.skymaxs[1][i] = -9999
+	}
+}
+
+func (T *qGl3) makeSkyVec(s, t float32, axis int) {
+	// vec3_t v, b;
+	// int j, k;
+
+	var b [3]float32
+	if !T.r_farsee.Bool() {
+		b[0] = s * 2300
+		b[1] = t * 2300
+		b[2] = 2300
+	} else {
+		b[0] = s * 4096
+		b[1] = t * 4096
+		b[2] = 4096
+	}
+
+	var v [3]float32
+	for j := 0; j < 3; j++ {
+		k := st_to_vec[axis][j]
+
+		if k < 0 {
+			v[j] = -b[-k-1]
+		} else {
+			v[j] = b[k-1]
+		}
+	}
+
+	/* avoid bilerp seam */
+	s = (s + 1) * 0.5
+	t = (t + 1) * 0.5
+
+	if s < T.sky_min {
+		s = T.sky_min
+	} else if s > T.sky_max {
+		s = T.sky_max
+	}
+
+	if t < T.sky_min {
+		t = T.sky_min
+	} else if t > T.sky_max {
+		t = T.sky_max
+	}
+
+	t = 1.0 - t
+
+	T.tex_sky[T.index_tex] = s
+	T.tex_sky[T.index_tex+1] = t
+
+	T.vtx_sky[T.index_vtx+2] = v[0]
+	T.vtx_sky[T.index_vtx+3] = v[1]
+	T.vtx_sky[T.index_vtx+4] = v[2]
+	T.index_tex += 5
+}
+
+func (T *qGl3) drawSkyBox() {
+
+	// if T.skyrotate != 0 {
+	// 	/* check for no sky at all */
+	// 	for i := 0; i < 6; i++ {
+	// 		if (T.skymins[0][i] < T.skymaxs[0][i]) &&
+	// 			(T.skymins[1][i] < T.skymaxs[1][i]) {
+	// 			break
+	// 		}
+	// 	}
+
+	// 	if i == 6 {
+	// 		return /* nothing visible */
+	// 	}
+	// }
+
+	// gl.PushMatrix()
+	// gl.Translatef(r_origin[0], r_origin[1], r_origin[2])
+	// gl.Rotatef(r_newrefdef.time*skyrotate, skyaxis[0], skyaxis[1], skyaxis[2])
+
+	// for i := 0; i < 6; i++ {
+	// 	if T.skyrotate != 0 {
+	// 		T.skymins[0][i] = -1
+	// 		T.skymins[1][i] = -1
+	// 		T.skymaxs[0][i] = 1
+	// 		T.skymaxs[1][i] = 1
+	// 	}
+
+	// 	if (T.skymins[0][i] >= T.skymaxs[0][i]) ||
+	// 		(T.skymins[1][i] >= T.skymaxs[1][i]) {
+	// 		continue
+	// 	}
+
+	// 	T.bind(T.sky_images[skytexorder[i]].texnum)
+
+	// 	gl.EnableClientState(gl.VERTEX_ARRAY)
+	// 	gl.EnableClientState(gl.TEXTURE_COORD_ARRAY)
+
+	// 	T.index_vtx = 0
+	// 	T.index_tex = 0
+
+	// 	T.makeSkyVec(T.skymins[0][i], T.skymins[1][i], i)
+	// 	T.makeSkyVec(T.skymins[0][i], T.skymaxs[1][i], i)
+	// 	T.makeSkyVec(T.skymaxs[0][i], T.skymaxs[1][i], i)
+	// 	T.makeSkyVec(T.skymaxs[0][i], T.skymins[1][i], i)
+
+	// 	gl.VertexPointer(3, GL_FLOAT, 0, vtx_sky)
+	// 	gl.TexCoordPointer(2, GL_FLOAT, 0, tex_sky)
+	// 	gl.DrawArrays(GL_TRIANGLE_FAN, 0, 4)
+
+	// 	gl.DisableClientState(GL_VERTEX_ARRAY)
+	// 	gl.DisableClientState(GL_TEXTURE_COORD_ARRAY)
+	// }
+
+	// glPopMatrix()
+}

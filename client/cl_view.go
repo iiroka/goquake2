@@ -36,7 +36,7 @@ import (
  * Specifies the model that will be used as the world
  */
 func (T *qClient) clearScene() {
-	//  r_numdlights = 0;
+	T.r_dlights = make([]shared.Dlight_t, 0)
 	T.r_particles = make([]shared.Particle_t, 0)
 	T.r_entities = make([]shared.Entity_t, 0)
 }
@@ -60,6 +60,21 @@ func (T *qClient) addParticle(org [3]float32, color int, alpha float32) {
 	p.Color = color
 	p.Alpha = alpha
 	T.r_particles = append(T.r_particles, p)
+}
+
+func (T *qClient) addLight(org []float32, intensity, r, g, b float32) {
+
+	if len(T.r_dlights) >= shared.MAX_DLIGHTS {
+		return
+	}
+
+	dl := shared.Dlight_t{}
+	copy(dl.Origin[:], org)
+	dl.Intensity = intensity
+	dl.Color[0] = r
+	dl.Color[1] = g
+	dl.Color[2] = b
+	T.r_dlights = append(T.r_dlights, dl)
 }
 
 func (T *qClient) addLightStyle(style int, r, g, b float32) {
@@ -115,8 +130,8 @@ func (T *qClient) prepRefresh() error {
 
 	T.registerTEntModels()
 
-	//  num_cl_weaponmodels = 1;
-	//  strcpy(cl_weaponmodels[0], "weapon.md2");
+	T.num_cl_weaponmodels = 1
+	T.cl_weaponmodels[0] = "weapon.md2"
 
 	for i := 1; i < shared.MAX_MODELS && len(T.cl.configstrings[shared.CS_MODELS+i]) > 0; i++ {
 		name := T.cl.configstrings[shared.CS_MODELS+i]
@@ -129,14 +144,11 @@ func (T *qClient) prepRefresh() error {
 		T.input.Update()
 
 		if name[0] == '#' {
-			// 		 /* special player weapon model */
-			// 		 if (num_cl_weaponmodels < MAX_CLIENTWEAPONMODELS)
-			// 		 {
-			// 			 Q_strlcpy(cl_weaponmodels[num_cl_weaponmodels],
-			// 					 cl.configstrings[CS_MODELS + i] + 1,
-			// 					 sizeof(cl_weaponmodels[num_cl_weaponmodels]));
-			// 			 num_cl_weaponmodels++;
-			// 		 }
+			/* special player weapon model */
+			if T.num_cl_weaponmodels < MAX_CLIENTWEAPONMODELS {
+				T.cl_weaponmodels[T.num_cl_weaponmodels] = T.cl.configstrings[shared.CS_MODELS+i][1:]
+				T.num_cl_weaponmodels++
+			}
 		} else {
 			T.cl.model_draw[i], err = T.R_RegisterModel(T.cl.configstrings[shared.CS_MODELS+i])
 			if err != nil {
@@ -305,7 +317,7 @@ func (T *qClient) renderView(stereo_separation float32) error {
 		// 	cl.refdef.num_particles = r_numparticles;
 		T.cl.refdef.Particles = T.r_particles
 		// 	cl.refdef.num_dlights = r_numdlights;
-		// 	cl.refdef.dlights = r_dlights;
+		T.cl.refdef.Dlights = T.r_dlights
 		T.cl.refdef.Lightstyles = T.r_lightstyles[:]
 
 		T.cl.refdef.Rdflags = T.cl.frame.playerstate.Rdflags

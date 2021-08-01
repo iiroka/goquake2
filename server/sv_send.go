@@ -27,6 +27,15 @@ package server
 
 import "goquake2/shared"
 
+func (T *qServer) svDemoCompleted() {
+	if T.sv.demofile != nil {
+		T.sv.demofile.Close()
+		T.sv.demofile = nil
+	}
+
+	// SV_Nextserver()
+}
+
 func (T *qServer) svSendClientMessages() {
 	// int i;
 	// client_t *c;
@@ -39,33 +48,31 @@ func (T *qServer) svSendClientMessages() {
 
 	/* read the next demo message if needed */
 	if T.sv.demofile != nil && (T.sv.state == ss_demo) {
-		// 	if (sv_paused->value) {
-		// 		msglen = 0;
-		// 	} else {
-		/* get the next message */
-		bfr := T.sv.demofile.Read(4)
-		if len(bfr) != 4 {
-			// 			SV_DemoCompleted();
-			return
-		}
+		if !T.sv_paused.Bool() {
+			/* get the next message */
+			bfr := T.sv.demofile.Read(4)
+			if len(bfr) != 4 {
+				T.svDemoCompleted()
+				return
+			}
 
-		msglen := int(shared.ReadInt32(bfr))
-		if msglen == -1 {
-			// 			SV_DemoCompleted();
-			return
-		}
+			msglen := int(shared.ReadInt32(bfr))
+			if msglen == -1 {
+				T.svDemoCompleted()
+				return
+			}
 
-		if msglen > shared.MAX_MSGLEN {
-			T.common.Com_Error(shared.ERR_DROP,
-				"SV_SendClientMessages: msglen > MAX_MSGLEN")
-		}
+			if msglen > shared.MAX_MSGLEN {
+				T.common.Com_Error(shared.ERR_DROP,
+					"SV_SendClientMessages: msglen > MAX_MSGLEN")
+			}
 
-		msgbuf = T.sv.demofile.Read(msglen)
-		if len(msgbuf) != msglen {
-			// SV_DemoCompleted()
-			return
+			msgbuf = T.sv.demofile.Read(msglen)
+			if len(msgbuf) != msglen {
+				T.svDemoCompleted()
+				return
+			}
 		}
-		// 	}
 	}
 
 	/* send a message to each connected client */
@@ -77,8 +84,7 @@ func (T *qServer) svSendClientMessages() {
 		/* if the reliable message
 		   overflowed, drop the
 		   client */
-		// 	if (c->netchan.message.overflowed)
-		// 	{
+		// 	if (c->netchan.message.overflowed) {
 		// 		SZ_Clear(&c->netchan.message);
 		// 		SZ_Clear(&c->datagram);
 		// 		SV_BroadcastPrintf(PRINT_HIGH, "%s overflowed\n", c->name);

@@ -206,8 +206,6 @@ func (T *qClient) parseDelta(msg *shared.QReadbuf, from, to *shared.Entity_state
  * the current frame
  */
 func (T *qClient) deltaEntity(msg *shared.QReadbuf, frame *frame_t, newnum int, old *shared.Entity_state_t, bits int) {
-	//  centity_t *ent;
-	//  entity_state_t *state;
 
 	ent := &T.cl_entities[newnum]
 
@@ -238,16 +236,13 @@ func (T *qClient) deltaEntity(msg *shared.QReadbuf, frame *frame_t, newnum int, 
 		lerping doesn't hurt anything */
 		ent.prev.Copy(*state)
 
-		// 	 if (state->event == EV_OTHER_TELEPORT)
-		// 	 {
-		// 		 VectorCopy(state->origin, ent->prev.origin);
-		// 		 VectorCopy(state->origin, ent->lerp_origin);
-		// 	 }
-		// 	 else
-		// 	 {
-		copy(ent.prev.Origin[:], state.Old_origin[:])
-		copy(ent.lerp_origin[:], state.Old_origin[:])
-		// 	 }
+		if state.Event == shared.EV_OTHER_TELEPORT {
+			copy(ent.prev.Origin[:], state.Origin[:])
+			copy(ent.lerp_origin[:], state.Origin[:])
+		} else {
+			copy(ent.prev.Origin[:], state.Old_origin[:])
+			copy(ent.lerp_origin[:], state.Old_origin[:])
+		}
 	} else {
 		/* shuffle the last state to previous */
 		ent.prev.Copy(ent.current)
@@ -704,15 +699,14 @@ func (T *qClient) loadClientinfo(ci *clientinfo_t, s string) {
 	}
 
 	if T.cl_noskins.Bool() || t < 0 {
-		// 	strcpy(model_filename, "players/male/tris.md2");
-		// 	strcpy(weapon_filename, "players/male/weapon.md2");
-		// 	strcpy(skin_filename, "players/male/grunt.pcx");
-		// 	strcpy(ci->iconname, "/players/male/grunt_i.pcx");
+		ci.iconname = "/players/male/grunt_i.pcx"
 		ci.model, _ = T.R_RegisterModel("players/male/tris.md2")
-		// 	memset(ci->weaponmodel, 0, sizeof(ci->weaponmodel));
-		// 	ci->weaponmodel[0] = R_RegisterModel(weapon_filename);
+		for i := range ci.weaponmodel {
+			ci.weaponmodel[i] = nil
+		}
+		ci.weaponmodel[0], _ = T.R_RegisterModel("players/male/weapon.md2")
 		ci.skin = T.R_RegisterSkin("players/male/grunt.pcx")
-		// 	ci->icon = Draw_FindPic(ci->iconname);
+		ci.icon = T.Draw_FindPic(ci.iconname)
 	} else {
 		/* isolate the model name */
 		var model_name string
@@ -768,31 +762,27 @@ func (T *qClient) loadClientinfo(ci *clientinfo_t, s string) {
 			ci.skin = T.R_RegisterSkin(skin_filename)
 		}
 
-		// 	/* weapon file */
-		// 	for (i = 0; i < num_cl_weaponmodels; i++)
-		// 	{
-		// 		Com_sprintf(weapon_filename, sizeof(weapon_filename),
-		// 				"players/%s/%s", model_name, cl_weaponmodels[i]);
-		// 		ci->weaponmodel[i] = R_RegisterModel(weapon_filename);
+		/* weapon file */
+		for i := 0; i < T.num_cl_weaponmodels; i++ {
+			weapon_filename := fmt.Sprintf("players/%s/%s", model_name, T.cl_weaponmodels[i])
+			ci.weaponmodel[i], _ = T.R_RegisterModel(weapon_filename)
 
-		// 		if (!ci->weaponmodel[i] && (strcmp(model_name, "cyborg") == 0))
-		// 		{
-		// 			/* try male */
-		// 			Com_sprintf(weapon_filename, sizeof(weapon_filename),
-		// 					"players/male/%s", cl_weaponmodels[i]);
-		// 			ci->weaponmodel[i] = R_RegisterModel(weapon_filename);
-		// 		}
+			// 		if (!ci->weaponmodel[i] && (strcmp(model_name, "cyborg") == 0))
+			// 		{
+			// 			/* try male */
+			// 			Com_sprintf(weapon_filename, sizeof(weapon_filename),
+			// 					"players/male/%s", cl_weaponmodels[i]);
+			// 			ci->weaponmodel[i] = R_RegisterModel(weapon_filename);
+			// 		}
 
-		// 		if (!cl_vwep->value)
-		// 		{
-		// 			break; /* only one when vwep is off */
-		// 		}
-		// 	}
+			if !T.cl_vwep.Bool() {
+				break /* only one when vwep is off */
+			}
+		}
 
-		// 	/* icon file */
-		// 	Com_sprintf(ci->iconname, sizeof(ci->iconname),
-		// 			"/players/%s/%s_i.pcx", model_name, skin_name);
-		// 	ci->icon = Draw_FindPic(ci->iconname);
+		/* icon file */
+		ci.iconname = fmt.Sprintf("/players/%s/%s_i.pcx", model_name, skin_name)
+		ci.icon = T.Draw_FindPic(ci.iconname)
 	}
 
 	// /* must have loaded all data types to be valid */

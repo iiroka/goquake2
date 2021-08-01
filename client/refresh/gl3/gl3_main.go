@@ -844,12 +844,11 @@ func (T *qGl3) BeginFrame(camera_separation float32) error {
 		T.updateUBO3D()
 	}
 
-	// if(gl3_particle_fade_factor->modified)
-	// {
-	// 	gl3_particle_fade_factor->modified = false;
-	// 	gl3state.uni3DData.particleFadeFactor = gl3_particle_fade_factor->value;
-	// 	GL3_UpdateUBO3D();
-	// }
+	if T.gl3_particle_fade_factor.Modified {
+		T.gl3_particle_fade_factor.Modified = false
+		T.gl3state.uni3DData.setParticleFadeFactor(T.gl3_particle_fade_factor.Float())
+		T.updateUBO3D()
+	}
 
 	// if(gl3_particle_square->modified)
 	// {
@@ -1036,7 +1035,7 @@ func (T *qGl3) renderView(fd shared.Refdef_t) error {
 
 	T.setupGL()
 
-	//  GL3_MarkLeaves(); /* done here so we know if we're in water */
+	T.markLeaves() /* done here so we know if we're in water */
 
 	T.drawWorld()
 
@@ -1047,9 +1046,9 @@ func (T *qGl3) renderView(fd shared.Refdef_t) error {
 
 	T.drawParticles()
 
-	//  GL3_DrawAlphaSurfaces();
+	T.drawAlphaSurfaces()
 
-	//  // Note: R_Flash() is now GL3_Draw_Flash() and called from GL3_RenderFrame()
+	// Note: R_Flash() is now GL3_Draw_Flash() and called from GL3_RenderFrame()
 
 	if T.r_speeds.Bool() {
 		T.rPrintf(shared.PRINT_ALL, "%4v wpoly %4v epoly %v tex %v lmaps\n",
@@ -1068,24 +1067,24 @@ func (T *qGl3) setLightLevel() {
 	}
 
 	/* save off light value for server to look at */
-	// var shadelight [3]float32
-	// GL3_LightPoint(gl3_newrefdef.vieworg, shadelight);
+	var shadelight [3]float32
+	T.lightPoint(T.gl3_newrefdef.Vieworg[:], shadelight[:])
 
 	// /* pick the greatest component, which should be the
 	//  * same as the mono value returned by software */
-	// if (shadelight[0] > shadelight[1]) {
-	// 	if (shadelight[0] > shadelight[2]) {
-	// 		T.r_lightlevel->value = 150 * shadelight[0];
-	// 	} else {
-	// 		T.r_lightlevel->value = 150 * shadelight[2];
-	// 	}
-	// } else {
-	// 	if (shadelight[1] > shadelight[2]) {
-	// 		T.r_lightlevel->value = 150 * shadelight[1];
-	// 	} else {
-	// 		T.r_lightlevel->value = 150 * shadelight[2];
-	// 	}
-	// }
+	if shadelight[0] > shadelight[1] {
+		if shadelight[0] > shadelight[2] {
+			// 		T.r_lightlevel->value = 150 * shadelight[0];
+		} else {
+			// 		T.r_lightlevel->value = 150 * shadelight[2];
+		}
+	} else {
+		if shadelight[1] > shadelight[2] {
+			// 		T.r_lightlevel->value = 150 * shadelight[1];
+		} else {
+			// T.r_lightlevel->value = 150 * shadelight[2];
+		}
+	}
 }
 
 func (T *qGl3) RenderFrame(fd shared.Refdef_t) error {

@@ -607,7 +607,18 @@ const DVIS_PHS = 1
 
 type Dvis_t struct {
 	Numclusters int32
-	// 	int bitofs[8][2]; /* bitofs[numclusters][2] */
+	Bitofs      [][2]int32
+}
+
+func Dvis(data []byte) *Dvis_t {
+	d := &Dvis_t{}
+	d.Numclusters = ReadInt32(data)
+	d.Bitofs = make([][2]int32, d.Numclusters)
+	for i := 0; i < int(d.Numclusters); i++ {
+		d.Bitofs[i][0] = ReadInt32(data[(1+2*i)*4:])
+		d.Bitofs[i][1] = ReadInt32(data[(2+2*i)*4:])
+	}
+	return d
 }
 
 /* each area has a list of portals that lead into other areas

@@ -88,3 +88,65 @@ func (T *qClient) addLightStyles() {
 		T.addLightStyle(i, ls.value[0], ls.value[1], ls.value[2])
 	}
 }
+
+func (T *qClient) clearDlights() {
+	for i := range T.cl_dlights {
+		T.cl_dlights[i].key = 0
+		T.cl_dlights[i].die = 0
+		T.cl_dlights[i].radius = 0
+	}
+}
+
+func (T *qClient) allocDlight(key int) *cdlight_t {
+
+	/* first look for an exact key match */
+	if key != 0 {
+		for i, dl := range T.cl_dlights {
+			if dl.key == key {
+				return &T.cl_dlights[i]
+			}
+		}
+	}
+
+	/* then look for anything else */
+	for i, dl := range T.cl_dlights {
+		if dl.die < float32(T.cl.time) {
+			T.cl_dlights[i].key = key
+			return &T.cl_dlights[i]
+		}
+	}
+
+	T.cl_dlights[0].key = key
+	return &T.cl_dlights[0]
+}
+
+func (T *qClient) runDLights() {
+
+	for i, dl := range T.cl_dlights {
+		if dl.radius == 0 {
+			continue
+		}
+
+		if dl.die < float32(T.cl.time) {
+			T.cl_dlights[i].radius = 0
+			continue
+		}
+
+		T.cl_dlights[i].radius -= T.cls.rframetime * dl.decay
+
+		if dl.radius < 0 {
+			T.cl_dlights[i].radius = 0
+		}
+	}
+}
+
+func (T *qClient) addDLights() {
+
+	for _, dl := range T.cl_dlights {
+		if dl.radius == 0 {
+			continue
+		}
+
+		T.addLight(dl.origin[:], dl.radius, dl.color[0], dl.color[1], dl.color[2])
+	}
+}

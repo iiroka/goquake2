@@ -72,30 +72,30 @@ func (T *qClient) addPacketEntities(frame *frame_t) {
 			ent.Frame = s1.Frame
 		}
 
-		// 		/* quad and pent can do different things on client */
-		// 		if (effects & EF_PENT) != 0 {
-		// 			effects &= ~EF_PENT;
-		// 			effects |= EF_COLOR_SHELL;
-		// 			renderfx |= RF_SHELL_RED;
-		// 		}
+		/* quad and pent can do different things on client */
+		if (effects & shared.EF_PENT) != 0 {
+			effects &^= shared.EF_PENT
+			effects |= shared.EF_COLOR_SHELL
+			renderfx |= shared.RF_SHELL_RED
+		}
 
-		// 		if (effects & EF_QUAD) != 0 {
-		// 			effects &= ~EF_QUAD;
-		// 			effects |= EF_COLOR_SHELL;
-		// 			renderfx |= RF_SHELL_BLUE;
-		// 		}
+		if (effects & shared.EF_QUAD) != 0 {
+			effects &^= shared.EF_QUAD
+			effects |= shared.EF_COLOR_SHELL
+			renderfx |= shared.RF_SHELL_BLUE
+		}
 
-		// 		if (effects & EF_DOUBLE) != 0 {
-		// 			effects &= ~EF_DOUBLE;
-		// 			effects |= EF_COLOR_SHELL;
-		// 			renderfx |= RF_SHELL_DOUBLE;
-		// 		}
+		if (effects & shared.EF_DOUBLE) != 0 {
+			effects &^= shared.EF_DOUBLE
+			effects |= shared.EF_COLOR_SHELL
+			renderfx |= shared.RF_SHELL_DOUBLE
+		}
 
-		// 		if (effects & EF_HALF_DAMAGE) != 0 {
-		// 			effects &= ~EF_HALF_DAMAGE;
-		// 			effects |= EF_COLOR_SHELL;
-		// 			renderfx |= RF_SHELL_HALF_DAM;
-		// 		}
+		if (effects & shared.EF_HALF_DAMAGE) != 0 {
+			effects &^= shared.EF_HALF_DAMAGE
+			effects |= shared.EF_COLOR_SHELL
+			renderfx |= shared.RF_SHELL_HALF_DAM
+		}
 
 		ent.Oldframe = cent.prev.Frame
 		ent.Backlerp = 1.0 - T.cl.lerpfrac
@@ -165,32 +165,25 @@ func (T *qClient) addPacketEntities(frame *frame_t) {
 			}
 		}
 
-		// 		/* only used for black hole model right now */
-		// 		if (renderfx & RF_TRANSLUCENT && !(renderfx & RF_BEAM))
-		// 		{
-		// 			ent.alpha = 0.70f;
-		// 		}
+		/* only used for black hole model right now */
+		if (renderfx&shared.RF_TRANSLUCENT) != 0 && (renderfx&shared.RF_BEAM) == 0 {
+			ent.Alpha = 0.70
+		}
 
-		// 		/* render effects (fullbright, translucent, etc) */
-		// 		if ((effects & EF_COLOR_SHELL))
-		// 		{
-		// 			ent.flags = 0; /* renderfx go on color shell entity */
-		// 		}
-		// 		else
-		// 		{
-		ent.Flags = renderfx
-		// 		}
+		/* render effects (fullbright, translucent, etc) */
+		if (effects & shared.EF_COLOR_SHELL) != 0 {
+			ent.Flags = 0 /* renderfx go on color shell entity */
+		} else {
+			ent.Flags = renderfx
+		}
 
 		// 		/* calculate angles */
-		// 		if (effects & EF_ROTATE)
-		// 		{
+		// 		if (effects & EF_ROTATE) != 0 {
 		// 			/* some bonus items auto-rotate */
 		// 			ent.angles[0] = 0;
 		// 			ent.angles[1] = autorotate;
 		// 			ent.angles[2] = 0;
-		// 		}
-		// 		else if (effects & EF_SPINNINGLIGHTS)
-		// 		{
+		// 		} else if (effects & EF_SPINNINGLIGHTS) != 0 {
 		// 			ent.angles[0] = 0;
 		// 			ent.angles[1] = anglemod(cl.time / 2) + s1->angles[1];
 		// 			ent.angles[2] = 180;
@@ -202,9 +195,7 @@ func (T *qClient) addPacketEntities(frame *frame_t) {
 		// 				VectorMA(ent.origin, 64, forward, start);
 		// 				V_AddLight(start, 100, 1, 0, 0);
 		// 			}
-		// 		}
-		// 		else
-		// 		{
+		// 		} else {
 		// 			/* interpolate angles */
 		for i := 0; i < 3; i++ {
 			a1 := cent.current.Angles[i]
@@ -249,10 +240,10 @@ func (T *qClient) addPacketEntities(frame *frame_t) {
 			ent.Alpha = 0.30
 		}
 
-		// 		if (effects & EF_PLASMA) != 0 {
-		// 			ent.flags |= RF_TRANSLUCENT;
-		// 			ent.alpha = 0.6f;
-		// 		}
+		if (effects & shared.EF_PLASMA) != 0 {
+			ent.Flags |= shared.RF_TRANSLUCENT
+			ent.Alpha = 0.6
+		}
 
 		// 		if (effects & EF_SPHERETRANS) != 0 {
 		// 			ent.flags |= RF_TRANSLUCENT;
@@ -334,68 +325,56 @@ func (T *qClient) addPacketEntities(frame *frame_t) {
 		ent.Flags = 0
 		ent.Alpha = 0
 
-		// 		/* duplicate for linked models */
-		// 		if (s1->modelindex2)
-		// 		{
-		// 			if (s1->modelindex2 == 255)
-		// 			{
-		// 				/* custom weapon */
-		// 				ci = &cl.clientinfo[s1->skinnum & 0xff];
-		// 				i = (s1->skinnum >> 8); /* 0 is default weapon model */
+		/* duplicate for linked models */
+		if s1.Modelindex2 != 0 {
+			if s1.Modelindex2 == 255 {
+				/* custom weapon */
+				ci := &T.cl.clientinfo[s1.Skinnum&0xff]
+				i := (s1.Skinnum >> 8) /* 0 is default weapon model */
 
-		// 				if (!cl_vwep->value || (i > MAX_CLIENTWEAPONMODELS - 1))
-		// 				{
-		// 					i = 0;
-		// 				}
+				if !T.cl_vwep.Bool() || (i > MAX_CLIENTWEAPONMODELS-1) {
+					i = 0
+				}
 
-		// 				ent.model = ci->weaponmodel[i];
+				ent.Model = ci.weaponmodel[i]
 
-		// 				if (!ent.model)
-		// 				{
-		// 					if (i != 0)
-		// 					{
-		// 						ent.model = ci->weaponmodel[0];
-		// 					}
+				if ent.Model == nil {
+					if i != 0 {
+						ent.Model = ci.weaponmodel[0]
+					}
 
-		// 					if (!ent.model)
-		// 					{
-		// 						ent.model = cl.baseclientinfo.weaponmodel[0];
-		// 					}
-		// 				}
-		// 			}
-		// 			else
-		// 			{
-		// 				ent.model = cl.model_draw[s1->modelindex2];
-		// 			}
+					if ent.Model == nil {
+						ent.Model = T.cl.baseclientinfo.weaponmodel[0]
+					}
+				}
+			} else {
+				ent.Model = T.cl.model_draw[s1.Modelindex2]
+			}
 
-		// 			/* check for the defender sphere shell and make it translucent */
-		// 			if (!Q_strcasecmp(cl.configstrings[CS_MODELS + (s1->modelindex2)],
-		// 						"models/items/shell/tris.md2"))
-		// 			{
-		// 				ent.alpha = 0.32f;
-		// 				ent.flags = RF_TRANSLUCENT;
-		// 			}
+			/* check for the defender sphere shell and make it translucent */
+			// if !Q_strcasecmp(cl.configstrings[CS_MODELS+(s1.modelindex2)],
+			// 	"models/items/shell/tris.md2") {
+			// 	ent.alpha = 0.32
+			// 	ent.flags = RF_TRANSLUCENT
+			// }
 
-		// 			V_AddEntity(&ent);
+			T.addEntity(ent)
 
-		// 			ent.flags = 0;
-		// 			ent.alpha = 0;
-		// 		}
+			ent.Flags = 0
+			ent.Alpha = 0
+		}
 
-		// 		if (s1->modelindex3)
-		// 		{
-		// 			ent.model = cl.model_draw[s1->modelindex3];
-		// 			V_AddEntity(&ent);
-		// 		}
+		if s1.Modelindex3 != 0 {
+			ent.Model = T.cl.model_draw[s1.Modelindex3]
+			T.addEntity(ent)
+		}
 
-		// 		if (s1->modelindex4)
-		// 		{
-		// 			ent.model = cl.model_draw[s1->modelindex4];
-		// 			V_AddEntity(&ent);
-		// 		}
+		if s1.Modelindex4 != 0 {
+			ent.Model = T.cl.model_draw[s1.Modelindex4]
+			T.addEntity(ent)
+		}
 
-		// 		if (effects & EF_POWERSCREEN)
-		// 		{
+		// 		if (effects & EF_POWERSCREEN) != 0 {
 		// 			ent.model = cl_mod_powerscreen;
 		// 			ent.oldframe = 0;
 		// 			ent.frame = 0;
@@ -696,6 +675,6 @@ func (T *qClient) addEntities() {
 	T.addPacketEntities(&T.cl.frame)
 	// CL_AddTEnts();
 	T.addParticles()
-	// CL_AddDLights();
+	T.addDLights()
 	T.addLightStyles()
 }

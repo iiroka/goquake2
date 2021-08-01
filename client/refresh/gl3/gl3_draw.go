@@ -115,6 +115,10 @@ func (T *qGl3) drawFindPic(name string) *gl3image_t {
 	}
 }
 
+func (T *qGl3) DrawFindPic(name string) interface{} {
+	return T.drawFindPic(name)
+}
+
 func (T *qGl3) DrawStretchPic(x, y, w, h int, name string) {
 	img := T.drawFindPic(name)
 	if img == nil {

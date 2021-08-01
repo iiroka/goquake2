@@ -230,8 +230,7 @@ func (T *qGl3) renderBrushPoly(fa *msurface_t) {
 		lmScales[mmap][3] = 1.0
 	}
 
-	// if (fa->texinfo->flags & SURF_FLOWING)
-	// {
+	// if (fa.texinfo.flags & SURF_FLOWING) != 0 {
 	// 	GL3_UseProgram(gl3state.si3DlmFlow.shaderProgram);
 	// 	UpdateLMscales(lmScales, &gl3state.si3DlmFlow);
 	// 	GL3_DrawGLFlowingPoly(fa);
@@ -244,6 +243,52 @@ func (T *qGl3) renderBrushPoly(fa *msurface_t) {
 	// }
 
 	// Note: lightmap chains are gone, lightmaps are rendered together with normal texture in one pass
+}
+
+/*
+ * Draw water surfaces and windows.
+ * The BSP tree is waled front to back, so unwinding the chain
+ * of alpha_surfaces will draw back to front, giving proper ordering.
+ */
+func (T *qGl3) drawAlphaSurfaces() {
+
+	//  /* go back to the world matrix */
+	T.gl3state.uni3DData.setTransModelMat4(gl3_identityMat4)
+	T.updateUBO3D()
+
+	gl.Enable(gl.BLEND)
+
+	for s := T.gl3_alpha_surfaces; s != nil; s = s.texturechain {
+		T.bind(s.texinfo.image.texnum)
+		T.c_brush_polys++
+		var alpha float32 = 1.0
+		if (s.texinfo.flags & shared.SURF_TRANS33) != 0 {
+			alpha = 0.333
+		} else if (s.texinfo.flags & shared.SURF_TRANS66) != 0 {
+			alpha = 0.666
+		}
+		if alpha != T.gl3state.uni3DData.getAlpha() {
+			T.gl3state.uni3DData.setAlpha(alpha)
+			T.updateUBO3D()
+		}
+
+		// 	 if (s->flags & SURF_DRAWTURB) != 0 {
+		// 		 GL3_EmitWaterPolys(s);
+		// 	 } else if (s->texinfo->flags & SURF_FLOWING) {
+		// 		 GL3_UseProgram(gl3state.si3DtransFlow.shaderProgram);
+		// 		 GL3_DrawGLFlowingPoly(s);
+		// 	 } else {
+		T.useProgram(T.gl3state.si3Dtrans.shaderProgram)
+		T.drawGLPoly(s)
+		// 	 }
+	}
+
+	T.gl3state.uni3DData.setAlpha(1.0)
+	T.updateUBO3D()
+
+	gl.Disable(gl.BLEND)
+
+	T.gl3_alpha_surfaces = nil
 }
 
 func (T *qGl3) drawTextureChains() {
@@ -283,7 +328,6 @@ func (T *qGl3) renderLightmappedPoly(surf *msurface_t) {
 	for j := range lmScales[0] {
 		lmScales[0][j] = 1.0
 	}
-	// lmScales[0] = HMM_Vec4(1.0f, 1.0f, 1.0f, 1.0f);
 
 	// assert((surf->texinfo->flags & (SURF_SKY | SURF_TRANS33 | SURF_TRANS66 | SURF_WARP)) == 0
 	// 		&& "RenderLightMappedPoly mustn't be called with transparent, sky or warping surfaces!");
@@ -304,8 +348,7 @@ func (T *qGl3) renderLightmappedPoly(surf *msurface_t) {
 	T.bind(image.texnum)
 	T.bindLightmap(surf.lightmaptexturenum)
 
-	// if (surf->texinfo->flags & SURF_FLOWING)
-	// {
+	// if (surf.texinfo.flags & SURF_FLOWING) != 0 {
 	// 	GL3_UseProgram(gl3state.si3DlmFlow.shaderProgram);
 	// 	UpdateLMscales(lmScales, &gl3state.si3DlmFlow);
 	// 	GL3_DrawGLFlowingPoly(surf);
@@ -328,8 +371,7 @@ func (T *qGl3) drawInlineBModel() {
 	// /* calculate dynamic lighting for bmodel */
 	// lt = gl3_newrefdef.dlights;
 
-	// for (k = 0; k < gl3_newrefdef.num_dlights; k++, lt++)
-	// {
+	// for (k = 0; k < gl3_newrefdef.num_dlights; k++, lt++) {
 	// 	GL3_MarkLights(lt, 1 << k, currentmodel->nodes + currentmodel->firstnode);
 	// }
 
@@ -400,24 +442,25 @@ func (T *qGl3) drawBrushModel(e *shared.Entity_t) {
 		return
 	}
 
-	// if (gl_zfix->value) {
-	// 	glEnable(GL_POLYGON_OFFSET_FILL);
-	// }
+	if T.gl_zfix.Bool() {
+		gl.Enable(gl.POLYGON_OFFSET_FILL)
+	}
 
 	shared.VectorSubtract(T.gl3_newrefdef.Vieworg[:], e.Origin[:], T._surf_modelorg[:])
 
 	if rotated {
-		// 	vec3_t temp;
-		// 	vec3_t forward, right, up;
-
-		// 	VectorCopy(T._surf_modelorg[:], temp);
-		// 	AngleVectors(e->angles, forward, right, up);
-		// 	T._surf_modelorg[0] = DotProduct(temp, forward);
-		// 	T._surf_modelorg[1] = -DotProduct(temp, right);
-		// 	T._surf_modelorg[2] = DotProduct(temp, up);
+		temp := make([]float32, 3)
+		copy(temp, T._surf_modelorg[:])
+		forward := make([]float32, 3)
+		right := make([]float32, 3)
+		up := make([]float32, 3)
+		shared.AngleVectors(e.Angles[:], forward, right, up)
+		T._surf_modelorg[0] = shared.DotProduct(temp, forward)
+		T._surf_modelorg[1] = -shared.DotProduct(temp, right)
+		T._surf_modelorg[2] = shared.DotProduct(temp, up)
 	}
 
-	// //glPushMatrix();
+	//glPushMatrix();
 	oldMat := T.gl3state.uni3DData.getTransModelMat4()
 
 	e.Angles[0] = -e.Angles[0]
@@ -432,9 +475,9 @@ func (T *qGl3) drawBrushModel(e *shared.Entity_t) {
 	T.gl3state.uni3DData.setTransModelMat4(oldMat)
 	T.updateUBO3D()
 
-	// if (gl_zfix->value) {
-	// 	glDisable(GL_POLYGON_OFFSET_FILL);
-	// }
+	if T.gl_zfix.Bool() {
+		gl.Disable(gl.POLYGON_OFFSET_FILL)
+	}
 }
 
 func (T *qGl3) recursiveWorldNode(anode mnode_or_leaf) {
@@ -517,8 +560,8 @@ func (T *qGl3) recursiveWorldNode(anode mnode_or_leaf) {
 		}
 
 		if (surf.texinfo.flags & shared.SURF_SKY) != 0 {
-			// 			/* just adds to visible sky bounds */
-			// 			GL3_AddSkySurface(surf);
+			/* just adds to visible sky bounds */
+			T.addSkySurface(surf)
 		} else if (surf.texinfo.flags & (shared.SURF_TRANS33 | shared.SURF_TRANS66)) != 0 {
 			/* add to the translucent chain */
 			surf.texturechain = T.gl3_alpha_surfaces
@@ -561,11 +604,100 @@ func (T *qGl3) drawWorld() {
 
 	T.gl3state.currenttexture = 0xFFFFFFFF
 
-	// GL3_ClearSkyBox();
+	T.clearSkyBox()
 	T.recursiveWorldNode(&T.gl3_worldmodel.nodes[0])
 	T.drawTextureChains()
-	// GL3_DrawSkyBox();
+	T.drawSkyBox()
 	// DrawTriangleOutlines();
 
 	T.currententity = nil
+}
+
+/*
+ * Mark the leaves and nodes that are
+ * in the PVS for the current cluster
+ */
+func (T *qGl3) markLeaves() {
+	//  byte *vis;
+	//  YQ2_ALIGNAS_TYPE(int) byte fatvis[MAX_MAP_LEAFS / 8];
+	//  mnode_t *node;
+	//  int i, c;
+	//  mleaf_t *leaf;
+	//  int cluster;
+
+	if (T.gl3_oldviewcluster == T.gl3_viewcluster) &&
+		(T.gl3_oldviewcluster2 == T.gl3_viewcluster2) &&
+		!T.r_novis.Bool() &&
+		(T.gl3_viewcluster != -1) {
+		return
+	}
+
+	/* development aid to let you run around
+	and see exactly where the pvs ends */
+	if T.r_lockpvs.Bool() {
+		return
+	}
+
+	T.gl3_visframecount++
+	T.gl3_oldviewcluster = T.gl3_viewcluster
+	T.gl3_oldviewcluster2 = T.gl3_viewcluster2
+
+	//  if (r_novis->value || (gl3_viewcluster == -1) || !gl3_worldmodel->vis) {
+	// 	 /* mark everything */
+	for i := 0; i < T.gl3_worldmodel.numleafs; i++ {
+		T.gl3_worldmodel.leafs[i].visframe = T.gl3_visframecount
+	}
+
+	for i := 0; i < len(T.gl3_worldmodel.nodes); i++ {
+		T.gl3_worldmodel.nodes[i].visframe = T.gl3_visframecount
+	}
+
+	return
+	//  }
+
+	//  vis = GL3_Mod_ClusterPVS(gl3_viewcluster, gl3_worldmodel);
+
+	//  /* may have to combine two clusters because of solid water boundaries */
+	//  if (gl3_viewcluster2 != gl3_viewcluster)
+	//  {
+	// 	 memcpy(fatvis, vis, (gl3_worldmodel->numleafs + 7) / 8);
+	// 	 vis = GL3_Mod_ClusterPVS(gl3_viewcluster2, gl3_worldmodel);
+	// 	 c = (gl3_worldmodel->numleafs + 31) / 32;
+
+	// 	 for (i = 0; i < c; i++)
+	// 	 {
+	// 		 ((int *)fatvis)[i] |= ((int *)vis)[i];
+	// 	 }
+
+	// 	 vis = fatvis;
+	//  }
+
+	//  for (i = 0, leaf = gl3_worldmodel->leafs;
+	// 	  i < gl3_worldmodel->numleafs;
+	// 	  i++, leaf++)
+	//  {
+	// 	 cluster = leaf->cluster;
+
+	// 	 if (cluster == -1)
+	// 	 {
+	// 		 continue;
+	// 	 }
+
+	// 	 if (vis[cluster >> 3] & (1 << (cluster & 7)))
+	// 	 {
+	// 		 node = (mnode_t *)leaf;
+
+	// 		 do
+	// 		 {
+	// 			 if (node->visframe == gl3_visframecount)
+	// 			 {
+	// 				 break;
+	// 			 }
+
+	// 			 node->visframe = gl3_visframecount;
+	// 			 node = node->parent;
+	// 		 }
+	// 		 while (node);
+	// 	 }
+	//  }
 }

@@ -115,31 +115,31 @@ func (T *qClient) predictMovement() {
 	}
 
 	/* copy current state to pmove */
-	//  memset (&pm, 0, sizeof(pm));
+	pm := shared.Pmove_t{}
 	//  pm.trace = CL_PMTrace;
 	//  pm.pointcontents = CL_PMpointcontents;
 	//  pm_airaccelerate = atof(cl.configstrings[CS_AIRACCEL]);
-	//  pm.s = cl.frame.playerstate.pmove;
+	pm.S = T.cl.frame.playerstate.Pmove
 
 	/* run frames */
 	for ack < current {
 		ack++
-		// 	 frame = ack & (CMD_BACKUP - 1);
-		// 	 cmd = &cl.cmds[frame];
+		frame := ack & (CMD_BACKUP - 1)
+		cmd := &T.cl.cmds[frame]
 
-		// 	 // Ignore null entries
-		// 	 if (!cmd->msec) {
-		// 		 continue;
-		// 	 }
+		// Ignore null entries
+		if cmd.Msec == 0 {
+			continue
+		}
 
-		// 	 pm.cmd = *cmd;
-		// 	 Pmove(&pm);
+		pm.Cmd = *cmd
+		T.common.Pmove(&pm)
 
-		// 	 /* save for debug checking */
-		// 	 VectorCopy(pm.s.origin, cl.predicted_origins[frame]);
+		/* save for debug checking */
+		copy(T.cl.predicted_origins[frame][:], pm.S.Origin[:])
 	}
 
-	//  step = pm.s.origin[2] - (int)(cl.predicted_origin[2] * 8);
+	// step := int(pm.S.Origin[2]) - int(T.cl.predicted_origin[2]*8)
 	//  VectorCopy(pm.s.velocity, tmp);
 
 	//  if (((step > 126 && step < 130))
@@ -151,9 +151,9 @@ func (T *qClient) predictMovement() {
 	//  }
 
 	/* copy results out for rendering */
-	//  T.cl.predicted_origin[0] = pm.s.origin[0] * 0.125f;
-	//  T.cl.predicted_origin[1] = pm.s.origin[1] * 0.125f;
-	//  T.cl.predicted_origin[2] = pm.s.origin[2] * 0.125f;
+	T.cl.predicted_origin[0] = float32(pm.S.Origin[0]) * 0.125
+	T.cl.predicted_origin[1] = float32(pm.S.Origin[1]) * 0.125
+	T.cl.predicted_origin[2] = float32(pm.S.Origin[2]) * 0.125
 
-	//  VectorCopy(pm.viewangles, cl.predicted_angles);
+	copy(T.cl.predicted_angles[:], pm.Viewangles[:])
 }

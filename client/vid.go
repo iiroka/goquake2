@@ -382,6 +382,14 @@ func (T *qClient) R_SetSky(name string, rotate float32, axis []float32) {
 	}
 }
 
+func (T *qClient) Draw_FindPic(name string) interface{} {
+	if T.re != nil {
+		return T.re.DrawFindPic(name)
+	}
+
+	return nil
+}
+
 func (T *qClient) IsVSyncActive() bool {
 	if T.re != nil {
 		return T.re.IsVSyncActive()

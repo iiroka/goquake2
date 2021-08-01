@@ -377,10 +377,9 @@ func (T *qGl3) drawAliasModel(entity *shared.Entity_t) {
 	}
 
 	if (entity.Flags & shared.RF_WEAPONMODEL) != 0 {
-		// 	if (gl_lefthand->value == 2)
-		// 	{
-		// 		return;
-		// 	}
+		if T.gl_lefthand.Int() == 2 {
+			return
+		}
 	}
 
 	model := entity.Model.(*gl3model_t)
@@ -423,54 +422,49 @@ func (T *qGl3) drawAliasModel(entity *shared.Entity_t) {
 		T.lightPoint(entity.Origin[:], shadelight[:])
 
 		// 	/* player lighting hack for communication back to server */
-		// 	if (entity.flags & RF_WEAPONMODEL) != 0 {
-		// 		/* pick the greatest component, which should be
-		// 		   the same as the mono value returned by software */
-		// 		if (shadelight[0] > shadelight[1])
-		// 		{
-		// 			if (shadelight[0] > shadelight[2])
-		// 			{
-		// 				r_lightlevel->value = 150 * shadelight[0];
-		// 			}
-		// 			else
-		// 			{
-		// 				r_lightlevel->value = 150 * shadelight[2];
-		// 			}
-		// 		}
-		// 		else
-		// 		{
-		// 			if (shadelight[1] > shadelight[2])
-		// 			{
-		// 				r_lightlevel->value = 150 * shadelight[1];
-		// 			}
-		// 			else
-		// 			{
-		// 				r_lightlevel->value = 150 * shadelight[2];
-		// 			}
-		// 		}
-		// 	}
+		if (entity.Flags & shared.RF_WEAPONMODEL) != 0 {
+			/* pick the greatest component, which should be
+			   the same as the mono value returned by software */
+			// 		if (shadelight[0] > shadelight[1])
+			// 		{
+			// 			if (shadelight[0] > shadelight[2])
+			// 			{
+			// 				r_lightlevel->value = 150 * shadelight[0];
+			// 			}
+			// 			else
+			// 			{
+			// 				r_lightlevel->value = 150 * shadelight[2];
+			// 			}
+			// 		}
+			// 		else
+			// 		{
+			// 			if (shadelight[1] > shadelight[2])
+			// 			{
+			// 				r_lightlevel->value = 150 * shadelight[1];
+			// 			}
+			// 			else
+			// 			{
+			// 				r_lightlevel->value = 150 * shadelight[2];
+			// 			}
+			// 		}
+		}
 	}
 
-	// if (entity->flags & RF_MINLIGHT)
-	// {
-	// 	for (i = 0; i < 3; i++)
-	// 	{
-	// 		if (shadelight[i] > 0.1)
-	// 		{
+	// if (entity->flags & RF_MINLIGHT) != 0 {
+	// 	for (i := 0; i < 3; i++) {
+	// 		if (shadelight[i] > 0.1) {
 	// 			break;
 	// 		}
 	// 	}
 
-	// 	if (i == 3)
-	// 	{
+	// 	if (i == 3) {
 	// 		shadelight[0] = 0.1;
 	// 		shadelight[1] = 0.1;
 	// 		shadelight[2] = 0.1;
 	// 	}
 	// }
 
-	// if (entity->flags & RF_GLOW)
-	// {
+	// if (entity->flags & RF_GLOW) != 0 {
 	// 	/* bonus items will pulse with time */
 	// 	float scale;
 	// 	float min;
@@ -489,9 +483,9 @@ func (T *qGl3) drawAliasModel(entity *shared.Entity_t) {
 	// 	}
 	// }
 
-	// // Note: gl_overbrightbits are now applied in shader.
+	// Note: gl_overbrightbits are now applied in shader.
 
-	// /* ir goggles color override */
+	/* ir goggles color override */
 	// if ((gl3_newrefdef.rdflags & RDF_IRGOGGLES) && (entity->flags & RF_IR_VISIBLE))
 	// {
 	// 	shadelight[0] = 1.0;
@@ -509,14 +503,12 @@ func (T *qGl3) drawAliasModel(entity *shared.Entity_t) {
 	T.c_alias_polys += int(paliashdr.Num_tris)
 
 	// /* draw all the triangles */
-	// if (entity->flags & RF_DEPTHHACK)
-	// {
+	// if (entity->flags & RF_DEPTHHACK) != 0 {
 	// 	/* hack the depth range to prevent view model from poking into walls */
 	// 	glDepthRange(gl3depthmin, gl3depthmin + 0.3 * (gl3depthmax - gl3depthmin));
 	// }
 
-	// if (entity->flags & RF_WEAPONMODEL)
-	// {
+	// if (entity->flags & RF_WEAPONMODEL) != 0 {
 	// 	extern hmm_mat4 GL3_MYgluPerspective(GLdouble fovy, GLdouble aspect, GLdouble zNear, GLdouble zFar);
 
 	// 	origProjMat = gl3state.uni3DData.transProjMat4;
@@ -604,21 +596,18 @@ func (T *qGl3) drawAliasModel(entity *shared.Entity_t) {
 	T.gl3state.uni3DData.setTransModelMat4(origModelMat)
 	T.updateUBO3D()
 
-	// if (entity->flags & RF_WEAPONMODEL)
-	// {
+	// if (entity->flags & RF_WEAPONMODEL) != 0 {
 	// 	gl3state.uni3DData.transProjMat4 = origProjMat;
 	// 	GL3_UpdateUBO3D();
 	// 	if(gl_lefthand->value == 1.0F)
 	// 		glCullFace(GL_FRONT);
 	// }
 
-	// if (entity->flags & RF_TRANSLUCENT)
-	// {
-	// 	glDisable(GL_BLEND);
-	// }
+	if (entity.Flags & shared.RF_TRANSLUCENT) != 0 {
+		gl.Disable(gl.BLEND)
+	}
 
-	// if (entity->flags & RF_DEPTHHACK)
-	// {
+	// if (entity->flags & RF_DEPTHHACK) != 0 {
 	// 	glDepthRange(gl3depthmin, gl3depthmax);
 	// }
 

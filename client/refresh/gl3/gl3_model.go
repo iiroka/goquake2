@@ -33,6 +33,10 @@ import (
 	"strconv"
 )
 
+const SIDE_FRONT = 0
+const SIDE_BACK = 1
+const SIDE_ON = 2
+
 const MAX_MOD_KNOWN = 512
 
 const (
@@ -55,6 +59,14 @@ type gl3_3D_vtx_t struct {
 }
 
 const gl3_3D_vtx_size = 11
+
+func (T *gl3_3D_vtx_t) getPos() []float32 {
+	r := make([]float32, 3)
+	r[0] = math.Float32frombits(T.data[0])
+	r[1] = math.Float32frombits(T.data[1])
+	r[2] = math.Float32frombits(T.data[2])
+	return r
+}
 
 func (T *gl3_3D_vtx_t) setPos(v []float32) {
 	T.data[0] = math.Float32bits(v[0])
@@ -331,7 +343,8 @@ type gl3model_t struct {
 	// int nummarksurfaces;
 	marksurfaces [][]msurface_t
 
-	// dvis_t *vis;
+	vis    *shared.Dvis_t
+	visBfr []byte
 
 	lightdata []byte
 
@@ -371,7 +384,8 @@ func (M *gl3model_t) Copy(other gl3model_t) {
 	M.surfedges = other.surfedges
 	// int nummarksurfaces;
 	// msurface_t **marksurfaces;
-	// dvis_t *vis;
+	M.visBfr = other.visBfr
+	M.vis = other.vis
 	M.lightdata = other.lightdata
 	// gl3image_t *skins[MAX_MD2SKINS];
 	// int extradatasize;
@@ -404,6 +418,16 @@ func (T *qGl3) modPointInLeaf(p []float32, model *gl3model_t) (*mleaf_t, error) 
 			anode = node.children[1]
 		}
 	}
+}
+
+func (T *qGl3) modClusterPVS(cluster int, model *gl3model_t) []byte {
+	if (cluster == -1) || model.vis == nil {
+		return T.mod_novis[:]
+	}
+
+	return shared.Mod_DecompressVis(model.visBfr,
+		int(model.vis.Bitofs[cluster][shared.DVIS_PVS]),
+		int((model.vis.Numclusters+7)>>3))
 }
 
 func (T *qGl3) modInit() {
@@ -640,7 +664,7 @@ func (T *qGl3) modLoadSubmodels(l shared.Lump_t, mod *gl3model_t, buffer []byte)
 			mod.submodels[i].origin[j] = src.Origin[j]
 		}
 
-		// 	out->radius = Mod_RadiusFromBounds(out->mins, out->maxs);
+		mod.submodels[i].radius = shared.Mod_RadiusFromBounds(mod.submodels[i].mins[:], mod.submodels[i].maxs[:])
 		mod.submodels[i].headnode = int(src.Headnode)
 		mod.submodels[i].firstface = int(src.Firstface)
 		mod.submodels[i].numfaces = int(src.Numfaces)
@@ -823,6 +847,18 @@ func (T *qGl3) modLoadPlanes(l shared.Lump_t, mod *gl3model_t, buffer []byte) er
 	return nil
 }
 
+func (T *qGl3) modLoadVisibility(l shared.Lump_t, mod *gl3model_t, buffer []byte) {
+
+	if l.Filelen == 0 {
+		mod.vis = nil
+		mod.visBfr = nil
+		return
+	}
+
+	mod.visBfr = buffer[int(l.Fileofs) : int(l.Fileofs)+int(l.Filelen)]
+	mod.vis = shared.Dvis(mod.visBfr)
+}
+
 func (T *qGl3) modLoadBrushModel(mod *gl3model_t, buffer []byte) error {
 	// int i;
 	// dheader_t *header;
@@ -884,9 +920,7 @@ func (T *qGl3) modLoadBrushModel(mod *gl3model_t, buffer []byte) error {
 	if err := T.modLoadMarksurfaces(header.Lumps[shared.LUMP_LEAFFACES], mod, buffer); err != nil {
 		return err
 	}
-	// if err := T.modLoadVisibility(header.Lumps[shared.LUMP_VISIBILITY], mod, buffer); err != nil {
-	// 	return err
-	// }
+	T.modLoadVisibility(header.Lumps[shared.LUMP_VISIBILITY], mod, buffer)
 	if err := T.modLoadLeafs(header.Lumps[shared.LUMP_LEAFS], mod, buffer); err != nil {
 		return err
 	}
@@ -1069,18 +1103,4 @@ func (T *qGl3) RegisterModel(name string) (interface{}, error) {
 	}
 
 	return mod, nil
-}
-
-func modRadiusFromBounds(mins, maxs []float32) float32 {
-
-	var corner [3]float32
-	for i := 0; i < 3; i++ {
-		if math.Abs(float64(mins[i])) > math.Abs(float64(maxs[i])) {
-			corner[i] = float32(math.Abs(float64(mins[i])))
-		} else {
-			corner[i] = float32(math.Abs(float64(maxs[i])))
-		}
-	}
-
-	return shared.VectorLength(corner[:])
 }

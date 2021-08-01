@@ -301,8 +301,8 @@ func (T *qClient) Frame(packetdelta, renderdelta, timedelta int, packetframe, re
 		// 		/* update audio */
 		// 		S_Update(cl.refdef.vieworg, cl.v_forward, cl.v_right, cl.v_up);
 
-		// 		/* advance local effects for next frame */
-		// 		CL_RunDLights();
+		/* advance local effects for next frame */
+		T.runDLights()
 		T.runLightStyles()
 		// 		SCR_RunCinematic();
 		// 		SCR_RunConsole();

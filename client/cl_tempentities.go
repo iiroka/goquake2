@@ -79,20 +79,16 @@ func (T *qClient) parseTEnt(msg *shared.QReadbuf) error {
 	case shared.TE_GUNSHOT, /* bullet hitting wall */
 		shared.TE_SPARKS,
 		shared.TE_BULLET_SPARKS:
-		_ = msg.ReadPos()
-		_ = msg.ReadDir()
+		pos := msg.ReadPos()
+		dir := msg.ReadDir()
 
-	// 	if (type == TE_GUNSHOT)
-	// 	{
-	// 		CL_ParticleEffect(pos, dir, 0, 40);
-	// 	}
-	// 	else
-	// 	{
-	// 		CL_ParticleEffect(pos, dir, 0xe0, 6);
-	// 	}
+		if mtype == shared.TE_GUNSHOT {
+			T.particleEffect(pos, dir, 0, 40)
+		} else {
+			T.particleEffect(pos, dir, 0xe0, 6)
+		}
 
-	// 	if (type != TE_SPARKS)
-	// 	{
+	// 	if (type != TE_SPARKS) {
 	// 		CL_SmokeAndFlash(pos);
 	// 		/* impact sound */
 	// 		cnt = randk() & 15;
@@ -111,22 +107,16 @@ func (T *qClient) parseTEnt(msg *shared.QReadbuf) error {
 	// 		}
 	// 	}
 
-	// 	break;
-
 	case shared.TE_SCREEN_SPARKS,
 		shared.TE_SHIELD_SPARKS:
-		_ = msg.ReadPos()
-		_ = msg.ReadDir()
+		pos := msg.ReadPos()
+		dir := msg.ReadDir()
 
-	// 	if (type == TE_SCREEN_SPARKS)
-	// 	{
-	// 		CL_ParticleEffect(pos, dir, 0xd0, 40);
-	// 	}
-
-	// 	else
-	// 	{
-	// 		CL_ParticleEffect(pos, dir, 0xb0, 40);
-	// 	}
+		if mtype == shared.TE_SCREEN_SPARKS {
+			T.particleEffect(pos, dir, 0xd0, 40)
+		} else {
+			T.particleEffect(pos, dir, 0xb0, 40)
+		}
 
 	// 	if (cl_limitsparksounds->value)
 	// 	{
@@ -163,9 +153,9 @@ func (T *qClient) parseTEnt(msg *shared.QReadbuf) error {
 	// 	break;
 
 	case shared.TE_SHOTGUN: /* bullet hitting wall */
-		_ = msg.ReadPos()
-		_ = msg.ReadDir()
-		// 	CL_ParticleEffect(pos, dir, 0, 20);
+		pos := msg.ReadPos()
+		dir := msg.ReadDir()
+		T.particleEffect(pos, dir, 0, 20)
 	// 	CL_SmokeAndFlash(pos);
 
 	// case TE_SPLASH: /* bullet hitting water */
@@ -219,30 +209,22 @@ func (T *qClient) parseTEnt(msg *shared.QReadbuf) error {
 	// 	CL_BlasterParticles(pos, dir);
 	// 	break;
 
-	// case TE_BLASTER: /* blaster hitting wall */
-	// 	MSG_ReadPos(&net_message, pos);
-	// 	MSG_ReadDir(&net_message, dir);
-	// 	CL_BlasterParticles(pos, dir);
+	case shared.TE_BLASTER: /* blaster hitting wall */
+		pos := msg.ReadPos()
+		dir := msg.ReadDir()
+		T.blasterParticles(pos, dir)
 
 	// 	ex = CL_AllocExplosion();
 	// 	VectorCopy(pos, ex->ent.origin);
 	// 	ex->ent.angles[0] = (float)acos(dir[2]) / M_PI * 180;
 
-	// 	if (dir[0])
-	// 	{
+	// 	if (dir[0]) {
 	// 		ex->ent.angles[1] = (float)atan2(dir[1], dir[0]) / M_PI * 180;
-	// 	}
-
-	// 	else if (dir[1] > 0)
-	// 	{
+	// 	} else if (dir[1] > 0) {
 	// 		ex->ent.angles[1] = 90;
-	// 	}
-	// 	else if (dir[1] < 0)
-	// 	{
+	// 	} else if (dir[1] < 0) {
 	// 		ex->ent.angles[1] = 270;
-	// 	}
-	// 	else
-	// 	{
+	// 	} else {
 	// 		ex->ent.angles[1] = 0;
 	// 	}
 

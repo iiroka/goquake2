@@ -84,12 +84,12 @@ type clientinfo_t struct {
 
 	skin interface{}
 
-	// struct image_s	*icon;
-	// char	iconname[MAX_QPATH];
+	icon     interface{}
+	iconname string
 
 	model interface{}
 
-	// struct model_s	*weaponmodel[MAX_CLIENTWEAPONMODELS];
+	weaponmodel [MAX_CLIENTWEAPONMODELS]interface{}
 }
 
 /* the client_state_t structure is wiped
@@ -257,6 +257,16 @@ type cparticle_t struct {
 	alphavel float32
 }
 
+type cdlight_t struct {
+	key      int /* so entities can reuse same entry */
+	color    [3]float32
+	origin   [3]float32
+	radius   float32
+	die      float32 /* stop lighting after this time */
+	decay    float32 /* drop this each second */
+	minlight float32 /* don't add when contributing less */
+}
+
 type qClient struct {
 	common shared.QCommon
 	input  input.QInput
@@ -364,6 +374,10 @@ type qClient struct {
 	r_entities    []shared.Entity_t
 	r_particles   []shared.Particle_t
 	r_lightstyles [shared.MAX_LIGHTSTYLES]shared.Lightstyle_t
+	r_dlights     []shared.Dlight_t
+
+	num_cl_weaponmodels int
+	cl_weaponmodels     [MAX_CLIENTWEAPONMODELS]string
 
 	frame_msec         int
 	old_sys_frame_time int
@@ -406,6 +420,8 @@ type qClient struct {
 
 	cl_lightstyle [shared.MAX_LIGHTSTYLES]clightstyle_t
 	lastofs       int
+
+	cl_dlights [shared.MAX_DLIGHTS]cdlight_t
 }
 
 func CreateClient() shared.QClient {
@@ -415,4 +431,8 @@ func CreateClient() shared.QClient {
 	q.cl.model_draw = make([]interface{}, shared.MAX_MODELS)
 	q.cl_parse_entities = make([]shared.Entity_state_t, MAX_PARSE_ENTITIES)
 	return q
+}
+
+func (T *qClient) IsAttractloop() bool {
+	return T.cl.attractloop
 }

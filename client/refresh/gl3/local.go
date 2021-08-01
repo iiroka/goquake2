@@ -149,6 +149,10 @@ func (T *gl3Uni3D_t) setTime(v float32) {
 	T.data[3*16+1] = v
 }
 
+func (T *gl3Uni3D_t) getAlpha() float32 {
+	return T.data[3*16+2]
+}
+
 func (T *gl3Uni3D_t) setAlpha(v float32) {
 	T.data[3*16+2] = v
 }
@@ -457,6 +461,10 @@ type qGl3 struct {
 	skyaxis          [3]float32
 	sky_images       [6]*gl3image_t
 	c_sky            int
+	vtx_sky          [12]float32
+	tex_sky          [8]float32
+	index_vtx        int
+	index_tex        int
 }
 
 // gl3_lightmap.c

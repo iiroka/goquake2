@@ -52,6 +52,12 @@ type Entity_t struct {
 	Flags int
 }
 
+type Dlight_t struct {
+	Origin    [3]float32
+	Color     [3]float32
+	Intensity float32
+}
+
 type Lightstyle_t struct {
 	Rgb   [3]float32 /* 0.0 - 2.0 */
 	White float32    /* r+g+b */
@@ -79,7 +85,7 @@ type Refdef_t struct {
 	Entities []Entity_t
 
 	// int			num_dlights; // <= 32 (MAX_DLIGHTS)
-	// dlight_t	*dlights;
+	Dlights []Dlight_t
 
 	// int			num_particles;
 	Particles []Particle_t
@@ -118,6 +124,7 @@ type Refexport_t interface {
 	BeginRegistration(name string) error
 	RegisterModel(name string) (interface{}, error)
 	RegisterSkin(name string) interface{}
+	DrawFindPic(name string) interface{}
 
 	RenderFrame(fd Refdef_t) error
 
