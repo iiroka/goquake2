@@ -27,13 +27,12 @@
 package gl3
 
 import (
+	"fmt"
 	"goquake2/shared"
 	"math"
 )
 
 func rBoundPoly(numverts int, verts [][3]float32, mins, maxs [3]float32) {
-	// int i, j;
-	// float *v;
 
 	mins[0] = 9999
 	mins[1] = 9999
@@ -41,7 +40,6 @@ func rBoundPoly(numverts int, verts [][3]float32, mins, maxs [3]float32) {
 	maxs[0] = -9999
 	maxs[1] = -9999
 	maxs[2] = -9999
-	// v = verts;
 
 	for i := 0; i < numverts; i++ {
 		for j := 0; j < 3; j++ {
@@ -194,4 +192,73 @@ func gl3SubdivideSurface(fa *msurface_t, loadmodel *gl3model_t) {
 	}
 
 	rSubdividePolygon(numverts, verts[:], fa)
+}
+
+// ########### below: Sky-specific stuff ##########
+
+const ON_EPSILON = 0.1 /* point on plane side epsilon */
+const MAX_CLIP_VERTS = 64
+
+var skytexorder = [6]int{0, 2, 1, 3, 4, 5}
+
+/* 3dstudio environment map names */
+var suf = [6]string{"rt", "bk", "lf", "ft", "up", "dn"}
+
+var skyclip = [6][3]float32{
+	{1, 1, 0},
+	{1, -1, 0},
+	{0, -1, 1},
+	{0, 1, 1},
+	{1, 0, 1},
+	{-1, 0, 1},
+}
+
+var st_to_vec = [6][3]int{
+	{3, -1, 2},
+	{-3, 1, 2},
+
+	{1, 3, 2},
+	{-1, -3, 2},
+
+	{-2, -1, 3}, /* 0 degrees yaw, look straight up */
+	{2, -1, -3}, /* look straight down */
+}
+
+var vec_to_st = [6][3]int{
+	{-2, 3, 1},
+	{2, 3, -1},
+
+	{1, 3, 2},
+	{-1, 3, -2},
+
+	{-2, -1, 3},
+	{-2, 1, -3},
+}
+
+func (T *qGl3) SetSky(name string, rotate float32, axis []float32) {
+
+	skyname := name
+	T.skyrotate = rotate
+	copy(T.skyaxis[:], axis)
+
+	for i := 0; i < 6; i++ {
+		// NOTE: there might be a paletted .pcx version, which was only used
+		//       if gl_config.palettedtexture so it *shouldn't* be relevant for he GL3 renderer
+		pathname := fmt.Sprintf("env/%s%s.tga", skyname, suf[i])
+
+		T.sky_images[i] = T.findImage(pathname, it_sky)
+
+		if T.sky_images[i] == nil || T.sky_images[i] == T.gl3_notexture {
+			pathname = fmt.Sprintf("pics/Skies/%s%s.m8", skyname, suf[i])
+
+			T.sky_images[i] = T.findImage(pathname, it_sky)
+		}
+
+		if T.sky_images[i] == nil {
+			T.sky_images[i] = T.gl3_notexture
+		}
+
+		T.sky_min = 1.0 / 512
+		T.sky_max = 511.0 / 512
+	}
 }

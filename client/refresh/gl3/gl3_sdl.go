@@ -29,6 +29,7 @@
 package gl3
 
 import (
+	"fmt"
 	"goquake2/shared"
 
 	"github.com/go-gl/gl/v3.2-core/gl"
@@ -163,8 +164,71 @@ func (T *qGl3) InitContext(win interface{}) bool {
 		return false
 	}
 
+	// Check if we've got the requested MSAA.
+	if T.gl_msaa_samples.Bool() {
+		if msaa_samples, err := sdl.GLGetAttribute(sdl.GL_MULTISAMPLESAMPLES); err == nil {
+			T.ri.Cvar_Set("r_msaa_samples", fmt.Sprintf("%v", msaa_samples))
+		}
+	}
+
+	// Check if we've got at least 8 stencil bits
+	if T.gl3config.stencil {
+		if stencil_bits, err := sdl.GLGetAttribute(sdl.GL_STENCIL_SIZE); err != nil || stencil_bits < 8 {
+			T.gl3config.stencil = false
+		}
+	}
+
 	// Enable vsync if requested.
 	T.setVsync()
+
+	// // Load GL pointrs through GLAD and check context.
+	// if( !gladLoadGLLoader(SDL_GL_GetProcAddress))
+	// {
+	// 	R_Printf(PRINT_ALL, "GL3_InitContext(): ERROR: loading OpenGL function pointers failed!\n");
+
+	// 	return false;
+	// }
+	// else if (GLVersion.major < 3 || (GLVersion.major == 3 && GLVersion.minor < 2))
+	// {
+	// 	R_Printf(PRINT_ALL, "GL3_InitContext(): ERROR: glad only got GL version %d.%d!\n", GLVersion.major, GLVersion.minor);
+
+	// 	return false;
+	// }
+	// else
+	// {
+	// 	R_Printf(PRINT_ALL, "Successfully loaded OpenGL function pointers using glad, got version %d.%d!\n", GLVersion.major, GLVersion.minor);
+	// }
+
+	var numExtensions int32
+	gl.GetIntegerv(gl.NUM_EXTENSIONS, &numExtensions)
+	for i := 0; i < int(numExtensions); i++ {
+		ext := gl.GoStr(gl.GetStringi(gl.EXTENSIONS, uint32(i)))
+		if ext == "GL_EXT_texture_filter_anisotropic" {
+			T.gl3config.anisotropic = true
+		} else if ext == "GL_ARB_debug_output" {
+			T.gl3config.debug_output = true
+		}
+	}
+
+	// gl3config.debug_output = GLAD_GL_ARB_debug_output != 0;
+	// gl3config.anisotropic = GLAD_GL_EXT_texture_filter_anisotropic != 0;
+
+	// gl3config.major_version = GLVersion.major;
+	// gl3config.minor_version = GLVersion.minor;
+
+	// // Debug context setup.
+	// if (gl3_debugcontext && gl3_debugcontext->value && gl3config.debug_output)
+	// {
+	// 	glDebugMessageCallbackARB(DebugCallback, NULL);
+
+	// 	// Call GL3_DebugCallback() synchronously, i.e. directly when and
+	// 	// where the error happens (so we can get the cause in a backtrace)
+	// 	glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS_ARB);
+	// }
+
+	// Window title - set here so we can display renderer name in it.
+	title := fmt.Sprintf("Yamagi Quake II %s - OpenGL 3.2", shared.YQ2VERSION)
+	T.window.SetTitle(title)
 
 	return true
 }

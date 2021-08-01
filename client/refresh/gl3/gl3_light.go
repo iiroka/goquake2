@@ -28,14 +28,63 @@ package gl3
 
 import "goquake2/shared"
 
+func (T *qGl3) lightPoint(p, color []float32) {
+	// vec3_t end;
+	// float r;
+	// int lnum;
+	// dlight_t *dl;
+	// vec3_t dist;
+	// float add;
+
+	color[0] = 1.0
+	color[1] = 1.0
+	color[2] = 1.0
+	// if (!gl3_worldmodel.lightdata || !currententity) {
+	// 	color[0] = color[1] = color[2] = 1.0;
+	// 	return;
+	// }
+
+	// end[0] = p[0];
+	// end[1] = p[1];
+	// end[2] = p[2] - 2048;
+
+	// // TODO: don't just aggregate the color, but also save position of brightest+nearest light
+	// //       for shadow position and maybe lighting on model?
+
+	// r = RecursiveLightPoint(gl3_worldmodel->nodes, p, end);
+
+	// if (r == -1)
+	// {
+	// 	VectorCopy(vec3_origin, color);
+	// }
+	// else
+	// {
+	// 	VectorCopy(pointcolor, color);
+	// }
+
+	// /* add dynamic lights */
+	// dl = gl3_newrefdef.dlights;
+
+	// for (lnum = 0; lnum < gl3_newrefdef.num_dlights; lnum++, dl++)
+	// {
+	// 	VectorSubtract(currententity->origin,
+	// 			dl->origin, dist);
+	// 	add = dl->intensity - VectorLength(dist);
+	// 	add *= (1.0f / 256.0f);
+
+	// 	if (add > 0)
+	// 	{
+	// 		VectorMA(color, add, dl->color, color);
+	// 	}
+	// }
+
+	// VectorScale(color, r_modulate->value, color);
+}
+
 /*
  * Combine and scale multiple lightmaps into the floating format in blocklights
  */
 func (T *qGl3) buildLightMap(surf *msurface_t, offsetInLMbuf, stride int) error {
-	//  int smax, tmax;
-	//  int r, g, b, a, max;
-	//  int i, j, size, map, numMaps;
-	//  byte *lightmap;
 
 	if (surf.texinfo.flags &
 		(shared.SURF_SKY | shared.SURF_TRANS33 | shared.SURF_TRANS66 | shared.SURF_WARP)) != 0 {

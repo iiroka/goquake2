@@ -36,7 +36,7 @@ func (T *qCommon) qcommon_Mainloop() error {
 	oldtime := time.Now()
 
 	/* The mainloop. The legend. */
-	for i := 0; i < 100; i++ {
+	for T.running {
 		// #ifndef DEDICATED_ONLY
 		// 		// Throttle the game a little bit.
 		// 		if (busywait->value)
@@ -99,6 +99,7 @@ func (T *qCommon) IsDedicated() bool {
 
 func (T *qCommon) Init() error {
 	T.startTime = time.Now()
+	T.running = true
 	// Jump point used in emergency situations.
 	// 	if (setjmp(abortframe))
 	// 	{

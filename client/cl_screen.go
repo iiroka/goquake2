@@ -26,7 +26,11 @@
  */
 package client
 
-import "goquake2/shared"
+import (
+	"fmt"
+	"goquake2/shared"
+	"strconv"
+)
 
 func (T *qClient) scrInit() {
 	T.scr_viewsize = T.common.Cvar_Get("viewsize", "100", shared.CVAR_ARCHIVE)
@@ -238,6 +242,434 @@ func (T *qClient) scrTileClear() {
 	}
 }
 
+const STAT_MINUS = 10
+
+var sb_nums = [2][11]string{
+	{
+		"num_0", "num_1", "num_2", "num_3", "num_4", "num_5",
+		"num_6", "num_7", "num_8", "num_9", "num_minus",
+	},
+	{
+		"anum_0", "anum_1", "anum_2", "anum_3", "anum_4", "anum_5",
+		"anum_6", "anum_7", "anum_8", "anum_9", "anum_minus",
+	},
+}
+
+const ICON_WIDTH = 24
+const ICON_HEIGHT = 24
+const CHAR_WIDTH = 16
+const ICON_SPACE = 8
+
+func (T *qClient) scrDrawFieldScaled(x, y, color, width, value int, factor float32) {
+	// char num[16], *ptr;
+	// int l;
+	// int frame;
+
+	if width < 1 {
+		return
+	}
+
+	/* draw number string */
+	if width > 5 {
+		width = 5
+	}
+
+	T.scrAddDirtyPoint(x, y)
+	T.scrAddDirtyPoint(x+int(float32(width*CHAR_WIDTH+2)*factor), y+int(factor*24))
+
+	num := fmt.Sprintf("%v", value)
+	l := len(num)
+
+	if l > width {
+		l = width
+	}
+
+	x += int(float32(2+CHAR_WIDTH*(width-l)) * factor)
+
+	for index := 0; index < l; index++ {
+		var frame int
+		if num[index] == '-' {
+			frame = STAT_MINUS
+		} else {
+			frame = int(num[index] - '0')
+		}
+
+		T.Draw_PicScaled(x, y, sb_nums[color][frame], factor)
+		x += int(CHAR_WIDTH * factor)
+	}
+}
+
+func (T *qClient) scrDrawField(x, y, color, width, value int) {
+	T.scrDrawFieldScaled(x, y, color, width, value, 1.0)
+}
+
+func (T *qClient) scrExecuteLayoutString(s string) {
+	// int x, y;
+	// int value;
+	// char *token;
+	// int width;
+	// int index;
+	// clientinfo_t *ci;
+
+	scale := T.scrGetHUDScale()
+
+	if (T.cls.state != ca_active) || !T.cl.refresh_prepped {
+		return
+	}
+
+	if len(s) == 0 {
+		return
+	}
+
+	x := 0
+	y := 0
+
+	index := 0
+	for index >= 0 && index < len(s) {
+		token, indx := shared.COM_Parse(s, index)
+		if indx < 0 {
+			break
+		}
+		index = indx
+
+		if token == "xl" {
+			token, index = shared.COM_Parse(s, index)
+			xi, _ := strconv.ParseInt(token, 10, 32)
+			x = int(scale * float32(xi))
+			continue
+		}
+
+		if token == "xr" {
+			token, index = shared.COM_Parse(s, index)
+			xi, _ := strconv.ParseInt(token, 10, 32)
+			x = T.viddef.width + int(scale*float32(xi))
+			continue
+		}
+
+		if token == "xv" {
+			token, index = shared.COM_Parse(s, index)
+			xi, _ := strconv.ParseInt(token, 10, 32)
+			x = T.viddef.width/2 - int(scale*160) + int(scale*float32(xi))
+			continue
+		}
+
+		if token == "yt" {
+			token, index = shared.COM_Parse(s, index)
+			yi, _ := strconv.ParseInt(token, 10, 32)
+			y = int(scale * float32(yi))
+			continue
+		}
+
+		if token == "yb" {
+			token, index = shared.COM_Parse(s, index)
+			yi, _ := strconv.ParseInt(token, 10, 32)
+			y = T.viddef.height + int(scale*float32(yi))
+			continue
+		}
+
+		if token == "yv" {
+			token, index = shared.COM_Parse(s, index)
+			yi, _ := strconv.ParseInt(token, 10, 32)
+			y = T.viddef.height/2 - int(scale*120) + int(scale*float32(yi))
+			continue
+		}
+
+		if token == "pic" {
+			/* draw a pic from a stat number */
+			token, index = shared.COM_Parse(s, index)
+			idx, _ := strconv.ParseInt(token, 10, 32)
+
+			// 		if ((idx < 0) || (idx >= sizeof(cl.frame.playerstate.stats))) {
+			// 			Com_Error(ERR_DROP, "bad stats index %d (0x%x)", index, index);
+			// 		}
+
+			value := T.cl.frame.playerstate.Stats[idx]
+
+			// 		if (value >= MAX_IMAGES) {
+			// 			Com_Error(ERR_DROP, "Pic >= MAX_IMAGES");
+			// 		}
+
+			if len(T.cl.configstrings[shared.CS_IMAGES+value]) > 0 {
+				T.scrAddDirtyPoint(x, y)
+				T.scrAddDirtyPoint(x+int(23*scale), y+int(23*scale))
+				T.Draw_PicScaled(x, y, T.cl.configstrings[shared.CS_IMAGES+value], scale)
+			}
+
+			continue
+		}
+
+		// 	if (!strcmp(token, "client"))
+		// 	{
+		// 		/* draw a deathmatch client block */
+		// 		int score, ping, time;
+
+		// 		token = COM_Parse(&s);
+		// 		x = viddef.width / 2 - scale*160 + scale*(int)strtol(token, (char **)NULL, 10);
+		// 		token = COM_Parse(&s);
+		// 		y = viddef.height / 2 - scale*120 + scale*(int)strtol(token, (char **)NULL, 10);
+		// 		SCR_AddDirtyPoint(x, y);
+		// 		SCR_AddDirtyPoint(x + scale*159, y + scale*31);
+
+		// 		token = COM_Parse(&s);
+		// 		value = (int)strtol(token, (char **)NULL, 10);
+
+		// 		if ((value >= MAX_CLIENTS) || (value < 0))
+		// 		{
+		// 			Com_Error(ERR_DROP, "client >= MAX_CLIENTS");
+		// 		}
+
+		// 		ci = &cl.clientinfo[value];
+
+		// 		token = COM_Parse(&s);
+		// 		score = (int)strtol(token, (char **)NULL, 10);
+
+		// 		token = COM_Parse(&s);
+		// 		ping = (int)strtol(token, (char **)NULL, 10);
+
+		// 		token = COM_Parse(&s);
+		// 		time = (int)strtol(token, (char **)NULL, 10);
+
+		// 		DrawAltStringScaled(x + scale*32, y, ci->name, scale);
+		// 		DrawAltStringScaled(x + scale*32, y + scale*8, "Score: ", scale);
+		// 		DrawAltStringScaled(x + scale*(32 + 7 * 8), y + scale*8, va("%i", score), scale);
+		// 		DrawStringScaled(x + scale*32, y + scale*16, va("Ping:  %i", ping), scale);
+		// 		DrawStringScaled(x + scale*32, y + scale*24, va("Time:  %i", time), scale);
+
+		// 		if (!ci->icon)
+		// 		{
+		// 			ci = &cl.baseclientinfo;
+		// 		}
+
+		// 		Draw_PicScaled(x, y, ci->iconname, scale);
+		// 		continue;
+		// 	}
+
+		// 	if (!strcmp(token, "ctf"))
+		// 	{
+		// 		/* draw a ctf client block */
+		// 		int score, ping;
+		// 		char block[80];
+
+		// 		token = COM_Parse(&s);
+		// 		x = viddef.width / 2 - scale*160 + scale*(int)strtol(token, (char **)NULL, 10);
+		// 		token = COM_Parse(&s);
+		// 		y = viddef.height / 2 - scale*120 + scale*(int)strtol(token, (char **)NULL, 10);
+		// 		SCR_AddDirtyPoint(x, y);
+		// 		SCR_AddDirtyPoint(x + scale*159, y + scale*31);
+
+		// 		token = COM_Parse(&s);
+		// 		value = (int)strtol(token, (char **)NULL, 10);
+
+		// 		if ((value >= MAX_CLIENTS) || (value < 0))
+		// 		{
+		// 			Com_Error(ERR_DROP, "client >= MAX_CLIENTS");
+		// 		}
+
+		// 		ci = &cl.clientinfo[value];
+
+		// 		token = COM_Parse(&s);
+		// 		score = (int)strtol(token, (char **)NULL, 10);
+
+		// 		token = COM_Parse(&s);
+		// 		ping = (int)strtol(token, (char **)NULL, 10);
+
+		// 		if (ping > 999)
+		// 		{
+		// 			ping = 999;
+		// 		}
+
+		// 		sprintf(block, "%3d %3d %-12.12s", score, ping, ci->name);
+
+		// 		if (value == cl.playernum)
+		// 		{
+		// 			DrawAltStringScaled(x, y, block, scale);
+		// 		}
+
+		// 		else
+		// 		{
+		// 			DrawStringScaled(x, y, block, scale);
+		// 		}
+
+		// 		continue;
+		// 	}
+
+		// 	if (!strcmp(token, "picn"))
+		// 	{
+		// 		/* draw a pic from a name */
+		// 		token = COM_Parse(&s);
+		// 		SCR_AddDirtyPoint(x, y);
+		// 		SCR_AddDirtyPoint(x + scale*23, y + scale*23);
+		// 		Draw_PicScaled(x, y, (char *)token, scale);
+		// 		continue;
+		// 	}
+
+		// 	if (!strcmp(token, "num"))
+		// 	{
+		// 		/* draw a number */
+		// 		token = COM_Parse(&s);
+		// 		width = (int)strtol(token, (char **)NULL, 10);
+		// 		token = COM_Parse(&s);
+		// 		value = cl.frame.playerstate.stats[(int)strtol(token, (char **)NULL, 10)];
+		// 		SCR_DrawFieldScaled(x, y, 0, width, value, scale);
+		// 		continue;
+		// 	}
+
+		if token == "hnum" {
+			/* health number */
+			value := T.cl.frame.playerstate.Stats[shared.STAT_HEALTH]
+
+			var color int
+			if value > 25 {
+				color = 0 /* green */
+			} else if value > 0 {
+				color = (T.cl.frame.serverframe >> 2) & 1 /* flash */
+			} else {
+				color = 1
+			}
+
+			if (T.cl.frame.playerstate.Stats[shared.STAT_FLASHES] & 1) != 0 {
+				T.Draw_PicScaled(x, y, "field_3", scale)
+			}
+
+			T.scrDrawFieldScaled(x, y, color, 3, int(value), scale)
+			continue
+		}
+
+		if token == "anum" {
+			/* ammo number */
+			value := T.cl.frame.playerstate.Stats[shared.STAT_AMMO]
+
+			var color int
+			if value > 5 {
+				color = 0 /* green */
+			} else if value >= 0 {
+				color = (T.cl.frame.serverframe >> 2) & 1 /* flash */
+			} else {
+				continue /* negative number = don't show */
+			}
+
+			if (T.cl.frame.playerstate.Stats[shared.STAT_FLASHES] & 4) != 0 {
+				T.Draw_PicScaled(x, y, "field_3", scale)
+			}
+
+			T.scrDrawFieldScaled(x, y, color, 3, int(value), scale)
+			continue
+		}
+
+		// 	if (!strcmp(token, "rnum"))
+		// 	{
+		// 		/* armor number */
+		// 		int color;
+
+		// 		width = 3;
+		// 		value = cl.frame.playerstate.stats[STAT_ARMOR];
+
+		// 		if (value < 1)
+		// 		{
+		// 			continue;
+		// 		}
+
+		// 		color = 0; /* green */
+
+		// 		if (cl.frame.playerstate.stats[STAT_FLASHES] & 2)
+		// 		{
+		// 			Draw_PicScaled(x, y, "field_3", scale);
+		// 		}
+
+		// 		SCR_DrawFieldScaled(x, y, color, width, value, scale);
+		// 		continue;
+		// 	}
+
+		// 	if (!strcmp(token, "stat_string"))
+		// 	{
+		// 		token = COM_Parse(&s);
+		// 		index = (int)strtol(token, (char **)NULL, 10);
+
+		// 		if ((index < 0) || (index >= MAX_CONFIGSTRINGS))
+		// 		{
+		// 			Com_Error(ERR_DROP, "Bad stat_string index");
+		// 		}
+
+		// 		index = cl.frame.playerstate.stats[index];
+
+		// 		if ((index < 0) || (index >= MAX_CONFIGSTRINGS))
+		// 		{
+		// 			Com_Error(ERR_DROP, "Bad stat_string index");
+		// 		}
+
+		// 		DrawStringScaled(x, y, cl.configstrings[index], scale);
+		// 		continue;
+		// 	}
+
+		// 	if (!strcmp(token, "cstring"))
+		// 	{
+		// 		token = COM_Parse(&s);
+		// 		DrawHUDStringScaled(token, x, y, 320, 0, scale); // FIXME: or scale 320 here?
+		// 		continue;
+		// 	}
+
+		// 	if (!strcmp(token, "string"))
+		// 	{
+		// 		token = COM_Parse(&s);
+		// 		DrawStringScaled(x, y, token, scale);
+		// 		continue;
+		// 	}
+
+		// 	if (!strcmp(token, "cstring2"))
+		// 	{
+		// 		token = COM_Parse(&s);
+		// 		DrawHUDStringScaled(token, x, y, 320, 0x80, scale); // FIXME: or scale 320 here?
+		// 		continue;
+		// 	}
+
+		// 	if (!strcmp(token, "string2"))
+		// 	{
+		// 		token = COM_Parse(&s);
+		// 		DrawAltStringScaled(x, y, token, scale);
+		// 		continue;
+		// 	}
+
+		if token == "if" {
+			token, index = shared.COM_Parse(s, index)
+			idx, _ := strconv.ParseInt(token, 10, 32)
+			value := T.cl.frame.playerstate.Stats[idx]
+
+			if value == 0 {
+				/* skip to endif */
+				for index > 0 && index < len(s) && token != "endif" {
+					token, index = shared.COM_Parse(s, index)
+				}
+			}
+
+			continue
+		}
+
+		if token == "endif" {
+			continue
+		}
+
+		println("Token", token)
+	}
+}
+
+/*
+ * The status bar is a small layout program that
+ * is based on the stats array
+ */
+func (T *qClient) scrDrawStats() {
+	T.scrExecuteLayoutString(T.cl.configstrings[shared.CS_STATUSBAR])
+}
+
+const STAT_LAYOUTS = 13
+
+func (T *qClient) scrDrawLayout() {
+	if T.cl.frame.playerstate.Stats[STAT_LAYOUTS] == 0 {
+		return
+	}
+
+	T.scrExecuteLayoutString(T.cl.layout)
+}
+
 // ----
 /*
  * This is called every frame, and can also be called
@@ -355,17 +787,15 @@ func (T *qClient) scrUpdateScreen() error {
 			return err
 		}
 
-		// 		 SCR_DrawStats();
+		T.scrDrawStats()
 
-		// 		 if (cl.frame.playerstate.stats[STAT_LAYOUTS] & 1)
-		// 		 {
-		// 			 SCR_DrawLayout();
-		// 		 }
+		if (T.cl.frame.playerstate.Stats[shared.STAT_LAYOUTS] & 1) != 0 {
+			T.scrDrawLayout()
+		}
 
-		// 		 if (cl.frame.playerstate.stats[STAT_LAYOUTS] & 2)
-		// 		 {
-		// 			 CL_DrawInventory();
-		// 		 }
+		if (T.cl.frame.playerstate.Stats[shared.STAT_LAYOUTS] & 2) != 0 {
+			// 			 CL_DrawInventory();
+		}
 
 		// 		 SCR_DrawNet();
 		// 		 SCR_CheckDrawCenterString();

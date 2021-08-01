@@ -128,6 +128,19 @@ func (T *qGl3) DrawStretchPic(x, y, w, h int, name string) {
 	T.drawTexturedRectangle(float32(x), float32(y), float32(w), float32(h), img.sl, img.tl, img.sh, img.th)
 }
 
+func (T *qGl3) DrawPicScaled(x, y int, name string, factor float32) {
+	img := T.drawFindPic(name)
+	if img == nil {
+		T.rPrintf(shared.PRINT_ALL, "Can't find pic: %s\n", name)
+		return
+	}
+
+	T.useProgram(T.gl3state.si2D.shaderProgram)
+	T.bind(img.texnum)
+
+	T.drawTexturedRectangle(float32(x), float32(y), float32(img.width)*factor, float32(img.height)*factor, img.sl, img.tl, img.sh, img.th)
+}
+
 /*
  * This repeats a 64*64 tile graphic to fill
  * the screen around a sized down

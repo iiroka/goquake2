@@ -54,7 +54,7 @@ type gl3_3D_vtx_t struct {
 	data []uint32
 }
 
-const gl3_3D_vtx_size = 12
+const gl3_3D_vtx_size = 11
 
 func (T *gl3_3D_vtx_t) setPos(v []float32) {
 	T.data[0] = math.Float32bits(v[0])
@@ -87,6 +87,34 @@ type gl3_alias_vtx_t struct {
 	// GLfloat pos[3];
 	// GLfloat texCoord[2];
 	// GLfloat color[4];
+	data []float32
+}
+
+const gl3_alias_vtx_size = 9
+
+func (T *gl3_alias_vtx_t) setPos(v []float32) {
+	T.data[0] = v[0]
+	T.data[1] = v[1]
+	T.data[2] = v[2]
+}
+
+func (T *gl3_alias_vtx_t) setTexCoord(s, t float32) {
+	T.data[3] = s
+	T.data[4] = t
+}
+
+func (T *gl3_alias_vtx_t) setColor(v []float32) {
+	T.data[5] = v[0]
+	T.data[6] = v[1]
+	T.data[7] = v[2]
+	T.data[8] = v[3]
+}
+
+func (T *gl3_alias_vtx_t) setColorAlpha(v []float32, a float32) {
+	T.data[5] = v[0]
+	T.data[6] = v[1]
+	T.data[7] = v[2]
+	T.data[8] = a
 }
 
 /* in memory representation */
@@ -225,8 +253,8 @@ type mleaf_t struct {
 	cluster int
 	area    int
 
-	// msurface_t **firstmarksurface
-	nummarksurfaces int
+	firstmarksurface []msurface_t
+	nummarksurfaces  int
 }
 
 func (T *mleaf_t) Contents() int {
@@ -301,17 +329,17 @@ type gl3model_t struct {
 	surfedges []int
 
 	// int nummarksurfaces;
-	// msurface_t **marksurfaces;
+	marksurfaces [][]msurface_t
 
 	// dvis_t *vis;
 
 	lightdata []byte
 
-	// /* for alias models and skins */
-	// gl3image_t *skins[MAX_MD2SKINS];
+	/* for alias models and skins */
+	skins []*gl3image_t
 
 	// int extradatasize;
-	// void *extradata;
+	extradata interface{}
 }
 
 func (M *gl3model_t) Copy(other gl3model_t) {
@@ -392,6 +420,26 @@ func (T *qGl3) modLoadLighting(l shared.Lump_t, mod *gl3model_t, buffer []byte) 
 
 	mod.lightdata = make([]byte, l.Filelen)
 	copy(mod.lightdata, buffer[l.Fileofs:])
+	return nil
+}
+
+func (T *qGl3) modLoadMarksurfaces(l shared.Lump_t, mod *gl3model_t, buffer []byte) error {
+	if (l.Filelen % 2) != 0 {
+		return T.ri.Sys_Error(shared.ERR_DROP, "modLoadMarksurfaces: funny lump size in %s", mod.name)
+	}
+
+	count := l.Filelen / 2
+
+	mod.marksurfaces = make([][]msurface_t, count)
+
+	for i := 0; i < int(count); i++ {
+		j := shared.ReadInt16(buffer[int(l.Fileofs)+i*2:])
+		if (j < 0) || (int(j) >= len(mod.surfaces)) {
+			return T.ri.Sys_Error(shared.ERR_DROP, "modLoadMarksurfaces: bad surface number")
+		}
+
+		mod.marksurfaces[i] = mod.surfaces[j:]
+	}
 	return nil
 }
 
@@ -560,10 +608,10 @@ func (T *qGl3) modLoadLeafs(l shared.Lump_t, mod *gl3model_t, buffer []byte) err
 		mod.leafs[i].area = int(src.Area)
 
 		// make unsigned long from signed short
-		// firstleafface := src.Firstleafface & 0xFFFF;
+		firstleafface := src.Firstleafface & 0xFFFF
 		mod.leafs[i].nummarksurfaces = int(src.Numleaffaces & 0xFFFF)
 
-		// 	out->firstmarksurface = loadmodel->marksurfaces + firstleafface;
+		mod.leafs[i].firstmarksurface = mod.marksurfaces[firstleafface]
 		// 	if ((firstleafface + out->nummarksurfaces) > loadmodel->nummarksurfaces)
 		// 	{
 		// 		ri.Sys_Error(ERR_DROP, "%s: wrong marksurfaces position in %s",
@@ -833,9 +881,9 @@ func (T *qGl3) modLoadBrushModel(mod *gl3model_t, buffer []byte) error {
 	if err := T.modLoadFaces(header.Lumps[shared.LUMP_FACES], mod, buffer); err != nil {
 		return err
 	}
-	// if err := T.modLoadMarksurfaces(header.Lumps[shared.LUMP_LEAFFACES], mod, buffer); err != nil {
-	// 	return err
-	// }
+	if err := T.modLoadMarksurfaces(header.Lumps[shared.LUMP_LEAFFACES], mod, buffer); err != nil {
+		return err
+	}
 	// if err := T.modLoadVisibility(header.Lumps[shared.LUMP_VISIBILITY], mod, buffer); err != nil {
 	// 	return err
 	// }
@@ -943,6 +991,8 @@ func (T *qGl3) modForName(name string, crash bool) (*gl3model_t, error) {
 		}
 
 	case shared.IDSPRITEHEADER:
+		T.mod_known[index].mtype = mod_sprite
+		println("SPRITE")
 	// 		 GL3_LoadSP2(mod, buf, modfilelen);
 	// 		 break;
 
@@ -1004,14 +1054,13 @@ func (T *qGl3) RegisterModel(name string) (interface{}, error) {
 			// 		mod->skins[i] = GL3_FindImage(sprout->frames[i].name, it_sprite);
 			// 	}
 		} else if mod.mtype == mod_alias {
-			// 	pheader = (dmdl_t *)mod->extradata;
+			extra := mod.extradata.(aliasExtra)
 
-			// 	for (i = 0; i < pheader->num_skins; i++)
-			// 	{
-			// 		mod->skins[i] = GL3_FindImage((char *)pheader + pheader->ofs_skins + i * MAX_SKINNAME, it_skin);
-			// 	}
+			for i := range mod.skins {
+				mod.skins[i] = T.findImage(extra.skinNames[i], it_skin)
+			}
 
-			// 	mod->numframes = pheader->num_frames;
+			mod.numframes = int(extra.header.Num_frames)
 		} else if mod.mtype == mod_brush {
 			for i := range mod.texinfo {
 				mod.texinfo[i].image.registration_sequence = T.registration_sequence

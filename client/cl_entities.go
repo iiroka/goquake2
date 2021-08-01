@@ -59,44 +59,39 @@ func (T *qClient) addPacketEntities(frame *frame_t) {
 		effects := s1.Effects
 		renderfx := s1.Renderfx
 
-		// 		/* set frame */
+		/* set frame */
 		if (effects & shared.EF_ANIM01) != 0 {
 			ent.Frame = autoanim & 1
 		} else if (effects & shared.EF_ANIM23) != 0 {
 			ent.Frame = 2 + (autoanim & 1)
-			// } else if (effects & EF_ANIM_ALL) {
-			// 			ent.frame = autoanim;
-			// 		} else if (effects & EF_ANIM_ALLFAST)
-			// 		{
-			// 			ent.frame = cl.time / 100;
+		} else if (effects & shared.EF_ANIM_ALL) != 0 {
+			ent.Frame = autoanim
+		} else if (effects & shared.EF_ANIM_ALLFAST) != 0 {
+			ent.Frame = T.cl.time / 100
 		} else {
 			ent.Frame = s1.Frame
 		}
 
 		// 		/* quad and pent can do different things on client */
-		// 		if (effects & EF_PENT)
-		// 		{
+		// 		if (effects & EF_PENT) != 0 {
 		// 			effects &= ~EF_PENT;
 		// 			effects |= EF_COLOR_SHELL;
 		// 			renderfx |= RF_SHELL_RED;
 		// 		}
 
-		// 		if (effects & EF_QUAD)
-		// 		{
+		// 		if (effects & EF_QUAD) != 0 {
 		// 			effects &= ~EF_QUAD;
 		// 			effects |= EF_COLOR_SHELL;
 		// 			renderfx |= RF_SHELL_BLUE;
 		// 		}
 
-		// 		if (effects & EF_DOUBLE)
-		// 		{
+		// 		if (effects & EF_DOUBLE) != 0 {
 		// 			effects &= ~EF_DOUBLE;
 		// 			effects |= EF_COLOR_SHELL;
 		// 			renderfx |= RF_SHELL_DOUBLE;
 		// 		}
 
-		// 		if (effects & EF_HALF_DAMAGE)
-		// 		{
+		// 		if (effects & EF_HALF_DAMAGE) != 0 {
 		// 			effects &= ~EF_HALF_DAMAGE;
 		// 			effects |= EF_COLOR_SHELL;
 		// 			renderfx |= RF_SHELL_HALF_DAM;
@@ -211,8 +206,6 @@ func (T *qClient) addPacketEntities(frame *frame_t) {
 		// 		else
 		// 		{
 		// 			/* interpolate angles */
-		// 			float a1, a2;
-
 		for i := 0; i < 3; i++ {
 			a1 := cent.current.Angles[i]
 			a2 := cent.prev.Angles[i]
@@ -220,42 +213,41 @@ func (T *qClient) addPacketEntities(frame *frame_t) {
 		}
 		// 		}
 
-		// 		if (s1->number == cl.playernum + 1)
-		// 		{
-		// 			ent.flags |= RF_VIEWERMODEL;
+		if s1.Number == T.cl.playernum+1 {
+			ent.Flags |= shared.RF_VIEWERMODEL
 
-		// 			if (effects & EF_FLAG1)
-		// 			{
-		// 				V_AddLight(ent.origin, 225, 1.0f, 0.1f, 0.1f);
-		// 			}
+			// 			if (effects & EF_FLAG1)
+			// 			{
+			// 				V_AddLight(ent.origin, 225, 1.0f, 0.1f, 0.1f);
+			// 			}
 
-		// 			else if (effects & EF_FLAG2)
-		// 			{
-		// 				V_AddLight(ent.origin, 225, 0.1f, 0.1f, 1.0f);
-		// 			}
+			// 			else if (effects & EF_FLAG2)
+			// 			{
+			// 				V_AddLight(ent.origin, 225, 0.1f, 0.1f, 1.0f);
+			// 			}
 
-		// 			else if (effects & EF_TAGTRAIL)
-		// 			{
-		// 				V_AddLight(ent.origin, 225, 1.0f, 1.0f, 0.0f);
-		// 			}
+			// 			else if (effects & EF_TAGTRAIL)
+			// 			{
+			// 				V_AddLight(ent.origin, 225, 1.0f, 1.0f, 0.0f);
+			// 			}
 
-		// 			else if (effects & EF_TRACKERTRAIL)
-		// 			{
-		// 				V_AddLight(ent.origin, 225, -1.0f, -1.0f, -1.0f);
-		// 			}
+			// 			else if (effects & EF_TRACKERTRAIL)
+			// 			{
+			// 				V_AddLight(ent.origin, 225, -1.0f, -1.0f, -1.0f);
+			// 			}
 
-		// 			continue;
-		// 		}
+			continue
+		}
 
 		/* if set to invisible, skip */
 		if s1.Modelindex == 0 {
 			continue
 		}
 
-		// 		if (effects & EF_BFG) != 0 {
-		// 			ent.flags |= RF_TRANSLUCENT;
-		// 			ent.alpha = 0.30f;
-		// 		}
+		if (effects & shared.EF_BFG) != 0 {
+			ent.Flags |= shared.RF_TRANSLUCENT
+			ent.Alpha = 0.30
+		}
 
 		// 		if (effects & EF_PLASMA) != 0 {
 		// 			ent.flags |= RF_TRANSLUCENT;
@@ -645,13 +637,11 @@ func (T *qClient) calcViewValues() {
 		}
 	}
 
-	//  if (cl_kickangles->value)
-	//  {
-	// 	 for (i = 0; i < 3; i++) {
-	// 		 cl.refdef.viewangles[i] += LerpAngle(ops->kick_angles[i],
-	// 				 ps->kick_angles[i], lerp);
-	// 	 }
-	//  }
+	if T.cl_kickangles.Bool() {
+		for i := 0; i < 3; i++ {
+			T.cl.refdef.Viewangles[i] += shared.LerpAngle(ops.Kick_angles[i], ps.Kick_angles[i], lerp)
+		}
+	}
 
 	shared.AngleVectors(T.cl.refdef.Viewangles[:], T.cl.v_forward[:], T.cl.v_right[:], T.cl.v_up[:])
 
@@ -705,7 +695,7 @@ func (T *qClient) addEntities() {
 	T.calcViewValues()
 	T.addPacketEntities(&T.cl.frame)
 	// CL_AddTEnts();
-	// CL_AddParticles();
+	T.addParticles()
 	// CL_AddDLights();
-	// CL_AddLightStyles();
+	T.addLightStyles()
 }

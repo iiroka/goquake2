@@ -370,6 +370,18 @@ func (T *qClient) Draw_StretchPic(x, y, w, h int, name string) {
 	}
 }
 
+func (T *qClient) Draw_PicScaled(x, y int, pic string, factor float32) {
+	if T.re != nil {
+		T.re.DrawPicScaled(x, y, pic, factor)
+	}
+}
+
+func (T *qClient) R_SetSky(name string, rotate float32, axis []float32) {
+	if T.re != nil {
+		T.re.SetSky(name, rotate, axis)
+	}
+}
+
 func (T *qClient) IsVSyncActive() bool {
 	if T.re != nil {
 		return T.re.IsVSyncActive()

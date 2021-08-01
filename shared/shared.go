@@ -36,6 +36,8 @@ import (
 )
 
 const (
+	MAX_QPATH = 64 /* max length of a quake game pathname */
+
 	/* angle indexes */
 	PITCH = 0 /* up / down */
 	YAW   = 1 /* left / right */
@@ -148,6 +150,34 @@ func (T *Pmove_state_t) Copy(other Pmove_state_t) {
 	T.Pm_flags = other.Pm_flags
 	T.Pm_time = other.Pm_time
 	T.Gravity = other.Gravity
+}
+
+/* button bits */
+const BUTTON_ATTACK byte = 1
+const BUTTON_USE byte = 2
+const BUTTON_ANY byte = 128 /* any key whatsoever */
+
+/* usercmd_t is sent to the server each client frame */
+type Usercmd_t struct {
+	Msec                          byte
+	Buttons                       byte
+	Angles                        [3]int16
+	Forwardmove, Sidemove, Upmove int16
+	Impulse                       byte /* remove? */
+	Lightlevel                    byte /* light level the player is standing on */
+}
+
+func (T *Usercmd_t) Copy(other Usercmd_t) {
+	T.Msec = other.Msec
+	T.Buttons = other.Buttons
+	T.Angles[0] = other.Angles[0]
+	T.Angles[1] = other.Angles[1]
+	T.Angles[2] = other.Angles[2]
+	T.Forwardmove = other.Forwardmove
+	T.Sidemove = other.Sidemove
+	T.Upmove = other.Upmove
+	T.Impulse = other.Impulse
+	T.Lightlevel = other.Lightlevel
 }
 
 const (
@@ -472,6 +502,67 @@ const (
 	MZ2_WIDOW2_BEAM_SWEEP_9   = 208
 	MZ2_WIDOW2_BEAM_SWEEP_10  = 209
 	MZ2_WIDOW2_BEAM_SWEEP_11  = 210
+
+	/* Temp entity events are for things that happen
+	 * at a location seperate from any existing entity.
+	 * Temporary entity messages are explicitly constructed
+	 * and broadcast. */
+	TE_GUNSHOT                 = 0
+	TE_BLOOD                   = 1
+	TE_BLASTER                 = 2
+	TE_RAILTRAIL               = 3
+	TE_SHOTGUN                 = 4
+	TE_EXPLOSION1              = 5
+	TE_EXPLOSION2              = 6
+	TE_ROCKET_EXPLOSION        = 7
+	TE_GRENADE_EXPLOSION       = 8
+	TE_SPARKS                  = 9
+	TE_SPLASH                  = 10
+	TE_BUBBLETRAIL             = 11
+	TE_SCREEN_SPARKS           = 12
+	TE_SHIELD_SPARKS           = 13
+	TE_BULLET_SPARKS           = 14
+	TE_LASER_SPARKS            = 15
+	TE_PARASITE_ATTACK         = 16
+	TE_ROCKET_EXPLOSION_WATER  = 17
+	TE_GRENADE_EXPLOSION_WATER = 18
+	TE_MEDIC_CABLE_ATTACK      = 19
+	TE_BFG_EXPLOSION           = 20
+	TE_BFG_BIGEXPLOSION        = 21
+	TE_BOSSTPORT               = 22 /* used as '22' in a map, so DON'T RENUMBER!!! */
+	TE_BFG_LASER               = 23
+	TE_GRAPPLE_CABLE           = 24
+	TE_WELDING_SPARKS          = 25
+	TE_GREENBLOOD              = 26
+	TE_BLUEHYPERBLASTER        = 27
+	TE_PLASMA_EXPLOSION        = 28
+	TE_TUNNEL_SPARKS           = 29
+	TE_BLASTER2                = 30
+	TE_RAILTRAIL2              = 31
+	TE_FLAME                   = 32
+	TE_LIGHTNING               = 33
+	TE_DEBUGTRAIL              = 34
+	TE_PLAIN_EXPLOSION         = 35
+	TE_FLASHLIGHT              = 36
+	TE_FORCEWALL               = 37
+	TE_HEATBEAM                = 38
+	TE_MONSTER_HEATBEAM        = 39
+	TE_STEAM                   = 40
+	TE_BUBBLETRAIL2            = 41
+	TE_MOREBLOOD               = 42
+	TE_HEATBEAM_SPARKS         = 43
+	TE_HEATBEAM_STEAM          = 44
+	TE_CHAINFIST_SMOKE         = 45
+	TE_ELECTRIC_SPARKS         = 46
+	TE_TRACKER_EXPLOSION       = 47
+	TE_TELEPORT_EFFECT         = 48
+	TE_DBALL_GOAL              = 49
+	TE_WIDOWBEAMOUT            = 50
+	TE_NUKEBLAST               = 51
+	TE_WIDOWSPLASH             = 52
+	TE_EXPLOSION1_BIG          = 53
+	TE_EXPLOSION1_NP           = 54
+	TE_FLECHETTE               = 55
 )
 
 const (
@@ -558,7 +649,9 @@ const (
  * ==========================================================
  */
 
-//   ANGLE2SHORT(x) ((int)((x) * 65536 / 360) & 65535)
+func ANGLE2SHORT(x float32) int16 {
+	return int16((int)((x)*65536/360) & 65535)
+}
 func SHORT2ANGLE(x int) float32 {
 	return (float32(x) * (360.0 / 65536.0))
 }
@@ -997,6 +1090,12 @@ func VectorSubtract(veca, vecb, out []float32) {
 	out[2] = veca[2] - vecb[2]
 }
 
+func VectorSubtract16(veca, vecb, out []int16) {
+	out[0] = veca[0] - vecb[0]
+	out[1] = veca[1] - vecb[1]
+	out[2] = veca[2] - vecb[2]
+}
+
 func VectorScaled(in []float32, scale float32) []float32 {
 	return []float32{
 		in[0] * scale,
@@ -1114,6 +1213,22 @@ func Randk() int {
 	return int(rand.Uint32())
 }
 
+/*
+ * Generate a pseudorandom
+ * signed float between
+ * 0 and 1.
+ */
+func Frandk() float32 {
+	return rand.Float32()
+}
+
+/* Generate a pseudorandom
+ * float between -1 and 1.
+ */
+func Crandk() float32 {
+	return rand.Float32()*2.0 - 1.0
+}
+
 type QCommon interface {
 	Init() error
 	IsDedicated() bool
@@ -1127,6 +1242,7 @@ type QCommon interface {
 	Com_Printf(format string, a ...interface{})
 	Com_DPrintf(format string, a ...interface{})
 	Com_Error(code int, format string, a ...interface{}) error
+	Com_Quit()
 
 	Cvar_Get(var_name, var_value string, flags int) *CvarT
 	Cvar_Set(var_name, value string) *CvarT

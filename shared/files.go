@@ -25,6 +25,8 @@
  */
 package shared
 
+import "log"
+
 type QFileHandle interface {
 	Close()
 	Read(len int) []byte
@@ -43,23 +45,50 @@ const (
 	MAX_SKINNAME  = 64
 )
 
-// typedef struct
-// {
-// 	short s;
-// 	short t;
-// } dstvert_t;
+type Dstvert_t struct {
+	S, T int16
+}
 
-// typedef struct
-// {
-// 	short index_xyz[3];
-// 	short index_st[3];
-// } dtriangle_t;
+const Dstvert_size = 2 * 2
 
-// typedef struct
-// {
-// 	byte v[3]; /* scaled byte to fit in frame mins/maxs */
-// 	byte lightnormalindex;
-// } dtrivertx_t;
+func Dstvert(data []byte) Dstvert_t {
+	d := Dstvert_t{}
+	d.S = ReadInt16(data[0*2:])
+	d.T = ReadInt16(data[1*2:])
+	return d
+}
+
+type Dtriangle_t struct {
+	Index_xyz [3]int16
+	Index_st  [3]int16
+}
+
+const Dtriangle_size = 6 * 4
+
+func Dtriangle(data []byte) Dtriangle_t {
+	d := Dtriangle_t{}
+	for i := 0; i < 3; i++ {
+		d.Index_xyz[i] = ReadInt16(data[i*2:])
+		d.Index_st[i] = ReadInt16(data[(i+3)*2:])
+	}
+	return d
+}
+
+type Dtrivertx_t struct {
+	V                [3]byte /* scaled byte to fit in frame mins/maxs */
+	Lightnormalindex byte
+}
+
+const Dtrivertx_size = 4
+
+func Dtrivertx(data []byte) Dtrivertx_t {
+	d := Dtrivertx_t{}
+	for i := 0; i < 3; i++ {
+		d.V[i] = data[i]
+	}
+	d.Lightnormalindex = data[3]
+	return d
+}
 
 // #define DTRIVERTX_V0 0
 // #define DTRIVERTX_V1 1
@@ -67,13 +96,32 @@ const (
 // #define DTRIVERTX_LNI 3
 // #define DTRIVERTX_SIZE 4
 
-// typedef struct
-// {
-// 	float scale[3];       /* multiply byte verts by this */
-// 	float translate[3];   /* then add this */
-// 	char name[16];        /* frame name from grabbing */
-// 	dtrivertx_t verts[1]; /* variable sized */
-// } daliasframe_t;
+type Daliasframe_t struct {
+	Scale     [3]float32    /* multiply byte verts by this */
+	Translate [3]float32    /* then add this */
+	Name      string        /* frame name from grabbing */
+	Verts     []Dtrivertx_t /* variable sized */
+}
+
+const daliasframe_size = 6*4 + 16
+
+func Daliasframe(data []byte, framesize int) Daliasframe_t {
+	d := Daliasframe_t{}
+	for i := 0; i < 3; i++ {
+		d.Scale[i] = ReadFloat32(data[i*4:])
+		d.Translate[i] = ReadFloat32(data[(3+i)*4:])
+	}
+	d.Name = ReadString(data[6*4:], 16)
+	size := (framesize - daliasframe_size)
+	if (size % Dtrivertx_size) != 0 {
+		log.Fatal("Aliasframe size is wrong")
+	}
+	d.Verts = make([]Dtrivertx_t, size/Dtrivertx_size)
+	for i := range d.Verts {
+		d.Verts[i] = Dtrivertx(data[daliasframe_size+i*Dtrivertx_size:])
+	}
+	return d
+}
 
 // /* the glcmd format:
 //  * - a positive integer starts a tristrip command, followed by that many
@@ -83,29 +131,55 @@ const (
 //  * - a vertex consists of a floating point s, a floating point t,
 //  *   and an integer vertex index. */
 
-// typedef struct
-// {
-// 	int ident;
-// 	int version;
+type Dmdl_t struct {
+	Ident   int32
+	Version int32
 
-// 	int skinwidth;
-// 	int skinheight;
-// 	int framesize;  /* byte size of each frame */
+	Skinwidth  int32
+	Skinheight int32
+	Framesize  int32 /* byte size of each frame */
 
-// 	int num_skins;
-// 	int num_xyz;
-// 	int num_st;     /* greater than num_xyz for seams */
-// 	int num_tris;
-// 	int num_glcmds; /* dwords in strip/fan command list */
-// 	int num_frames;
+	Num_skins  int32
+	Num_xyz    int32
+	Num_st     int32 /* greater than num_xyz for seams */
+	Num_tris   int32
+	Num_glcmds int32 /* dwords in strip/fan command list */
+	Num_frames int32
 
-// 	int ofs_skins;  /* each skin is a MAX_SKINNAME string */
-// 	int ofs_st;     /* byte offset from start for stverts */
-// 	int ofs_tris;   /* offset for dtriangles */
-// 	int ofs_frames; /* offset for first frame */
-// 	int ofs_glcmds;
-// 	int ofs_end;    /* end of file */
-// } dmdl_t;
+	Ofs_skins  int32 /* each skin is a MAX_SKINNAME string */
+	Ofs_st     int32 /* byte offset from start for stverts */
+	Ofs_tris   int32 /* offset for dtriangles */
+	Ofs_frames int32 /* offset for first frame */
+	Ofs_glcmds int32
+	Ofs_end    int32 /* end of file */
+}
+
+const Dmdl_size = 17 * 4
+
+func Dmdl(data []byte) Dmdl_t {
+	d := Dmdl_t{}
+	d.Ident = ReadInt32(data[0*4:])
+	d.Version = ReadInt32(data[1*4:])
+
+	d.Skinwidth = ReadInt32(data[2*4:])
+	d.Skinheight = ReadInt32(data[3*4:])
+	d.Framesize = ReadInt32(data[4*4:])
+
+	d.Num_skins = ReadInt32(data[5*4:])
+	d.Num_xyz = ReadInt32(data[6*4:])
+	d.Num_st = ReadInt32(data[7*4:])
+	d.Num_tris = ReadInt32(data[8*4:])
+	d.Num_glcmds = ReadInt32(data[9*4:])
+	d.Num_frames = ReadInt32(data[10*4:])
+
+	d.Ofs_skins = ReadInt32(data[11*4:])
+	d.Ofs_st = ReadInt32(data[12*4:])
+	d.Ofs_tris = ReadInt32(data[13*4:])
+	d.Ofs_frames = ReadInt32(data[14*4:])
+	d.Ofs_glcmds = ReadInt32(data[15*4:])
+	d.Ofs_end = ReadInt32(data[16*4:])
+	return d
+}
 
 /* .SP2 sprite file format */
 

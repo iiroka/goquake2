@@ -33,6 +33,8 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
+const MAX_LBM_HEIGHT = 480
+
 // Hold the video state.
 type viddef_t struct {
 	height int
@@ -64,7 +66,7 @@ type gl3config_t struct {
 type gl3ShaderInfo_t struct {
 	shaderProgram uint32
 	uniLmScales   int32
-	lmScales      [4][4]float32
+	lmScales      [16]float32
 }
 
 type gl3UniCommon_t struct {
@@ -310,10 +312,10 @@ type gl3image_t struct {
 	itype         imagetype_t
 	width, height int /* source image */
 	//int upload_width, upload_height;    /* after power of two and picmip */
-	registration_sequence int /* 0 = free */
-	//  struct msurface_s *texturechain;    /* for sort-by-texture world drawing */
-	texnum         uint32  /* gl texture binding */
-	sl, tl, sh, th float32 /* 0,0 - 1,1 unless part of the scrap */
+	registration_sequence int         /* 0 = free */
+	texturechain          *msurface_t /* for sort-by-texture world drawing */
+	texnum                uint32      /* gl texture binding */
+	sl, tl, sh, th        float32     /* 0,0 - 1,1 unless part of the scrap */
 	// qboolean scrap; // currently unused
 	has_alpha bool
 }
@@ -444,6 +446,17 @@ type qGl3 struct {
 	currentmodel  *gl3model_t
 
 	gl3_lms gl3lightmapstate_t
+
+	gl3_alpha_surfaces *msurface_t
+
+	// sky
+	skymins          [2][6]float32
+	skymaxs          [2][6]float32
+	sky_min, sky_max float32
+	skyrotate        float32
+	skyaxis          [3]float32
+	sky_images       [6]*gl3image_t
+	c_sky            int
 }
 
 // gl3_lightmap.c

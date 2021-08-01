@@ -38,8 +38,9 @@ type xcommand_t struct {
 }
 
 type qCommon struct {
-	client shared.QClient
-	server shared.QServer
+	client  shared.QClient
+	server  shared.QServer
+	running bool
 
 	// from frame
 	developer       *shared.CvarT

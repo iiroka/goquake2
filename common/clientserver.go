@@ -193,3 +193,14 @@ func (T *qCommon) Com_Error(code int, format string, a ...interface{}) error {
 	T.recursive = false
 	return nil
 }
+
+/*
+ * Both client and server can use this, and it will
+ * do the apropriate things.
+ */
+func (T *qCommon) Com_Quit() {
+	T.Com_Printf("\n----------- shutting down ----------\n")
+	//  SV_Shutdown("Server quit\n", false);
+	//  Sys_Quit();
+	T.running = false
+}

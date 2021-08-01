@@ -149,10 +149,10 @@ const (
 func (T *qGl3) initShader2D(shaderInfo *gl3ShaderInfo_t, vertSrc, fragSrc string) bool {
 	// GLuint prog = 0;
 
-	// if(shaderInfo->shaderProgram != 0) {
-	// 	R_Printf(PRINT_ALL, "WARNING: calling initShader2D for gl3ShaderInfo_t that already has a shaderProgram!\n");
-	// 	glDeleteProgram(shaderInfo->shaderProgram);
-	// }
+	if shaderInfo.shaderProgram != 0 {
+		T.rPrintf(shared.PRINT_ALL, "WARNING: calling initShader2D for gl3ShaderInfo_t that already has a shaderProgram!\n")
+		gl.DeleteProgram(shaderInfo.shaderProgram)
+	}
 
 	//shaderInfo->uniColor = shaderInfo->uniProjMatrix = shaderInfo->uniModelViewMatrix = -1;
 	shaderInfo.shaderProgram = 0
@@ -228,11 +228,10 @@ func (T *qGl3) initShader3D(shaderInfo *gl3ShaderInfo_t, vertSrc, fragSrc string
 	// GLuint prog = 0;
 	// int i=0;
 
-	// if(shaderInfo->shaderProgram != 0)
-	// {
-	// 	R_Printf(PRINT_ALL, "WARNING: calling initShader3D for gl3ShaderInfo_t that already has a shaderProgram!\n");
-	// 	glDeleteProgram(shaderInfo->shaderProgram);
-	// }
+	if shaderInfo.shaderProgram != 0 {
+		T.rPrintf(shared.PRINT_ALL, "WARNING: calling initShader3D for gl3ShaderInfo_t that already has a shaderProgram!\n")
+		gl.DeleteProgram(shaderInfo.shaderProgram)
+	}
 
 	shaderInfo.shaderProgram = 0
 	shaderInfo.uniLmScales = -1
@@ -329,7 +328,6 @@ func (T *qGl3) initShader3D(shaderInfo *gl3ShaderInfo_t, vertSrc, fragSrc string
 	}
 
 	// ..  and the 4 lightmap texture use GL_TEXTURE1..4
-	// char lmName[10] = "lightmapX";
 	for i := 0; i < 4; i++ {
 		lmName := fmt.Sprintf("lightmap%v\x00", i)
 		lmLoc := gl.GetUniformLocation(prog, gl.Str(lmName))
@@ -342,16 +340,16 @@ func (T *qGl3) initShader3D(shaderInfo *gl3ShaderInfo_t, vertSrc, fragSrc string
 	shaderInfo.uniLmScales = lmScalesLoc
 	if lmScalesLoc != -1 {
 		for j := 1; j < 4; j++ {
-			shaderInfo.lmScales[0][j] = 1.0
+			shaderInfo.lmScales[j] = 1.0
 		}
 
 		for i := 1; i < 4; i++ {
 			for j := 1; j < 4; j++ {
-				shaderInfo.lmScales[i][j] = 0.0
+				shaderInfo.lmScales[i*4+j] = 0.0
 			}
 		}
 
-		// gl.Uniform4fv(lmScalesLoc, 4, &shaderInfo.lmScales[:])
+		gl.Uniform4fv(lmScalesLoc, 4, (*float32)(gl.Ptr(shaderInfo.lmScales[:])))
 	}
 
 	shaderInfo.shaderProgram = prog
@@ -361,15 +359,6 @@ func (T *qGl3) initShader3D(shaderInfo *gl3ShaderInfo_t, vertSrc, fragSrc string
 	// glDeleteShader(shaders3D[1]);
 
 	return true
-
-	// err_cleanup:
-
-	// 	glDeleteShader(shaders3D[0]);
-	// 	glDeleteShader(shaders3D[1]);
-
-	// 	if(prog != 0)  glDeleteProgram(prog);
-
-	// 	return false;
 }
 
 func (T *qGl3) initUBOs() {
@@ -394,8 +383,6 @@ func (T *qGl3) initUBOs() {
 
 	// the matrices will be set to something more useful later, before being used
 	T.gl3state.uni3DData.data = make([]float32, gl3Uni3D_Size)
-	// gl3state.uni3DData.transProjMat4 = HMM_Mat4();
-	// gl3state.uni3DData.transViewMat4 = HMM_Mat4();
 	T.gl3state.uni3DData.setTransModelMat4(gl3_identityMat4)
 	T.gl3state.uni3DData.setScroll(0.0)
 	T.gl3state.uni3DData.setTime(0.0)
@@ -557,7 +544,7 @@ func (T *qGl3) updateUBO2D() {
 }
 
 func (T *qGl3) updateUBO3D() {
-	T.updateUBO(T.gl3state.uni2DUBO, len(T.gl3state.uni3DData.data)*4, gl.Ptr(T.gl3state.uni3DData.data))
+	T.updateUBO(T.gl3state.uni3DUBO, len(T.gl3state.uni3DData.data)*4, gl.Ptr(T.gl3state.uni3DData.data))
 }
 
 // ############## shaders for 2D rendering (HUD, menus, console, videos, ..) #####################
@@ -659,455 +646,455 @@ void main()
 
 const vertexCommon3D = `#version 150
 
-	in vec3 position;   // GL3_ATTRIB_POSITION
-	in vec2 texCoord;   // GL3_ATTRIB_TEXCOORD
-	in vec2 lmTexCoord; // GL3_ATTRIB_LMTEXCOORD
-	in vec4 vertColor;  // GL3_ATTRIB_COLOR
-	in vec3 normal;     // GL3_ATTRIB_NORMAL
-	in uint lightFlags; // GL3_ATTRIB_LIGHTFLAGS
+in vec3 position;   // GL3_ATTRIB_POSITION
+in vec2 texCoord;   // GL3_ATTRIB_TEXCOORD
+in vec2 lmTexCoord; // GL3_ATTRIB_LMTEXCOORD
+in vec4 vertColor;  // GL3_ATTRIB_COLOR
+in vec3 normal;     // GL3_ATTRIB_NORMAL
+in uint lightFlags; // GL3_ATTRIB_LIGHTFLAGS
 
-	out vec2 passTexCoord;
+out vec2 passTexCoord;
 
-	// for UBO shared between all 3D shaders
-	layout (std140) uniform uni3D
-	{
-		mat4 transProj;
-		mat4 transView;
-		mat4 transModel;
+// for UBO shared between all 3D shaders
+layout (std140) uniform uni3D
+{
+	mat4 transProj;
+	mat4 transView;
+	mat4 transModel;
 
-		float scroll; // for SURF_FLOWING
-		float time;
-		float alpha;
-		float overbrightbits;
-		float particleFadeFactor;
-		float _pad_1; // AMDs legacy windows driver needs this, otherwise uni3D has wrong size
-		float _pad_2;
-		float _pad_3;
-	};
-	` + "\x00"
+	float scroll; // for SURF_FLOWING
+	float time;
+	float alpha;
+	float overbrightbits;
+	float particleFadeFactor;
+	float _pad_1; // AMDs legacy windows driver needs this, otherwise uni3D has wrong size
+	float _pad_2;
+	float _pad_3;
+};
+` + "\x00"
 
 const fragmentCommon3D = `#version 150
 
-	in vec2 passTexCoord;
+in vec2 passTexCoord;
 
-	out vec4 outColor;
+out vec4 outColor;
 
-	// for UBO shared between all shaders (incl. 2D)
-	layout (std140) uniform uniCommon
-	{
-		float gamma; // this is 1.0/vid_gamma
-		float intensity;
-		float intensity2D; // for HUD, menus etc
+// for UBO shared between all shaders (incl. 2D)
+layout (std140) uniform uniCommon
+{
+	float gamma; // this is 1.0/vid_gamma
+	float intensity;
+	float intensity2D; // for HUD, menus etc
 
-		vec4 color; // really?
+	vec4 color; // really?
 
-	};
-	// for UBO shared between all 3D shaders
-	layout (std140) uniform uni3D
-	{
-		mat4 transProj;
-		mat4 transView;
-		mat4 transModel;
+};
+// for UBO shared between all 3D shaders
+layout (std140) uniform uni3D
+{
+	mat4 transProj;
+	mat4 transView;
+	mat4 transModel;
 
-		float scroll; // for SURF_FLOWING
-		float time;
-		float alpha;
-		float overbrightbits;
-		float particleFadeFactor;
-		float _pad_1; // AMDs legacy windows driver needs this, otherwise uni3D has wrong size
-		float _pad_2;
-		float _pad_3;
-	};
-	` + "\x00"
+	float scroll; // for SURF_FLOWING
+	float time;
+	float alpha;
+	float overbrightbits;
+	float particleFadeFactor;
+	float _pad_1; // AMDs legacy windows driver needs this, otherwise uni3D has wrong size
+	float _pad_2;
+	float _pad_3;
+};
+` + "\x00"
 
 const vertexSrc3D = `
 
-	// it gets attributes and uniforms from vertexCommon3D
+// it gets attributes and uniforms from vertexCommon3D
 
-	void main()
-	{
-		passTexCoord = texCoord;
-		gl_Position = transProj * transView * transModel * vec4(position, 1.0);
-	}
-	` + "\x00"
+void main()
+{
+	passTexCoord = texCoord;
+	gl_Position = transProj * transView * transModel * vec4(position, 1.0);
+}
+` + "\x00"
 
 const vertexSrc3Dflow = `
 
-	// it gets attributes and uniforms from vertexCommon3D
+// it gets attributes and uniforms from vertexCommon3D
 
-	void main()
-	{
-		passTexCoord = texCoord + vec2(scroll, 0);
-		gl_Position = transProj * transView * transModel * vec4(position, 1.0);
-	}
-	` + "\x00"
+void main()
+{
+	passTexCoord = texCoord + vec2(scroll, 0);
+	gl_Position = transProj * transView * transModel * vec4(position, 1.0);
+}
+` + "\x00"
 
 const vertexSrc3Dlm = `
 
-	// it gets attributes and uniforms from vertexCommon3D
+// it gets attributes and uniforms from vertexCommon3D
 
-	out vec2 passLMcoord;
-	out vec3 passWorldCoord;
-	out vec3 passNormal;
-	flat out uint passLightFlags;
+out vec2 passLMcoord;
+out vec3 passWorldCoord;
+out vec3 passNormal;
+flat out uint passLightFlags;
 
-	void main()
-	{
-		passTexCoord = texCoord;
-		passLMcoord = lmTexCoord;
-		vec4 worldCoord = transModel * vec4(position, 1.0);
-		passWorldCoord = worldCoord.xyz;
-		vec4 worldNormal = transModel * vec4(normal, 0.0f);
-		passNormal = normalize(worldNormal.xyz);
-		passLightFlags = lightFlags;
+void main()
+{
+	passTexCoord = texCoord;
+	passLMcoord = lmTexCoord;
+	vec4 worldCoord = transModel * vec4(position, 1.0);
+	passWorldCoord = worldCoord.xyz;
+	vec4 worldNormal = transModel * vec4(normal, 0.0f);
+	passNormal = normalize(worldNormal.xyz);
+	passLightFlags = lightFlags;
 
-		gl_Position = transProj * transView * worldCoord;
-	}
-	` + "\x00"
+	gl_Position = transProj * transView * worldCoord;
+}
+` + "\x00"
 
 const vertexSrc3DlmFlow = `
 
-	// it gets attributes and uniforms from vertexCommon3D
+// it gets attributes and uniforms from vertexCommon3D
 
-	out vec2 passLMcoord;
-	out vec3 passWorldCoord;
-	out vec3 passNormal;
-	flat out uint passLightFlags;
+out vec2 passLMcoord;
+out vec3 passWorldCoord;
+out vec3 passNormal;
+flat out uint passLightFlags;
 
-	void main()
-	{
-		passTexCoord = texCoord + vec2(scroll, 0);
-		passLMcoord = lmTexCoord;
-		vec4 worldCoord = transModel * vec4(position, 1.0);
-		passWorldCoord = worldCoord.xyz;
-		vec4 worldNormal = transModel * vec4(normal, 0.0f);
-		passNormal = normalize(worldNormal.xyz);
-		passLightFlags = lightFlags;
+void main()
+{
+	passTexCoord = texCoord + vec2(scroll, 0);
+	passLMcoord = lmTexCoord;
+	vec4 worldCoord = transModel * vec4(position, 1.0);
+	passWorldCoord = worldCoord.xyz;
+	vec4 worldNormal = transModel * vec4(normal, 0.0f);
+	passNormal = normalize(worldNormal.xyz);
+	passLightFlags = lightFlags;
 
-		gl_Position = transProj * transView * worldCoord;
-	}
-	` + "\x00"
+	gl_Position = transProj * transView * worldCoord;
+}
+` + "\x00"
 
 const fragmentSrc3D = `
 
-	// it gets attributes and uniforms from fragmentCommon3D
+// it gets attributes and uniforms from fragmentCommon3D
 
-	uniform sampler2D tex;
+uniform sampler2D tex;
 
-	void main()
-	{
-		vec4 texel = texture(tex, passTexCoord);
+void main()
+{
+	vec4 texel = texture(tex, passTexCoord);
 
-		// apply intensity and gamma
-		texel.rgb *= intensity;
-		outColor.rgb = pow(texel.rgb, vec3(gamma));
-		outColor.a = texel.a*alpha; // I think alpha shouldn't be modified by gamma and intensity
-	}
-	` + "\x00"
+	// apply intensity and gamma
+	texel.rgb *= intensity;
+	outColor.rgb = pow(texel.rgb, vec3(gamma));
+	outColor.a = texel.a*alpha; // I think alpha shouldn't be modified by gamma and intensity
+}
+` + "\x00"
 
 const fragmentSrc3Dwater = `
 
-	// it gets attributes and uniforms from fragmentCommon3D
+// it gets attributes and uniforms from fragmentCommon3D
 
-	uniform sampler2D tex;
+uniform sampler2D tex;
 
-	void main()
-	{
-		vec2 tc = passTexCoord;
-		tc.s += sin( passTexCoord.t*0.125 + time ) * 4;
-		tc.s += scroll;
-		tc.t += sin( passTexCoord.s*0.125 + time ) * 4;
-		tc *= 1.0/64.0; // do this last
+void main()
+{
+	vec2 tc = passTexCoord;
+	tc.s += sin( passTexCoord.t*0.125 + time ) * 4;
+	tc.s += scroll;
+	tc.t += sin( passTexCoord.s*0.125 + time ) * 4;
+	tc *= 1.0/64.0; // do this last
 
-		vec4 texel = texture(tex, tc);
+	vec4 texel = texture(tex, tc);
 
-		// apply intensity and gamma
-		texel.rgb *= intensity*0.5;
-		outColor.rgb = pow(texel.rgb, vec3(gamma));
-		outColor.a = texel.a*alpha; // I think alpha shouldn't be modified by gamma and intensity
-	}
-	` + "\x00"
+	// apply intensity and gamma
+	texel.rgb *= intensity*0.5;
+	outColor.rgb = pow(texel.rgb, vec3(gamma));
+	outColor.a = texel.a*alpha; // I think alpha shouldn't be modified by gamma and intensity
+}
+` + "\x00"
 
 const fragmentSrc3Dlm = `
 
-	// it gets attributes and uniforms from fragmentCommon3D
+// it gets attributes and uniforms from fragmentCommon3D
 
-	struct DynLight { // gl3UniDynLight in C
-		vec3 lightOrigin;
-		float _pad;
-		//vec3 lightColor;
-		//float lightIntensity;
-		vec4 lightColor; // .a is intensity; this way it also works on OSX...
-		// (otherwise lightIntensity always contained 1 there)
-	};
+struct DynLight { // gl3UniDynLight in C
+	vec3 lightOrigin;
+	float _pad;
+	//vec3 lightColor;
+	//float lightIntensity;
+	vec4 lightColor; // .a is intensity; this way it also works on OSX...
+	// (otherwise lightIntensity always contained 1 there)
+};
 
-	layout (std140) uniform uniLights
+layout (std140) uniform uniLights
+{
+	DynLight dynLights[32];
+	uint numDynLights;
+	uint _pad1; uint _pad2; uint _pad3; // FFS, AMD!
+};
+
+uniform sampler2D tex;
+
+uniform sampler2D lightmap0;
+uniform sampler2D lightmap1;
+uniform sampler2D lightmap2;
+uniform sampler2D lightmap3;
+
+uniform vec4 lmScales[4];
+
+in vec2 passLMcoord;
+in vec3 passWorldCoord;
+in vec3 passNormal;
+flat in uint passLightFlags;
+
+void main()
+{
+	vec4 texel = texture(tex, passTexCoord);
+
+	// apply intensity
+	texel.rgb *= intensity;
+
+	// apply lightmap
+	vec4 lmTex = texture(lightmap0, passLMcoord) * lmScales[0];
+	lmTex     += texture(lightmap1, passLMcoord) * lmScales[1];
+	lmTex     += texture(lightmap2, passLMcoord) * lmScales[2];
+	lmTex     += texture(lightmap3, passLMcoord) * lmScales[3];
+
+	if(passLightFlags != 0u)
 	{
-		DynLight dynLights[32];
-		uint numDynLights;
-		uint _pad1; uint _pad2; uint _pad3; // FFS, AMD!
-	};
-
-	uniform sampler2D tex;
-
-	uniform sampler2D lightmap0;
-	uniform sampler2D lightmap1;
-	uniform sampler2D lightmap2;
-	uniform sampler2D lightmap3;
-
-	uniform vec4 lmScales[4];
-
-	in vec2 passLMcoord;
-	in vec3 passWorldCoord;
-	in vec3 passNormal;
-	flat in uint passLightFlags;
-
-	void main()
-	{
-		vec4 texel = texture(tex, passTexCoord);
-
-		// apply intensity
-		texel.rgb *= intensity;
-
-		// apply lightmap
-		vec4 lmTex = texture(lightmap0, passLMcoord) * lmScales[0];
-		lmTex     += texture(lightmap1, passLMcoord) * lmScales[1];
-		lmTex     += texture(lightmap2, passLMcoord) * lmScales[2];
-		lmTex     += texture(lightmap3, passLMcoord) * lmScales[3];
-
-		if(passLightFlags != 0u)
+		// TODO: or is hardcoding 32 better?
+		for(uint i=0u; i<numDynLights; ++i)
 		{
-			// TODO: or is hardcoding 32 better?
-			for(uint i=0u; i<numDynLights; ++i)
-			{
-				// I made the following up, it's probably not too cool..
-				// it basically checks if the light is on the right side of the surface
-				// and, if it is, sets intensity according to distance between light and pixel on surface
+			// I made the following up, it's probably not too cool..
+			// it basically checks if the light is on the right side of the surface
+			// and, if it is, sets intensity according to distance between light and pixel on surface
 
-				// dyn light number i does not affect this plane, just skip it
-				if((passLightFlags & (1u << i)) == 0u)  continue;
+			// dyn light number i does not affect this plane, just skip it
+			if((passLightFlags & (1u << i)) == 0u)  continue;
 
-				float intens = dynLights[i].lightColor.a;
+			float intens = dynLights[i].lightColor.a;
 
-				vec3 lightToPos = dynLights[i].lightOrigin - passWorldCoord;
-				float distLightToPos = length(lightToPos);
-				float fact = max(0, intens - distLightToPos - 52);
+			vec3 lightToPos = dynLights[i].lightOrigin - passWorldCoord;
+			float distLightToPos = length(lightToPos);
+			float fact = max(0, intens - distLightToPos - 52);
 
-				// move the light source a bit further above the surface
-				// => helps if the lightsource is so close to the surface (e.g. grenades, rockets)
-				//    that the dot product below would return 0
-				// (light sources that are below the surface are filtered out by lightFlags)
-				lightToPos += passNormal*32.0;
+			// move the light source a bit further above the surface
+			// => helps if the lightsource is so close to the surface (e.g. grenades, rockets)
+			//    that the dot product below would return 0
+			// (light sources that are below the surface are filtered out by lightFlags)
+			lightToPos += passNormal*32.0;
 
-				// also factor in angle between light and point on surface
-				fact *= max(0, dot(passNormal, normalize(lightToPos)));
+			// also factor in angle between light and point on surface
+			fact *= max(0, dot(passNormal, normalize(lightToPos)));
 
 
-				lmTex.rgb += dynLights[i].lightColor.rgb * fact * (1.0/256.0);
-			}
+			lmTex.rgb += dynLights[i].lightColor.rgb * fact * (1.0/256.0);
 		}
-
-		lmTex.rgb *= overbrightbits;
-		outColor = lmTex*texel;
-		outColor.rgb = pow(outColor.rgb, vec3(gamma)); // apply gamma correction to result
-
-		outColor.a = 1; // lightmaps aren't used with translucent surfaces
 	}
-	` + "\x00"
+
+	lmTex.rgb *= overbrightbits;
+	outColor = lmTex*texel;
+	outColor.rgb = pow(outColor.rgb, vec3(gamma)); // apply gamma correction to result
+
+	outColor.a = 1; // lightmaps aren't used with translucent surfaces
+}
+` + "\x00"
 
 const fragmentSrc3Dcolor = `
 
-	// it gets attributes and uniforms from fragmentCommon3D
+// it gets attributes and uniforms from fragmentCommon3D
 
-	void main()
-	{
-		vec4 texel = color;
+void main()
+{
+	vec4 texel = color;
 
-		// apply gamma correction and intensity
-		// texel.rgb *= intensity; TODO: use intensity here? (this is used for beams)
-		outColor.rgb = pow(texel.rgb, vec3(gamma));
-		outColor.a = texel.a*alpha; // I think alpha shouldn't be modified by gamma and intensity
-	}
-	` + "\x00"
+	// apply gamma correction and intensity
+	// texel.rgb *= intensity; TODO: use intensity here? (this is used for beams)
+	outColor.rgb = pow(texel.rgb, vec3(gamma));
+	outColor.a = texel.a*alpha; // I think alpha shouldn't be modified by gamma and intensity
+}
+` + "\x00"
 
 const fragmentSrc3Dsky = `
 
-	// it gets attributes and uniforms from fragmentCommon3D
+// it gets attributes and uniforms from fragmentCommon3D
 
-	uniform sampler2D tex;
+uniform sampler2D tex;
 
-	void main()
-	{
-		vec4 texel = texture(tex, passTexCoord);
+void main()
+{
+	vec4 texel = texture(tex, passTexCoord);
 
-		// TODO: something about GL_BLEND vs GL_ALPHATEST etc
+	// TODO: something about GL_BLEND vs GL_ALPHATEST etc
 
-		// apply gamma correction
-		// texel.rgb *= intensity; // TODO: really no intensity for sky?
-		outColor.rgb = pow(texel.rgb, vec3(gamma));
-		outColor.a = texel.a*alpha; // I think alpha shouldn't be modified by gamma and intensity
-	}
-	` + "\x00"
+	// apply gamma correction
+	// texel.rgb *= intensity; // TODO: really no intensity for sky?
+	outColor.rgb = pow(texel.rgb, vec3(gamma));
+	outColor.a = texel.a*alpha; // I think alpha shouldn't be modified by gamma and intensity
+}
+` + "\x00"
 
 const fragmentSrc3Dsprite = `
 
-	// it gets attributes and uniforms from fragmentCommon3D
+// it gets attributes and uniforms from fragmentCommon3D
 
-	uniform sampler2D tex;
+uniform sampler2D tex;
 
-	void main()
-	{
-		vec4 texel = texture(tex, passTexCoord);
+void main()
+{
+	vec4 texel = texture(tex, passTexCoord);
 
-		// apply gamma correction and intensity
-		texel.rgb *= intensity;
-		outColor.rgb = pow(texel.rgb, vec3(gamma));
-		outColor.a = texel.a*alpha; // I think alpha shouldn't be modified by gamma and intensity
-	}
-	` + "\x00"
+	// apply gamma correction and intensity
+	texel.rgb *= intensity;
+	outColor.rgb = pow(texel.rgb, vec3(gamma));
+	outColor.a = texel.a*alpha; // I think alpha shouldn't be modified by gamma and intensity
+}
+` + "\x00"
 
 const fragmentSrc3DspriteAlpha = `
 
-	// it gets attributes and uniforms from fragmentCommon3D
+// it gets attributes and uniforms from fragmentCommon3D
 
-	uniform sampler2D tex;
+uniform sampler2D tex;
 
-	void main()
-	{
-		vec4 texel = texture(tex, passTexCoord);
+void main()
+{
+	vec4 texel = texture(tex, passTexCoord);
 
-		if(texel.a <= 0.666)
-			discard;
+	if(texel.a <= 0.666)
+		discard;
 
-		// apply gamma correction and intensity
-		texel.rgb *= intensity;
-		outColor.rgb = pow(texel.rgb, vec3(gamma));
-		outColor.a = texel.a*alpha; // I think alpha shouldn't be modified by gamma and intensity
-	}
-	` + "\x00"
+	// apply gamma correction and intensity
+	texel.rgb *= intensity;
+	outColor.rgb = pow(texel.rgb, vec3(gamma));
+	outColor.a = texel.a*alpha; // I think alpha shouldn't be modified by gamma and intensity
+}
+` + "\x00"
 
 const vertexSrc3Dwater = `
 
-	// it gets attributes and uniforms from vertexCommon3D
-	void main()
-	{
-		passTexCoord = texCoord;
+// it gets attributes and uniforms from vertexCommon3D
+void main()
+{
+	passTexCoord = texCoord;
 
-		gl_Position = transProj * transView * transModel * vec4(position, 1.0);
-	}
-	` + "\x00"
+	gl_Position = transProj * transView * transModel * vec4(position, 1.0);
+}
+` + "\x00"
 
 const vertexSrcAlias = `
 
-	// it gets attributes and uniforms from vertexCommon3D
+// it gets attributes and uniforms from vertexCommon3D
 
-	out vec4 passColor;
+out vec4 passColor;
 
-	void main()
-	{
-		passColor = vertColor*overbrightbits;
-		passTexCoord = texCoord;
-		gl_Position = transProj * transView * transModel * vec4(position, 1.0);
-	}
-	` + "\x00"
+void main()
+{
+	passColor = vertColor*overbrightbits;
+	passTexCoord = texCoord;
+	gl_Position = transProj * transView * transModel * vec4(position, 1.0);
+}
+` + "\x00"
 
 const fragmentSrcAlias = `
 
-	// it gets attributes and uniforms from fragmentCommon3D
+// it gets attributes and uniforms from fragmentCommon3D
 
-	uniform sampler2D tex;
+uniform sampler2D tex;
 
-	in vec4 passColor;
+in vec4 passColor;
 
-	void main()
-	{
-		vec4 texel = texture(tex, passTexCoord);
+void main()
+{
+	vec4 texel = texture(tex, passTexCoord);
 
-		// apply gamma correction and intensity
-		texel.rgb *= intensity;
-		texel.a *= alpha; // is alpha even used here?
-		texel *= min(vec4(1.5), passColor);
+	// apply gamma correction and intensity
+	texel.rgb *= intensity;
+	texel.a *= alpha; // is alpha even used here?
+	texel *= min(vec4(1.5), passColor);
 
-		outColor.rgb = pow(texel.rgb, vec3(gamma));
-		outColor.a = texel.a; // I think alpha shouldn't be modified by gamma and intensity
-	}
-	` + "\x00"
+	outColor.rgb = pow(texel.rgb, vec3(gamma));
+	outColor.a = texel.a; // I think alpha shouldn't be modified by gamma and intensity
+}
+` + "\x00"
 
 const fragmentSrcAliasColor = `
 
-	// it gets attributes and uniforms from fragmentCommon3D
+// it gets attributes and uniforms from fragmentCommon3D
 
-	in vec4 passColor;
+in vec4 passColor;
 
-	void main()
-	{
-		vec4 texel = passColor;
+void main()
+{
+	vec4 texel = passColor;
 
-		// apply gamma correction and intensity
-		// texel.rgb *= intensity; // TODO: color-only rendering probably shouldn't use intensity?
-		texel.a *= alpha; // is alpha even used here?
-		outColor.rgb = pow(texel.rgb, vec3(gamma));
-		outColor.a = texel.a; // I think alpha shouldn't be modified by gamma and intensity
-	}
-	` + "\x00"
+	// apply gamma correction and intensity
+	// texel.rgb *= intensity; // TODO: color-only rendering probably shouldn't use intensity?
+	texel.a *= alpha; // is alpha even used here?
+	outColor.rgb = pow(texel.rgb, vec3(gamma));
+	outColor.a = texel.a; // I think alpha shouldn't be modified by gamma and intensity
+}
+` + "\x00"
 
 const vertexSrcParticles = `
 
-	// it gets attributes and uniforms from vertexCommon3D
+// it gets attributes and uniforms from vertexCommon3D
 
-	out vec4 passColor;
+out vec4 passColor;
 
-	void main()
-	{
-		passColor = vertColor;
-		gl_Position = transProj * transView * transModel * vec4(position, 1.0);
+void main()
+{
+	passColor = vertColor;
+	gl_Position = transProj * transView * transModel * vec4(position, 1.0);
 
-		// abusing texCoord for pointSize, pointDist for particles
-		float pointDist = texCoord.y*0.1; // with factor 0.1 it looks good.
+	// abusing texCoord for pointSize, pointDist for particles
+	float pointDist = texCoord.y*0.1; // with factor 0.1 it looks good.
 
-		gl_PointSize = texCoord.x/pointDist;
-	}
-	` + "\x00"
+	gl_PointSize = texCoord.x/pointDist;
+}
+` + "\x00"
 
 const fragmentSrcParticles = `
 
-	// it gets attributes and uniforms from fragmentCommon3D
+// it gets attributes and uniforms from fragmentCommon3D
 
-	in vec4 passColor;
+in vec4 passColor;
 
-	void main()
-	{
-		vec2 offsetFromCenter = 2.0*(gl_PointCoord - vec2(0.5, 0.5)); // normalize so offset is between 0 and 1 instead 0 and 0.5
-		float distSquared = dot(offsetFromCenter, offsetFromCenter);
-		if(distSquared > 1.0) // this makes sure the particle is round
-			discard;
+void main()
+{
+	vec2 offsetFromCenter = 2.0*(gl_PointCoord - vec2(0.5, 0.5)); // normalize so offset is between 0 and 1 instead 0 and 0.5
+	float distSquared = dot(offsetFromCenter, offsetFromCenter);
+	if(distSquared > 1.0) // this makes sure the particle is round
+		discard;
 
-		vec4 texel = passColor;
+	vec4 texel = passColor;
 
-		// apply gamma correction and intensity
-		//texel.rgb *= intensity; TODO: intensity? Probably not?
-		outColor.rgb = pow(texel.rgb, vec3(gamma));
+	// apply gamma correction and intensity
+	//texel.rgb *= intensity; TODO: intensity? Probably not?
+	outColor.rgb = pow(texel.rgb, vec3(gamma));
 
-		// I want the particles to fade out towards the edge, the following seems to look nice
-		texel.a *= min(1.0, particleFadeFactor*(1.0 - distSquared));
+	// I want the particles to fade out towards the edge, the following seems to look nice
+	texel.a *= min(1.0, particleFadeFactor*(1.0 - distSquared));
 
-		outColor.a = texel.a; // I think alpha shouldn't be modified by gamma and intensity
-	}
-	` + "\x00"
+	outColor.a = texel.a; // I think alpha shouldn't be modified by gamma and intensity
+}
+` + "\x00"
 
 const fragmentSrcParticlesSquare = `
 
-	// it gets attributes and uniforms from fragmentCommon3D
+// it gets attributes and uniforms from fragmentCommon3D
 
-	in vec4 passColor;
+in vec4 passColor;
 
-	void main()
-	{
-		// outColor = passColor;
-		// so far we didn't use gamma correction for square particles, but this way
-		// uniCommon is referenced so hopefully Intels Ivy Bridge HD4000 GPU driver
-		// for Windows stops shitting itself (see https://github.com/yquake2/yquake2/issues/391)
-		outColor.rgb = pow(passColor.rgb, vec3(gamma));
-		outColor.a = passColor.a;
-	}
-	` + "\x00"
+void main()
+{
+	// outColor = passColor;
+	// so far we didn't use gamma correction for square particles, but this way
+	// uniCommon is referenced so hopefully Intels Ivy Bridge HD4000 GPU driver
+	// for Windows stops shitting itself (see https://github.com/yquake2/yquake2/issues/391)
+	outColor.rgb = pow(passColor.rgb, vec3(gamma));
+	outColor.a = passColor.a;
+}
+` + "\x00"

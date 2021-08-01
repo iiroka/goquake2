@@ -41,12 +41,12 @@ type Netchan_t struct {
 
 	/* sequencing variables */
 	incoming_sequence              int
-	incoming_acknowledged          int
+	Incoming_acknowledged          int
 	incoming_reliable_acknowledged int /* single bit */
 
 	incoming_reliable_sequence int /* single bit, maintained local */
 
-	outgoing_sequence      int
+	Outgoing_sequence      int
 	reliable_sequence      int /* single bit */
 	last_reliable_sequence int /* sequence number of last send */
 
@@ -73,10 +73,10 @@ func (ch *Netchan_t) Setup(common QCommon, sock Netsrc_t, adr Netadr_t, qport in
 	ch.remote_address = adr
 	ch.Qport = qport
 	ch.incoming_sequence = 0
-	ch.incoming_acknowledged = 0
+	ch.Incoming_acknowledged = 0
 	ch.incoming_reliable_acknowledged = 0
 	ch.incoming_reliable_sequence = 0
-	ch.outgoing_sequence = 1
+	ch.Outgoing_sequence = 1
 	ch.reliable_sequence = 0
 	ch.last_reliable_sequence = 0
 	ch.reliable_length = 0
@@ -101,7 +101,7 @@ func (ch *Netchan_t) needReliable() bool {
 	/* if the remote side dropped the last reliable message, resend it */
 	send_reliable := false
 
-	if (ch.incoming_acknowledged > ch.last_reliable_sequence) &&
+	if (ch.Incoming_acknowledged > ch.last_reliable_sequence) &&
 		(ch.incoming_reliable_acknowledged != ch.reliable_sequence) {
 		send_reliable = true
 	}
@@ -146,13 +146,13 @@ func (ch *Netchan_t) Transmit(data []byte) {
 	/* write the packet header */
 	send := QWritebufCreate(MAX_MSGLEN)
 
-	w1 := (ch.outgoing_sequence & 0x7FFFFFFF)
+	w1 := (ch.Outgoing_sequence & 0x7FFFFFFF)
 	if send_reliable {
 		w1 |= 0x80000000
 	}
 	w2 := (ch.incoming_sequence & 0x7FFFFFFF) | (ch.incoming_reliable_sequence << 31)
 
-	ch.outgoing_sequence++
+	ch.Outgoing_sequence++
 	ch.LastSent = ch.common.Curtime()
 
 	send.WriteLong(w1)
@@ -166,7 +166,7 @@ func (ch *Netchan_t) Transmit(data []byte) {
 	/* copy the reliable message to the packet first */
 	if send_reliable {
 		send.Write(ch.reliable_buf[0:ch.reliable_length])
-		ch.last_reliable_sequence = ch.outgoing_sequence
+		ch.last_reliable_sequence = ch.Outgoing_sequence
 	}
 
 	/* add the unreliable part if space is available */
@@ -273,7 +273,7 @@ func (ch *Netchan_t) Process(msg *QReadbuf) bool {
 
 	/* if this message contains a reliable message, bump incoming_reliable_sequence */
 	ch.incoming_sequence = sequence
-	ch.incoming_acknowledged = sequence_ack
+	ch.Incoming_acknowledged = sequence_ack
 	ch.incoming_reliable_acknowledged = reliable_ack
 
 	if reliable_message != 0 {

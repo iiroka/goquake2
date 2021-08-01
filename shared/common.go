@@ -33,6 +33,7 @@ import (
 )
 
 const (
+	YQ2VERSION  = "8.00pre"
 	BASEDIRNAME = "baseq2"
 
 	/* PROTOCOL */
@@ -66,7 +67,7 @@ const (
 
 	/* these ops are known to the game dll */
 	SvcMuzzleflash  = 1
-	svcMuzzleflash2 = 2
+	SvcMuzzleflash2 = 2
 	SvcTempEntity   = 3
 	SvcLayout       = 4
 	SvcInventory    = 5

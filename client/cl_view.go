@@ -26,8 +26,10 @@
 package client
 
 import (
+	"fmt"
 	"goquake2/shared"
 	"math"
+	"strconv"
 )
 
 /*
@@ -35,7 +37,7 @@ import (
  */
 func (T *qClient) clearScene() {
 	//  r_numdlights = 0;
-	//  r_numparticles = 0;
+	T.r_particles = make([]shared.Particle_t, 0)
 	T.r_entities = make([]shared.Entity_t, 0)
 }
 
@@ -45,6 +47,34 @@ func (T *qClient) addEntity(ent shared.Entity_t) {
 	}
 
 	T.r_entities = append(T.r_entities, ent)
+}
+
+func (T *qClient) addParticle(org [3]float32, color int, alpha float32) {
+
+	if len(T.r_particles) >= shared.MAX_PARTICLES {
+		return
+	}
+
+	p := shared.Particle_t{}
+	copy(p.Origin[:], org[:])
+	p.Color = color
+	p.Alpha = alpha
+	T.r_particles = append(T.r_particles, p)
+}
+
+func (T *qClient) addLightStyle(style int, r, g, b float32) {
+
+	if (style < 0) || (style > shared.MAX_LIGHTSTYLES) {
+		// Com_Error(ERR_DROP, "Bad light style %i", style);
+		return
+	}
+
+	ls := &T.r_lightstyles[style]
+
+	ls.White = r + g + b
+	ls.Rgb[0] = r
+	ls.Rgb[1] = g
+	ls.Rgb[2] = b
 }
 
 /*
@@ -83,7 +113,7 @@ func (T *qClient) prepRefresh() error {
 	//  SCR_TouchPics();
 	T.common.Com_Printf("                                     \r")
 
-	//  CL_RegisterTEntModels();
+	T.registerTEntModels()
 
 	//  num_cl_weaponmodels = 1;
 	//  strcpy(cl_weaponmodels[0], "weapon.md2");
@@ -152,9 +182,10 @@ func (T *qClient) prepRefresh() error {
 	/* set sky textures and speed */
 	T.common.Com_Printf("sky\r")
 	T.scrUpdateScreen()
-	//  rotate = (float)strtod(cl.configstrings[CS_SKYROTATE], (char **)NULL);
-	//  sscanf(cl.configstrings[CS_SKYAXIS], "%f %f %f", &axis[0], &axis[1], &axis[2]);
-	//  R_SetSky(cl.configstrings[CS_SKY], rotate, axis);
+	rotate, _ := strconv.ParseFloat(T.cl.configstrings[shared.CS_SKYROTATE], 32)
+	var axis [3]float32
+	fmt.Sscanf(T.cl.configstrings[shared.CS_SKYAXIS], "%f %f %f", &axis[0], &axis[1], &axis[2])
+	T.R_SetSky(T.cl.configstrings[shared.CS_SKY], float32(rotate), axis[:])
 	T.common.Com_Printf("                                     \r")
 
 	//  /* the renderer can now free unneeded stuff */
@@ -272,10 +303,10 @@ func (T *qClient) renderView(stereo_separation float32) error {
 		// 	cl.refdef.num_entities = r_numentities;
 		T.cl.refdef.Entities = T.r_entities
 		// 	cl.refdef.num_particles = r_numparticles;
-		// 	cl.refdef.particles = r_particles;
+		T.cl.refdef.Particles = T.r_particles
 		// 	cl.refdef.num_dlights = r_numdlights;
 		// 	cl.refdef.dlights = r_dlights;
-		// 	cl.refdef.lightstyles = r_lightstyles;
+		T.cl.refdef.Lightstyles = T.r_lightstyles[:]
 
 		T.cl.refdef.Rdflags = T.cl.frame.playerstate.Rdflags
 
@@ -311,9 +342,8 @@ func (T *qClient) renderView(stereo_separation float32) error {
 		return err
 	}
 
-	// if (T.cl_stats)
-	// {
-	T.common.Com_Printf("ent:%v  lt:%v  part:%v\n", len(T.r_entities), 0, 0)
+	// if T.cl_stats.Bool() {
+	// T.common.Com_Printf("ent:%v  lt:%v  part:%v\n", len(T.r_entities), 0, 0)
 	// r_numdlights, r_numparticles)
 	// }
 

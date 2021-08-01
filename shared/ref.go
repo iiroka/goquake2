@@ -57,6 +57,12 @@ type Lightstyle_t struct {
 	White float32    /* r+g+b */
 }
 
+type Particle_t struct {
+	Origin [3]float32
+	Color  int
+	Alpha  float32
+}
+
 type Refdef_t struct {
 	X, Y, Width, Height int /* in virtual screen coordinates */
 	Fov_x, Fov_y        float32
@@ -76,7 +82,7 @@ type Refdef_t struct {
 	// dlight_t	*dlights;
 
 	// int			num_particles;
-	// particle_t	*particles;
+	Particles []Particle_t
 }
 
 //
@@ -117,10 +123,13 @@ type Refexport_t interface {
 
 	DrawStretchPic(x, y, w, h int, name string)
 	DrawTileClear(x, y, w, h int, name string)
+	DrawPicScaled(x, y int, pic string, factor float32)
 	DrawFill(x, y, w, h, c int)
 
 	BeginFrame(camera_separation float32) error
 	EndFrame()
+
+	SetSky(name string, rotate float32, axis []float32)
 }
 
 type Refimport_t interface {

@@ -40,6 +40,9 @@ const CMD_BACKUP = 256 /* allow a lot of command backups for very fast systems *
    it can be un-deltad from the original */
 const MAX_PARSE_ENTITIES = 1024
 
+const PARTICLE_GRAVITY = 40
+const INSTANT_PARTICLE = -10000.0
+
 type frame_t struct {
 	valid          bool /* cleared if delta parsing was invalid */
 	serverframe    int
@@ -103,10 +106,10 @@ type client_state_t struct {
 
 	parse_entities int /* index (not anded off) into cl_parse_entities[] */
 
-	//    usercmd_t	cmd;
-	//    usercmd_t	cmds[CMD_BACKUP]; /* each mesage will send several old cmds */
-	//    int			cmd_time[CMD_BACKUP]; /* time sent, for calculating pings */
-	predicted_origins [CMD_BACKUP][3]int16 /* for debug comparing against server */
+	cmd               shared.Usercmd_t
+	cmds              [CMD_BACKUP]shared.Usercmd_t /* each mesage will send several old cmds */
+	cmd_time          [CMD_BACKUP]int              /* time sent, for calculating pings */
+	predicted_origins [CMD_BACKUP][3]int16         /* for debug comparing against server */
 
 	predicted_step      float32 /* for stair up smoothing */
 	predicted_step_time uint
@@ -124,7 +127,7 @@ type client_state_t struct {
 	the server sends a delta each frame which is added to the locally
 	tracked view angles to account for standing on rotating objects,
 	and teleport direction changes */
-	//    vec3_t		viewangles;
+	viewangles [3]float32
 
 	time     int     /* this is the time value that the client is rendering at. always <= cls.realtime */
 	lerpfrac float32 /* between oldframe and frame */
@@ -137,8 +140,8 @@ type client_state_t struct {
 	v_up      [3]float32
 
 	/* transient data from server */
-	//    char		layout[1024]; /* general 2D overlay */
-	//    int			inventory[MAX_ITEMS];
+	layout    string /* general 2D overlay */
+	inventory [shared.MAX_ITEMS]int
 
 	//    /* non-gameserver infornamtion */
 	//    fileHandle_t cinematic_file;
@@ -238,6 +241,20 @@ type client_static_t struct {
 
 type dirty_t struct {
 	x1, y1, x2, y2 int
+}
+
+type cparticle_t struct {
+	next *cparticle_t
+
+	time float32
+
+	org      [3]float32
+	vel      [3]float32
+	accel    [3]float32
+	color    float32
+	colorvel float32
+	alpha    float32
+	alphavel float32
 }
 
 type qClient struct {
@@ -344,7 +361,51 @@ type qClient struct {
 	// console
 	con console_t
 
-	r_entities []shared.Entity_t
+	r_entities    []shared.Entity_t
+	r_particles   []shared.Particle_t
+	r_lightstyles [shared.MAX_LIGHTSTYLES]shared.Lightstyle_t
+
+	frame_msec         int
+	old_sys_frame_time int
+
+	// 	struct sfx_s *cl_sfx_ric1;
+	// struct sfx_s *cl_sfx_ric2;
+	// struct sfx_s *cl_sfx_ric3;
+	// struct sfx_s *cl_sfx_lashit;
+	// struct sfx_s *cl_sfx_spark5;
+	// struct sfx_s *cl_sfx_spark6;
+	// struct sfx_s *cl_sfx_spark7;
+	// struct sfx_s *cl_sfx_railg;
+	// struct sfx_s *cl_sfx_rockexp;
+	// struct sfx_s *cl_sfx_grenexp;
+	// struct sfx_s *cl_sfx_watrexp;
+	// struct sfx_s *cl_sfx_plasexp;
+	// struct sfx_s *cl_sfx_footsteps[4];
+
+	cl_mod_explode          interface{}
+	cl_mod_smoke            interface{}
+	cl_mod_flash            interface{}
+	cl_mod_parasite_segment interface{}
+	cl_mod_grapple_cable    interface{}
+	cl_mod_parasite_tip     interface{}
+	cl_mod_explo4           interface{}
+	cl_mod_bfg_explo        interface{}
+	cl_mod_powerscreen      interface{}
+	cl_mod_plasmaexplo      interface{}
+
+	// cl_sfx_lightning        interface{}
+	// cl_sfx_disrexp          interface{}
+	cl_mod_lightning        interface{}
+	cl_mod_heatbeam         interface{}
+	cl_mod_monster_heatbeam interface{}
+	cl_mod_explo4_big       interface{}
+
+	active_particles *cparticle_t
+	free_particles   *cparticle_t
+	particles        [shared.MAX_PARTICLES]cparticle_t
+
+	cl_lightstyle [shared.MAX_LIGHTSTYLES]clightstyle_t
+	lastofs       int
 }
 
 func CreateClient() shared.QClient {

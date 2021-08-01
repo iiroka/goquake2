@@ -36,6 +36,10 @@ import (
 
 type QInput struct {
 	common shared.QCommon
+
+	// The last time input events were processed.
+	// Used throughout the client.
+	Sys_frame_time int
 }
 
 /* ------------------------------------------------------------------ */
@@ -398,9 +402,8 @@ func (T *QInput) Update() {
 			// 			 break;
 			// 		 }
 
-			// 		 case SDL_QUIT:
-			// 			 Com_Quit();
-			// 			 break;
+		case sdl.QUIT:
+			T.common.Com_Quit()
 		}
 	}
 
@@ -419,9 +422,9 @@ func (T *QInput) Update() {
 	//  // The called SDL functions return after a cheap check, if there's nothing to do.
 	//  GLimp_GrabInput(want_grab);
 
-	//  // We need to save the frame time so other subsystems
-	//  // know the exact time of the last input events.
-	//  sys_frame_time = Sys_Milliseconds();
+	// We need to save the frame time so other subsystems
+	// know the exact time of the last input events.
+	T.Sys_frame_time = T.common.Sys_Milliseconds()
 }
 
 /*

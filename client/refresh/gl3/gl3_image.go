@@ -83,35 +83,32 @@ func (T *qGl3) textureMode(str string) {
 
 	// const char* nolerplist = gl_nolerp_list->string;
 
-	// /* change all the existing texture objects */
-	// for (i = 0, glt = gl3textures; i < numgl3textures; i++, glt++)
-	// {
-	// 	if (nolerplist != NULL && strstr(nolerplist, glt->name) != NULL)
-	// 	{
-	// 		continue; /* those (by default: font and crosshairs) always only use GL_NEAREST */
-	// 	}
+	/* change all the existing texture objects */
+	for i := 0; i < T.numgl3textures; i++ {
+		glt := &T.gl3textures[i]
+		// 	if (nolerplist != NULL && strstr(nolerplist, glt->name) != NULL)
+		// 	{
+		// 		continue; /* those (by default: font and crosshairs) always only use GL_NEAREST */
+		// 	}
 
-	// 	GL3_SelectTMU(GL_TEXTURE0);
-	// 	GL3_Bind(glt->texnum);
-	// 	if ((glt->type != it_pic) && (glt->type != it_sky)) /* mipmapped texture */
-	// 	{
-	// 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter_min);
-	// 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter_max);
+		T.selectTMU(gl.TEXTURE0)
+		T.bind(glt.texnum)
+		if (glt.itype != it_pic) && (glt.itype != it_sky) { /* mipmapped texture */
+			gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, T.gl_filter_min)
+			gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, T.gl_filter_max)
 
-	// 		/* Set anisotropic filter if supported and enabled */
-	// 		if (gl3config.anisotropic && gl_anisotropic->value)
-	// 		{
-	// 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, max(gl_anisotropic->value, 1.f));
-	// 		}
-	// 	}
-	// 	else /* texture has no mipmaps */
-	// 	{
-	// 		// we can't use gl_filter_min which might be GL_*_MIPMAP_*
-	// 		// also, there's no anisotropic filtering for textures w/o mipmaps
-	// 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter_max);
-	// 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter_max);
-	// 	}
-	// }
+			// 		/* Set anisotropic filter if supported and enabled */
+			// 		if (gl3config.anisotropic && gl_anisotropic->value)
+			// 		{
+			// 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, max(gl_anisotropic->value, 1.f));
+			// 		}
+		} else { /* texture has no mipmaps */
+			// we can't use gl_filter_min which might be GL_*_MIPMAP_*
+			// also, there's no anisotropic filtering for textures w/o mipmaps
+			gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, T.gl_filter_max)
+			gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, T.gl_filter_max)
+		}
+	}
 }
 
 func (T *qGl3) bind(texnum uint32) {
@@ -155,15 +152,8 @@ func (T *qGl3) bindLightmap(lightmapnum int) {
  * Returns has_alpha
  */
 func (T *qGl3) upload32(data unsafe.Pointer, width, height int, mipmap bool) bool {
-	//  qboolean res;
-
-	//  int samples;
-	//  int i, c;
-	//  byte *scan;
-	//  int comp;
 
 	c := width * height
-	//  scan = ((byte *)data) + 3;
 	samples := gl3_solid_format
 	comp := gl3_tex_solid_format
 
@@ -192,10 +182,9 @@ func (T *qGl3) upload32(data unsafe.Pointer, width, height int, mipmap bool) boo
 		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, T.gl_filter_max)
 	}
 
-	//  if (mipmap && gl3config.anisotropic && gl_anisotropic->value)
-	//  {
-	// 	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, max(gl_anisotropic->value, 1.f));
-	//  }
+	if mipmap && T.gl3config.anisotropic && T.gl_anisotropic.Bool() {
+		// gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_ANISOTROPY_EXT, max(T.gl_anisotropic.Int(), 1))
+	}
 
 	return res
 }
@@ -319,8 +308,8 @@ func (T *qGl3) loadPic(name string, pic []byte, width, realwidth,
 			(image.itype != it_pic && image.itype != it_sky),
 			image.itype == it_sky)
 	} else {
-		// 	 image->has_alpha = GL3_Upload32((unsigned *)pic, width, height,
-		// 				 (image->type != it_pic && image->type != it_sky));
+		image.has_alpha = T.upload32(gl.Ptr(pic), width, height,
+			(image.itype != it_pic && image.itype != it_sky))
 	}
 
 	//  if (realwidth && realheight) {
@@ -580,8 +569,6 @@ func (T *qGl3) findImage(name string, itype imagetype_t) *gl3image_t {
 		// 		 return NULL;
 		// 	 }
 		//  }
-	} else {
-		return nil
 	}
 
 	//  if (pic)

@@ -75,7 +75,6 @@ var dottexture = [][]byte{
 }
 
 func (T *qGl3) initParticleTexture() {
-	// 	int x, y;
 	data := make([]byte, 8*8*4)
 
 	/* particle texture */

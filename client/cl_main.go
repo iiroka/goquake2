@@ -28,6 +28,20 @@ package client
 
 import "goquake2/shared"
 
+func (T *qClient) clearState() {
+	// S_StopAllSounds();
+	T.clearEffects()
+	// CL_ClearTEnts();
+
+	/* wipe the entire cl structure */
+	T.cl = client_state_t{}
+	T.cl.configstrings = make([]string, shared.MAX_CONFIGSTRINGS)
+	T.cl_entities = make([]centity_t, shared.MAX_EDICTS)
+	T.cl.model_draw = make([]interface{}, shared.MAX_MODELS)
+
+	T.cls.netchan.Message.Clear()
+}
+
 /*
  * The server will send this command right
  * before allowing the client into the server
@@ -82,7 +96,7 @@ func (T *qClient) initLocal() {
 
 	// T.cl_run = Cvar_Get("cl_run", "0", CVAR_ARCHIVE)
 
-	T.cl_shownet = T.common.Cvar_Get("cl_shownet", "2", 0)
+	T.cl_shownet = T.common.Cvar_Get("cl_shownet", "0", 0)
 	T.cl_showmiss = T.common.Cvar_Get("cl_showmiss", "0", 0)
 	T.cl_showclamp = T.common.Cvar_Get("showclamp", "0", 0)
 	T.cl_timeout = T.common.Cvar_Get("cl_timeout", "120", 0)
@@ -234,11 +248,11 @@ func (T *qClient) Frame(packetdelta, renderdelta, timedelta int, packetframe, re
 		}
 		// 		CL_FixCvarCheats();
 
-		// 		if (cls.state > ca_connecting) {
-		// 			CL_RefreshCmd();
-		// 		} else {
-		// 			CL_RefreshMove();
-		// 		}
+		if T.cls.state > ca_connecting {
+			T.refreshCmd()
+		} else {
+			T.refreshMove()
+		}
 	}
 
 	// 	if (cls.forcePacket || userinfo_modified) {
@@ -264,15 +278,14 @@ func (T *qClient) Frame(packetdelta, renderdelta, timedelta int, packetframe, re
 		if err := T.vidCheckChanges(); err != nil {
 			return err
 		}
-		// 		CL_PredictMovement();
+		T.predictMovement()
 
 		// 		if (!cl.refresh_prepped && (cls.state == ca_active)) {
 		// 			CL_PrepRefresh();
 		// 		}
 
 		// 		/* update the screen */
-		// 		if (host_speeds->value)
-		// 		{
+		// 		if (host_speeds->value) {
 		// 			time_before_ref = Sys_Milliseconds();
 		// 		}
 
@@ -290,12 +303,12 @@ func (T *qClient) Frame(packetdelta, renderdelta, timedelta int, packetframe, re
 
 		// 		/* advance local effects for next frame */
 		// 		CL_RunDLights();
-		// 		CL_RunLightStyles();
+		T.runLightStyles()
 		// 		SCR_RunCinematic();
 		// 		SCR_RunConsole();
 
-		// 		/* Update framecounter */
-		// 		cls.framecount++;
+		/* Update framecounter */
+		T.cls.framecount++
 
 		// 		if (log_stats->value) {
 		// 			if (cls.state == ca_active) {

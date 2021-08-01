@@ -25,151 +25,144 @@
  */
 package gl3
 
+import (
+	"goquake2/shared"
+)
+
+type aliasExtra struct {
+	header      shared.Dmdl_t
+	sts         []shared.Dstvert_t
+	tris        []shared.Dtriangle_t
+	frames      []shared.Daliasframe_t
+	glcmds      []int32
+	skinNames   []string
+	vertexCount int
+	indexCount  int
+}
+
 func (T *qGl3) loadMD2(mod *gl3model_t, buffer []byte) error {
-	// int i, j;
-	// dmdl_t *pinmodel, *pheader;
-	// dstvert_t *pinst, *poutst;
-	// dtriangle_t *pintri, *pouttri;
-	// daliasframe_t *pinframe, *poutframe;
-	// int *pincmd, *poutcmd;
-	// int version;
-	// int ofs_end;
 
-	// pinmodel = (dmdl_t *)buffer;
+	pheader := shared.Dmdl(buffer)
 
-	// version = LittleLong(pinmodel->version);
+	if pheader.Version != shared.ALIAS_VERSION {
+		return T.ri.Sys_Error(shared.ERR_DROP, "%s has wrong version number (%i should be %i)",
+			mod.name, pheader.Version, shared.ALIAS_VERSION)
+	}
 
-	// if (version != ALIAS_VERSION)
-	// {
-	// 	ri.Sys_Error(ERR_DROP, "%s has wrong version number (%i should be %i)",
-	// 			mod->name, version, ALIAS_VERSION);
-	// }
+	if pheader.Ofs_end < 0 || int(pheader.Ofs_end) > len(buffer) {
+		return T.ri.Sys_Error(shared.ERR_DROP, "model %s file size(%d) too small, should be %d", mod.name,
+			len(buffer), pheader.Ofs_end)
+	}
 
-	// ofs_end = LittleLong(pinmodel->ofs_end);
-	// if (ofs_end < 0 || ofs_end > modfilelen)
-	// 	ri.Sys_Error (ERR_DROP, "model %s file size(%d) too small, should be %d", mod->name,
-	// 			   modfilelen, ofs_end);
+	if pheader.Skinheight > MAX_LBM_HEIGHT {
+		return T.ri.Sys_Error(shared.ERR_DROP, "model %s has a skin taller than %d", mod.name,
+			MAX_LBM_HEIGHT)
+	}
 
-	// mod->extradata = Hunk_Begin(modfilelen);
-	// pheader = Hunk_Alloc(ofs_end);
+	if pheader.Num_xyz <= 0 {
+		return T.ri.Sys_Error(shared.ERR_DROP, "model %s has no vertices", mod.name)
+	}
 
-	// /* byte swap the header fields and sanity check */
-	// for (i = 0; i < sizeof(dmdl_t) / 4; i++)
-	// {
-	// 	((int *)pheader)[i] = LittleLong(((int *)buffer)[i]);
-	// }
+	if pheader.Num_xyz > shared.MAX_VERTS {
+		return T.ri.Sys_Error(shared.ERR_DROP, "model %s has too many vertices", mod.name)
+	}
 
-	// if (pheader->skinheight > MAX_LBM_HEIGHT)
-	// {
-	// 	ri.Sys_Error(ERR_DROP, "model %s has a skin taller than %d", mod->name,
-	// 			MAX_LBM_HEIGHT);
-	// }
+	if pheader.Num_st <= 0 {
+		return T.ri.Sys_Error(shared.ERR_DROP, "model %s has no st vertices", mod.name)
+	}
 
-	// if (pheader->num_xyz <= 0)
-	// {
-	// 	ri.Sys_Error(ERR_DROP, "model %s has no vertices", mod->name);
-	// }
+	if pheader.Num_tris <= 0 {
+		return T.ri.Sys_Error(shared.ERR_DROP, "model %s has no triangles", mod.name)
+	}
 
-	// if (pheader->num_xyz > MAX_VERTS)
-	// {
-	// 	ri.Sys_Error(ERR_DROP, "model %s has too many vertices", mod->name);
-	// }
+	if pheader.Num_frames <= 0 {
+		return T.ri.Sys_Error(shared.ERR_DROP, "model %s has no frames", mod.name)
+	}
 
-	// if (pheader->num_st <= 0)
-	// {
-	// 	ri.Sys_Error(ERR_DROP, "model %s has no st vertices", mod->name);
-	// }
+	/* load base s and t vertices (not used in gl version) */
+	psts := make([]shared.Dstvert_t, pheader.Num_st)
+	for i := range psts {
+		psts[i] = shared.Dstvert(buffer[int(pheader.Ofs_st)+i*shared.Dstvert_size:])
+	}
 
-	// if (pheader->num_tris <= 0)
-	// {
-	// 	ri.Sys_Error(ERR_DROP, "model %s has no triangles", mod->name);
-	// }
+	/* load triangle lists */
+	ptris := make([]shared.Dtriangle_t, pheader.Num_tris)
+	for i := range ptris {
+		ptris[i] = shared.Dtriangle(buffer[int(pheader.Ofs_tris)+i*shared.Dtriangle_size:])
+	}
 
-	// if (pheader->num_frames <= 0)
-	// {
-	// 	ri.Sys_Error(ERR_DROP, "model %s has no frames", mod->name);
-	// }
-
-	// /* load base s and t vertices (not used in gl version) */
-	// pinst = (dstvert_t *)((byte *)pinmodel + pheader->ofs_st);
-	// poutst = (dstvert_t *)((byte *)pheader + pheader->ofs_st);
-
-	// for (i = 0; i < pheader->num_st; i++)
-	// {
-	// 	poutst[i].s = LittleShort(pinst[i].s);
-	// 	poutst[i].t = LittleShort(pinst[i].t);
-	// }
-
-	// /* load triangle lists */
-	// pintri = (dtriangle_t *)((byte *)pinmodel + pheader->ofs_tris);
-	// pouttri = (dtriangle_t *)((byte *)pheader + pheader->ofs_tris);
-
-	// for (i = 0; i < pheader->num_tris; i++)
-	// {
-	// 	for (j = 0; j < 3; j++)
-	// 	{
-	// 		pouttri[i].index_xyz[j] = LittleShort(pintri[i].index_xyz[j]);
-	// 		pouttri[i].index_st[j] = LittleShort(pintri[i].index_st[j]);
-	// 	}
-	// }
-
-	// /* load the frames */
-	// for (i = 0; i < pheader->num_frames; i++)
-	// {
-	// 	pinframe = (daliasframe_t *)((byte *)pinmodel
-	// 			+ pheader->ofs_frames + i * pheader->framesize);
-	// 	poutframe = (daliasframe_t *)((byte *)pheader
-	// 			+ pheader->ofs_frames + i * pheader->framesize);
-
-	// 	memcpy(poutframe->name, pinframe->name, sizeof(poutframe->name));
-
-	// 	for (j = 0; j < 3; j++)
-	// 	{
-	// 		poutframe->scale[j] = LittleFloat(pinframe->scale[j]);
-	// 		poutframe->translate[j] = LittleFloat(pinframe->translate[j]);
-	// 	}
-
-	// 	/* verts are all 8 bit, so no swapping needed */
-	// 	memcpy(poutframe->verts, pinframe->verts,
-	// 			pheader->num_xyz * sizeof(dtrivertx_t));
-	// }
+	/* load the frames */
+	pframes := make([]shared.Daliasframe_t, pheader.Num_frames)
+	for i := range pframes {
+		pframes[i] = shared.Daliasframe(buffer[int(pheader.Ofs_frames)+i*int(pheader.Framesize):], int(pheader.Framesize))
+	}
 
 	mod.mtype = mod_alias
 
-	// /* load the glcmds */
-	// pincmd = (int *)((byte *)pinmodel + pheader->ofs_glcmds);
-	// poutcmd = (int *)((byte *)pheader + pheader->ofs_glcmds);
+	/* load the glcmds */
+	glcmds := make([]int32, pheader.Num_glcmds)
+	for i := range glcmds {
+		glcmds[i] = shared.ReadInt32(buffer[int(pheader.Ofs_glcmds)+i*4:])
+	}
 
-	// for (i = 0; i < pheader->num_glcmds; i++)
-	// {
-	// 	poutcmd[i] = LittleLong(pincmd[i]);
-	// }
-
-	// if (poutcmd[pheader->num_glcmds-1] != 0)
-	// {
+	// if (poutcmd[pheader->num_glcmds-1] != 0) {
 	// 	R_Printf(PRINT_ALL, "%s: Entity %s has possible last element issues with %d verts.\n",
 	// 		__func__,
 	// 		mod->name,
 	// 		poutcmd[pheader->num_glcmds-1]);
 	// }
 
-	// /* register all skins */
-	// memcpy((char *)pheader + pheader->ofs_skins,
-	// 		(char *)pinmodel + pheader->ofs_skins,
-	// 		pheader->num_skins * MAX_SKINNAME);
+	/* register all skins */
+	skinNames := make([]string, pheader.Num_skins)
+	for i := range skinNames {
+		skinNames[i] = shared.ReadString(buffer[int(pheader.Ofs_skins)+i*shared.MAX_SKINNAME:], shared.MAX_SKINNAME)
+	}
 
-	// for (i = 0; i < pheader->num_skins; i++)
-	// {
-	// 	mod->skins[i] = GL3_FindImage(
-	// 			(char *)pheader + pheader->ofs_skins + i * MAX_SKINNAME,
-	// 			it_skin);
-	// }
+	mod.skins = make([]*gl3image_t, pheader.Num_skins)
+	for i := range skinNames {
+		mod.skins[i] = T.findImage(skinNames[i], it_skin)
+	}
 
-	// mod->mins[0] = -32;
-	// mod->mins[1] = -32;
-	// mod->mins[2] = -32;
-	// mod->maxs[0] = 32;
-	// mod->maxs[1] = 32;
-	// mod->maxs[2] = 32;
+	extra := aliasExtra{}
+	extra.header = pheader
+	extra.sts = psts
+	extra.tris = ptris
+	extra.frames = pframes
+	extra.glcmds = glcmds
+	extra.skinNames = skinNames
+
+	extra.vertexCount, extra.indexCount = countVerticesAndIndices(glcmds)
+
+	mod.extradata = extra
+
+	mod.mins[0] = -32
+	mod.mins[1] = -32
+	mod.mins[2] = -32
+	mod.maxs[0] = 32
+	mod.maxs[1] = 32
+	mod.maxs[2] = 32
 	return nil
+}
+
+func countVerticesAndIndices(cmds []int32) (int, int) {
+	indices := 0
+	vertices := 0
+	index := 0
+	for {
+		/* get the vertex count and primitive type */
+		count := cmds[index]
+		index++
+		if count == 0 {
+			break /* done */
+		}
+
+		if count < 0 {
+			count = -count
+		}
+
+		index += 3 * int(count)
+		vertices += int(count)
+		indices += 3 * int(count-2)
+	}
+	return vertices, indices
 }

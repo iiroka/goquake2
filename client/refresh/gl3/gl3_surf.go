@@ -142,6 +142,18 @@ func (T *qGl3) textureAnimation(tex *mtexinfo_t) *gl3image_t {
 	return tex.image
 }
 
+func (T *qGl3) setLightFlags(surf *msurface_t) {
+	lightFlags := 0
+	if surf.dlightframe == T.gl3_framecount {
+		lightFlags = surf.dlightbits
+	}
+
+	numVerts := surf.polys.numverts
+	for i := 0; i < numVerts; i++ {
+		surf.polys.vertices(i).setLightFlags(uint32(lightFlags))
+	}
+}
+
 func setAllLightFlags(surf *msurface_t) {
 	var lightFlags uint32 = 0xffffffff
 
@@ -160,11 +172,117 @@ func (T *qGl3) drawGLPoly(fa *msurface_t) {
 	T.bufferAndDraw3D(gl.Ptr(p.verticesData), p.numverts, gl.TRIANGLE_FAN)
 }
 
+func (T *qGl3) updateLMscales(lmScales [MAX_LIGHTMAPS_PER_SURFACE][4]float32, si *gl3ShaderInfo_t) {
+	hasChanged := false
+
+	for i := 0; i < MAX_LIGHTMAPS_PER_SURFACE; i++ {
+		if hasChanged {
+			copy(si.lmScales[i*4:(i+1)*4], lmScales[i][:])
+		} else if si.lmScales[i*4+0] != lmScales[i][0] ||
+			si.lmScales[i*4+1] != lmScales[i][1] ||
+			si.lmScales[i*4+2] != lmScales[i][2] ||
+			si.lmScales[i*4+3] != lmScales[i][3] {
+			copy(si.lmScales[i*4:(i+1)*4], lmScales[i][:])
+			hasChanged = true
+		}
+	}
+
+	if hasChanged {
+		gl.Uniform4fv(si.uniLmScales, MAX_LIGHTMAPS_PER_SURFACE, (*float32)(gl.Ptr(si.lmScales[:])))
+	}
+}
+
+func (T *qGl3) renderBrushPoly(fa *msurface_t) {
+	// int map;
+	// gl3image_t *image;
+
+	T.c_brush_polys++
+
+	image := T.textureAnimation(fa.texinfo)
+
+	// if (fa.flags & SURF_DRAWTURB) != 0 {
+	// 	GL3_Bind(image->texnum);
+
+	// 	GL3_EmitWaterPolys(fa);
+
+	// 	return;
+	// }
+	// else
+	// {
+	T.bind(image.texnum)
+	// }
+
+	var lmScales [MAX_LIGHTMAPS_PER_SURFACE][4]float32
+	for j := range lmScales[0] {
+		lmScales[0][j] = 1.0
+	}
+
+	T.bindLightmap(fa.lightmaptexturenum)
+
+	// Any dynamic lights on this surface?
+	for mmap := 0; mmap < MAX_LIGHTMAPS_PER_SURFACE; mmap++ {
+		if fa.styles[mmap] == 255 {
+			break
+		}
+		lmScales[mmap][0] = T.gl3_newrefdef.Lightstyles[fa.styles[mmap]].Rgb[0]
+		lmScales[mmap][1] = T.gl3_newrefdef.Lightstyles[fa.styles[mmap]].Rgb[1]
+		lmScales[mmap][2] = T.gl3_newrefdef.Lightstyles[fa.styles[mmap]].Rgb[2]
+		lmScales[mmap][3] = 1.0
+	}
+
+	// if (fa->texinfo->flags & SURF_FLOWING)
+	// {
+	// 	GL3_UseProgram(gl3state.si3DlmFlow.shaderProgram);
+	// 	UpdateLMscales(lmScales, &gl3state.si3DlmFlow);
+	// 	GL3_DrawGLFlowingPoly(fa);
+	// }
+	// else
+	// {
+	T.useProgram(T.gl3state.si3Dlm.shaderProgram)
+	T.updateLMscales(lmScales, &T.gl3state.si3Dlm)
+	T.drawGLPoly(fa)
+	// }
+
+	// Note: lightmap chains are gone, lightmaps are rendered together with normal texture in one pass
+}
+
+func (T *qGl3) drawTextureChains() {
+
+	T.c_visible_textures = 0
+
+	for i := 0; i < T.numgl3textures; i++ {
+		image := &T.gl3textures[i]
+		if image.registration_sequence == 0 {
+			continue
+		}
+
+		s := image.texturechain
+		if s == nil {
+			continue
+		}
+
+		T.c_visible_textures++
+
+		for s != nil {
+			T.setLightFlags(s)
+			T.renderBrushPoly(s)
+			s = s.texturechain
+		}
+
+		image.texturechain = nil
+	}
+
+	// TODO: maybe one loop for normal faces and one for SURF_DRAWTURB ???
+}
+
 func (T *qGl3) renderLightmappedPoly(surf *msurface_t) {
 	// int map;
 	image := T.textureAnimation(surf.texinfo)
 
-	// hmm_vec4 lmScales[MAX_LIGHTMAPS_PER_SURFACE] = {0};
+	var lmScales [MAX_LIGHTMAPS_PER_SURFACE][4]float32
+	for j := range lmScales[0] {
+		lmScales[0][j] = 1.0
+	}
 	// lmScales[0] = HMM_Vec4(1.0f, 1.0f, 1.0f, 1.0f);
 
 	// assert((surf->texinfo->flags & (SURF_SKY | SURF_TRANS33 | SURF_TRANS66 | SURF_WARP)) == 0
@@ -175,10 +293,10 @@ func (T *qGl3) renderLightmappedPoly(surf *msurface_t) {
 		if surf.styles[mmap] == 255 {
 			break
 		}
-		// lmScales[mmap].R = T.gl3_newrefdef.Lightstyles[surf.styles[mmap]].Rgb[0]
-		// lmScales[mmap].G = T.gl3_newrefdef.Lightstyles[surf.styles[mmap]].Rgb[1]
-		// lmScales[mmap].B = T.gl3_newrefdef.Lightstyles[surf.styles[mmap]].Rgb[2]
-		// lmScales[mmap].A = 1.0
+		lmScales[mmap][0] = T.gl3_newrefdef.Lightstyles[surf.styles[mmap]].Rgb[0]
+		lmScales[mmap][1] = T.gl3_newrefdef.Lightstyles[surf.styles[mmap]].Rgb[1]
+		lmScales[mmap][2] = T.gl3_newrefdef.Lightstyles[surf.styles[mmap]].Rgb[2]
+		lmScales[mmap][3] = 1.0
 	}
 
 	T.c_brush_polys++
@@ -195,7 +313,7 @@ func (T *qGl3) renderLightmappedPoly(surf *msurface_t) {
 	// else
 	// {
 	T.useProgram(T.gl3state.si3Dlm.shaderProgram)
-	// 	UpdateLMscales(lmScales, &gl3state.si3Dlm);
+	T.updateLMscales(lmScales, &T.gl3state.si3Dlm)
 	T.drawGLPoly(surf)
 	// }
 }
@@ -215,16 +333,13 @@ func (T *qGl3) drawInlineBModel() {
 	// 	GL3_MarkLights(lt, 1 << k, currentmodel->nodes + currentmodel->firstnode);
 	// }
 
-	// psurf = &currentmodel->surfaces[currentmodel->firstmodelsurface];
-
-	// if (currententity->flags & RF_TRANSLUCENT)
-	// {
-	// 	glEnable(GL_BLEND);
-	// 	/* TODO: should I care about the 0.25 part? we'll just set alpha to 0.33 or 0.66 depending on surface flag..
-	// 	glColor4f(1, 1, 1, 0.25);
-	// 	R_TexEnv(GL_MODULATE);
-	// 	*/
-	// }
+	if (T.currententity.Flags & shared.RF_TRANSLUCENT) != 0 {
+		gl.Enable(gl.BLEND)
+		/* TODO: should I care about the 0.25 part? we'll just set alpha to 0.33 or 0.66 depending on surface flag..
+		glColor4f(1, 1, 1, 0.25);
+		R_TexEnv(GL_MODULATE);
+		*/
+	}
 
 	/* draw texture */
 	for i := 0; i < T.currentmodel.nummodelsurfaces; i++ {
@@ -238,30 +353,24 @@ func (T *qGl3) drawInlineBModel() {
 		if ((psurf.flags&SURF_PLANEBACK) != 0 && (dot < -BACKFACE_EPSILON)) ||
 			((psurf.flags&SURF_PLANEBACK) == 0 && (dot > BACKFACE_EPSILON)) {
 			if (psurf.texinfo.flags & (shared.SURF_TRANS33 | shared.SURF_TRANS66)) != 0 {
-				// 			/* add to the translucent chain */
-				println("Draw trans")
-				// 			psurf->texturechain = gl3_alpha_surfaces;
-				// 			gl3_alpha_surfaces = psurf;
+				/* add to the translucent chain */
+				psurf.texturechain = T.gl3_alpha_surfaces
+				T.gl3_alpha_surfaces = psurf
 			} else if (psurf.flags & SURF_DRAWTURB) == 0 {
 				setAllLightFlags(psurf)
 				T.renderLightmappedPoly(psurf)
 			} else {
-				println("Draw brush")
-				// 			RenderBrushPoly(psurf);
+				T.renderBrushPoly(psurf)
 			}
 		}
 	}
 
-	// if (currententity->flags & RF_TRANSLUCENT)
-	// {
-	// 	glDisable(GL_BLEND);
-	// }
+	if (T.currententity.Flags & shared.RF_TRANSLUCENT) != 0 {
+		gl.Disable(gl.BLEND)
+	}
 }
 
 func (T *qGl3) drawBrushModel(e *shared.Entity_t) {
-	// vec3_t mins, maxs;
-	// int i;
-	// qboolean rotated;
 
 	if T.currentmodel.nummodelsurfaces == 0 {
 		return
@@ -313,7 +422,7 @@ func (T *qGl3) drawBrushModel(e *shared.Entity_t) {
 
 	e.Angles[0] = -e.Angles[0]
 	e.Angles[2] = -e.Angles[2]
-	// GL3_RotateForEntity(e);
+	T.rotateForEntity(e)
 	e.Angles[0] = -e.Angles[0]
 	e.Angles[2] = -e.Angles[2]
 
@@ -344,29 +453,20 @@ func (T *qGl3) recursiveWorldNode(anode mnode_or_leaf) {
 
 	/* if a leaf node, draw stuff */
 	if anode.Contents() != -1 {
-		// pleaf := anode.(*mleaf_t)
+		pleaf := anode.(*mleaf_t)
 
-		// 		/* check for door connected areas */
-		// 		if (gl3_newrefdef.areabits)
-		// 		{
-		// 			if (!(gl3_newrefdef.areabits[pleaf->area >> 3] & (1 << (pleaf->area & 7))))
-		// 			{
-		// 				return; /* not visible */
-		// 			}
-		// 		}
+		/* check for door connected areas */
+		if T.gl3_newrefdef.Areabits != nil {
+			if (T.gl3_newrefdef.Areabits[pleaf.area>>3] & (1 << (pleaf.area & 7))) == 0 {
+				return /* not visible */
+			}
+		}
 
-		// 		mark = pleaf->firstmarksurface;
-		// 		c = pleaf->nummarksurfaces;
+		mark := pleaf.firstmarksurface
 
-		// 		if (c)
-		// 		{
-		// 			do
-		// 			{
-		// 				(*mark)->visframe = gl3_framecount;
-		// 				mark++;
-		// 			}
-		// 			while (--c);
-		// 		}
+		for c := 0; c < pleaf.nummarksurfaces; c++ {
+			mark[c].visframe = T.gl3_framecount
+		}
 
 		return
 	}
@@ -418,23 +518,20 @@ func (T *qGl3) recursiveWorldNode(anode mnode_or_leaf) {
 
 		if (surf.texinfo.flags & shared.SURF_SKY) != 0 {
 			// 			/* just adds to visible sky bounds */
-			println("Draw sky")
 			// 			GL3_AddSkySurface(surf);
 		} else if (surf.texinfo.flags & (shared.SURF_TRANS33 | shared.SURF_TRANS66)) != 0 {
-			// 			/* add to the translucent chain */
-			println("Draw trans surface")
-			// 			surf->texturechain = gl3_alpha_surfaces;
-			// 			gl3_alpha_surfaces = surf;
-			// 			gl3_alpha_surfaces->texinfo->image = TextureAnimation(surf->texinfo);
+			/* add to the translucent chain */
+			surf.texturechain = T.gl3_alpha_surfaces
+			T.gl3_alpha_surfaces = surf
+			T.gl3_alpha_surfaces.texinfo.image = T.textureAnimation(surf.texinfo)
 		} else {
 			// calling RenderLightmappedPoly() here probably isn't optimal, rendering everything
 			// through texturechains should be faster, because far less glBindTexture() is needed
 			// (and it might allow batching the drawcalls of surfaces with the same texture)
 			/* the polygon is visible, so add it to the texture sorted chain */
-			println("Draw surface")
-			// 				image = TextureAnimation(surf->texinfo);
-			// 				surf->texturechain = image->texturechain;
-			// 				image->texturechain = surf;
+			image := T.textureAnimation(surf.texinfo)
+			surf.texturechain = image.texturechain
+			image.texturechain = surf
 		}
 	}
 
@@ -466,7 +563,7 @@ func (T *qGl3) drawWorld() {
 
 	// GL3_ClearSkyBox();
 	T.recursiveWorldNode(&T.gl3_worldmodel.nodes[0])
-	// DrawTextureChains();
+	T.drawTextureChains()
 	// GL3_DrawSkyBox();
 	// DrawTriangleOutlines();
 

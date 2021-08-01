@@ -616,11 +616,11 @@ func (T *qClient) parseFrame(msg *shared.QReadbuf) error {
 		// 	/* fire entity events */
 		// 	CL_FireEntityEvents(&cl.frame);
 
-		// 	if (!(!cl_predict->value ||
-		// 		  (cl.frame.playerstate.pmove.pm_flags &
-		// 		   PMF_NO_PREDICTION))) {
-		// 		CL_CheckPredictionError();
-		// 	}
+		if !(!T.cl_predict.Bool() ||
+			(T.cl.frame.playerstate.Pmove.Pm_flags&
+				shared.PMF_NO_PREDICTION) != 0) {
+			T.checkPredictionError()
+		}
 	}
 	return nil
 }
@@ -633,7 +633,7 @@ func (T *qClient) parseServerData(msg *shared.QReadbuf) error {
 	T.common.Com_DPrintf("Serverdata packet received.\n")
 
 	/* wipe the client_state_t struct */
-	// CL_ClearState();
+	T.clearState()
 	T.cls.state = ca_connected
 
 	/* parse protocol version number */
@@ -711,11 +711,10 @@ func (T *qClient) loadClientinfo(ci *clientinfo_t, s string) {
 		ci.model, _ = T.R_RegisterModel("players/male/tris.md2")
 		// 	memset(ci->weaponmodel, 0, sizeof(ci->weaponmodel));
 		// 	ci->weaponmodel[0] = R_RegisterModel(weapon_filename);
-		// 	ci->skin = R_RegisterSkin(skin_filename);
+		ci.skin = T.R_RegisterSkin("players/male/grunt.pcx")
 		// 	ci->icon = Draw_FindPic(ci->iconname);
 	} else {
-		// 	/* isolate the model name */
-		// 	strcpy(model_name, s);
+		/* isolate the model name */
 		var model_name string
 		var skin_name string
 		t = strings.IndexRune(s, '/')
@@ -844,7 +843,7 @@ func (T *qClient) parseConfigString(msg *shared.QReadbuf) error {
 
 	/* do something apropriate */
 	if (i >= shared.CS_LIGHTS) && (i < shared.CS_LIGHTS+shared.MAX_LIGHTSTYLES) {
-		// 		CL_SetLightstyle(i - CS_LIGHTS);
+		T.setLightstyle(i - shared.CS_LIGHTS)
 	} else if i == shared.CS_CDTRACK {
 		// 		if (cl.refresh_prepped)
 		// 		{
@@ -1064,20 +1063,23 @@ func (T *qClient) parseServerMessage(msg *shared.QReadbuf) error {
 
 		case shared.SvcSpawnbaseline:
 			if err := T.parseBaseline(msg); err != nil {
-				return nil
+				return err
 			}
 
-			// 		case svc_temp_entity:
-			// 			CL_ParseTEnt();
-			// 			break;
+		case shared.SvcTempEntity:
+			if err := T.parseTEnt(msg); err != nil {
+				return err
+			}
 
-			// 		case svc_muzzleflash:
-			// 			CL_AddMuzzleFlash();
-			// 			break;
+		case shared.SvcMuzzleflash:
+			if err := T.addMuzzleFlash(msg); err != nil {
+				return err
+			}
 
-			// 		case svc_muzzleflash2:
-			// 			CL_AddMuzzleFlash2();
-			// 			break;
+		case shared.SvcMuzzleflash2:
+			if err := T.addMuzzleFlash2(msg); err != nil {
+				return err
+			}
 
 			// 		case svc_download:
 			// 			CL_ParseDownload();

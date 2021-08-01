@@ -53,6 +53,43 @@ func QGl3Create(ri shared.Refimport_t) shared.Refexport_t {
 	return r
 }
 
+// Yaw-Pitch-Roll
+// equivalent to R_z * R_y * R_x where R_x is the trans matrix for rotating around X axis for aroundXdeg
+func rotAroundAxisZYX(aroundZdeg, aroundYdeg, aroundXdeg float32) []float32 {
+	// Naming of variables is consistent with http://planning.cs.uiuc.edu/node102.html
+	// and https://de.wikipedia.org/wiki/Roll-Nick-Gier-Winkel#.E2.80.9EZY.E2.80.B2X.E2.80.B3-Konvention.E2.80.9C
+	alpha := HMM_ToRadians(aroundZdeg)
+	beta := HMM_ToRadians(aroundYdeg)
+	gamma := HMM_ToRadians(aroundXdeg)
+
+	sinA := float32(math.Sin(alpha))
+	cosA := float32(math.Cos(alpha))
+	// TODO: or sincosf(alpha, &sinA, &cosA); ?? (not a standard function)
+	sinB := float32(math.Sin(beta))
+	cosB := float32(math.Cos(beta))
+	sinG := float32(math.Sin(gamma))
+	cosG := float32(math.Cos(gamma))
+
+	return []float32{
+		cosA * cosB, sinA * cosB, -sinB, 0, // first *column*
+		cosA*sinB*sinG - sinA*cosG, sinA*sinB*sinG + cosA*cosG, cosB * sinG, 0,
+		cosA*sinB*cosG + sinA*sinG, sinA*sinB*cosG - cosA*sinG, cosB * cosG, 0,
+		0, 0, 0, 1}
+}
+
+func (T *qGl3) rotateForEntity(e *shared.Entity_t) {
+	// angles: pitch (around y), yaw (around z), roll (around x)
+	// rot matrices to be multiplied in order Z, Y, X (yaw, pitch, roll)
+	transMat := rotAroundAxisZYX(e.Angles[1], -e.Angles[0], -e.Angles[2])
+	for i := 0; i < 3; i++ {
+		transMat[3*4+i] = e.Origin[i] // set translation
+	}
+
+	T.gl3state.uni3DData.setTransModelMat4(HMM_MultiplyMat4(T.gl3state.uni3DData.getTransModelMat4(), transMat))
+
+	T.updateUBO3D()
+}
+
 func (T *qGl3) gl3Strings() {
 
 	T.rPrintf(shared.PRINT_ALL, "GL_VENDOR: %s\n", T.gl3config.vendor_string)
@@ -296,7 +333,8 @@ func (T *qGl3) Init() bool {
 	T.rPrintf(shared.PRINT_ALL, " - Anisotropic Filtering: ")
 
 	if T.gl3config.anisotropic {
-		// gl.GetFloatv(gl.MAX_TEXTURE_MAX_ANISOTROPY_EXT, &T.gl3config.max_anisotropy)
+		const MAX_TEXTURE_MAX_ANISOTROPY_EXT = 0x84FF
+		gl.GetFloatv(MAX_TEXTURE_MAX_ANISOTROPY_EXT, &T.gl3config.max_anisotropy)
 
 		T.rPrintf(shared.PRINT_ALL, "Max level: %vx\n", T.gl3config.max_anisotropy)
 	} else {
@@ -305,22 +343,19 @@ func (T *qGl3) Init() bool {
 		T.rPrintf(shared.PRINT_ALL, "Not supported\n")
 	}
 
-	// 	if(gl3config.debug_output)
-	// 	{
-	// 		R_Printf(PRINT_ALL, " - OpenGL Debug Output: Supported ");
-	// 		if(gl3_debugcontext->value == 0.0f)
-	// 		{
-	// 			R_Printf(PRINT_ALL, "(but disabled with gl3_debugcontext = 0)\n");
-	// 		}
-	// 		else
-	// 		{
-	// 			R_Printf(PRINT_ALL, "and enabled with gl3_debugcontext = %i\n", (int)gl3_debugcontext->value);
-	// 		}
-	// 	}
-	// 	else
-	// 	{
-	T.rPrintf(shared.PRINT_ALL, " - OpenGL Debug Output: Not Supported\n")
-	// 	}
+	if T.gl3config.debug_output {
+		T.rPrintf(shared.PRINT_ALL, " - OpenGL Debug Output: Supported ")
+		// 		if(gl3_debugcontext->value == 0.0f)
+		// 		{
+		// 			R_Printf(PRINT_ALL, "(but disabled with gl3_debugcontext = 0)\n");
+		// 		}
+		// 		else
+		// 		{
+		// 			R_Printf(PRINT_ALL, "and enabled with gl3_debugcontext = %i\n", (int)gl3_debugcontext->value);
+		// 		}
+	} else {
+		T.rPrintf(shared.PRINT_ALL, " - OpenGL Debug Output: Not Supported\n")
+	}
 
 	T.gl3config.useBigVBO = false
 	// 	if(gl3_usebigvbo->value == 1.0f)
@@ -392,6 +427,145 @@ func (T *qGl3) Init() bool {
 	return true
 }
 
+func (T *qGl3) drawNullModel() {
+	// vec3_t shadelight;
+
+	var shadelight [3]float32
+	// if (currententity->flags & RF_FULLBRIGHT) != 0 {
+	for i := range shadelight {
+		shadelight[i] = 1.0
+	}
+	// shadelight[0] = shadelight[1] = shadelight[2] = 1.0F;
+	// } else {
+	// 	GL3_LightPoint(currententity->origin, shadelight);
+	// }
+
+	origModelMat := T.gl3state.uni3DData.getTransModelMat4()
+	T.rotateForEntity(T.currententity)
+
+	T.gl3state.uniCommonData.setColor(shadelight[0], shadelight[1], shadelight[2], 1)
+	T.updateUBOCommon()
+
+	T.useProgram(T.gl3state.si3DcolorOnly.shaderProgram)
+
+	T.bindVAO(T.gl3state.vao3D)
+	T.bindVBO(T.gl3state.vbo3D)
+
+	// type gl3_3D_vtx_t struct {
+	// vec3_t pos;
+	// float texCoord[2];
+	// float lmTexCoord[2]; // lightmap texture coordinate (sometimes unused)
+	// vec3_t normal;
+	// GLuint lightFlags; // bit i set means: dynlight i affects surface
+	// }
+
+	f0 := math.Float32bits(0)
+	vtxA := []uint32{
+		f0, f0, math.Float32bits(16), f0, f0, f0, f0, f0, f0, f0, 0,
+		math.Float32bits(16 * float32(math.Cos(0*math.Pi/2))), math.Float32bits(16 * float32(math.Sin(0*math.Pi/2))), f0, f0, f0, f0, f0, f0, f0, f0, 0,
+		math.Float32bits(16 * float32(math.Cos(1*math.Pi/2))), math.Float32bits(16 * float32(math.Sin(1*math.Pi/2))), f0, f0, f0, f0, f0, f0, f0, f0, 0,
+		math.Float32bits(16 * float32(math.Cos(2*math.Pi/2))), math.Float32bits(16 * float32(math.Sin(2*math.Pi/2))), f0, f0, f0, f0, f0, f0, f0, f0, 0,
+		math.Float32bits(16 * float32(math.Cos(3*math.Pi/2))), math.Float32bits(16 * float32(math.Sin(3*math.Pi/2))), f0, f0, f0, f0, f0, f0, f0, f0, 0,
+		math.Float32bits(16 * float32(math.Cos(4*math.Pi/2))), math.Float32bits(16 * float32(math.Sin(4*math.Pi/2))), f0, f0, f0, f0, f0, f0, f0, f0, 0,
+	}
+	// gl3_3D_vtx_t vtxA[6] = {
+	// 	{{0, 0, -16}, {0,0}, {0,0}},
+	// 	{{16 * cos( 0 * M_PI / 2 ), 16 * sin( 0 * M_PI / 2 ), 0}, {0,0}, {0,0}},
+	// 	{{16 * cos( 1 * M_PI / 2 ), 16 * sin( 1 * M_PI / 2 ), 0}, {0,0}, {0,0}},
+	// 	{{16 * cos( 2 * M_PI / 2 ), 16 * sin( 2 * M_PI / 2 ), 0}, {0,0}, {0,0}},
+	// 	{{16 * cos( 3 * M_PI / 2 ), 16 * sin( 3 * M_PI / 2 ), 0}, {0,0}, {0,0}},
+	// 	{{16 * cos( 4 * M_PI / 2 ), 16 * sin( 4 * M_PI / 2 ), 0}, {0,0}, {0,0}}
+	// };
+
+	T.bufferAndDraw3D(gl.Ptr(vtxA), 6, gl.TRIANGLE_FAN)
+
+	vtxB := []uint32{
+		f0, f0, math.Float32bits(16), f0, f0, f0, f0, f0, f0, f0, 0,
+		math.Float32bits(16 * float32(math.Cos(4*math.Pi/2))), math.Float32bits(16 * float32(math.Sin(4*math.Pi/2))), f0, f0, f0, f0, f0, f0, f0, f0, 0,
+		math.Float32bits(16 * float32(math.Cos(3*math.Pi/2))), math.Float32bits(16 * float32(math.Sin(3*math.Pi/2))), f0, f0, f0, f0, f0, f0, f0, f0, 0,
+		math.Float32bits(16 * float32(math.Cos(2*math.Pi/2))), math.Float32bits(16 * float32(math.Sin(2*math.Pi/2))), f0, f0, f0, f0, f0, f0, f0, f0, 0,
+		math.Float32bits(16 * float32(math.Cos(1*math.Pi/2))), math.Float32bits(16 * float32(math.Sin(1*math.Pi/2))), f0, f0, f0, f0, f0, f0, f0, f0, 0,
+		math.Float32bits(16 * float32(math.Cos(0*math.Pi/2))), math.Float32bits(16 * float32(math.Sin(0*math.Pi/2))), f0, f0, f0, f0, f0, f0, f0, f0, 0,
+	}
+	// gl3_3D_vtx_t vtxB[6] = {
+	// 	{{0, 0, 16}, {0,0}, {0,0}},
+	// 	vtxA[5], vtxA[4], vtxA[3], vtxA[2], vtxA[1]
+	// };
+
+	T.bufferAndDraw3D(gl.Ptr(vtxB), 6, gl.TRIANGLE_FAN)
+
+	T.gl3state.uni3DData.setTransModelMat4(origModelMat)
+	T.updateUBO3D()
+}
+
+func (T *qGl3) drawParticles() {
+	// TODO: stereo
+	//qboolean stereo_split_tb = ((gl_state.stereo_mode == STEREO_SPLIT_VERTICAL) && gl_state.camera_separation);
+	//qboolean stereo_split_lr = ((gl_state.stereo_mode == STEREO_SPLIT_HORIZONTAL) && gl_state.camera_separation);
+
+	//if (!(stereo_split_tb || stereo_split_lr))
+	// {
+	// int i;
+	numParticles := len(T.gl3_newrefdef.Particles)
+	if numParticles == 0 {
+		return
+	}
+	// YQ2_ALIGNAS_TYPE(unsigned) byte color[4];
+	// const particle_t *p;
+	// // assume the size looks good with window height 480px and scale according to real resolution
+	pointSize := T.gl3_particle_size.Float() * float32(T.gl3_newrefdef.Height) / 480.0
+
+	// typedef struct part_vtx {
+	// 	GLfloat pos[3];
+	// 	GLfloat size;
+	// 	GLfloat dist;
+	// 	GLfloat color[4];
+	// } part_vtx;
+	// assert(sizeof(part_vtx)==9*sizeof(float)); // remember to update GL3_SurfInit() if this changes!
+
+	// part_vtx buf[numParticles];
+	buf := make([]float32, numParticles*9)
+
+	// // TODO: viewOrg could be in UBO
+	viewOrg := make([]float32, 3)
+	copy(viewOrg, T.gl3_newrefdef.Vieworg[:])
+
+	gl.DepthMask(false)
+	gl.Enable(gl.BLEND)
+	gl.Enable(gl.PROGRAM_POINT_SIZE)
+
+	T.useProgram(T.gl3state.siParticle.shaderProgram)
+
+	for i, p := range T.gl3_newrefdef.Particles {
+		// for ( i = 0, p = gl3_newrefdef.particles; i < numParticles; i++, p++ )
+		// {
+		color := T.d_8to24table[p.Color&0xFF]
+		cur := buf[i*9:]
+		// 	vec3_t offset; // between viewOrg and particle position
+		offset := make([]float32, 3)
+		shared.VectorSubtract(viewOrg, p.Origin[:], offset)
+
+		copy(cur[0:3], p.Origin[:])
+		cur[3] = pointSize
+		cur[4] = shared.VectorLength(offset)
+
+		cur[5] = float32(color&0xFF) / 255.0
+		cur[6] = float32((color>>8)&0xFF) / 255.0
+		cur[7] = float32((color>>16)&0xFF) / 255.0
+		cur[8] = p.Alpha
+	}
+
+	T.bindVAO(T.gl3state.vaoParticle)
+	T.bindVBO(T.gl3state.vboParticle)
+	gl.BufferData(gl.ARRAY_BUFFER, 9*4*numParticles, gl.Ptr(buf), gl.STREAM_DRAW)
+	gl.DrawArrays(gl.POINTS, 0, int32(numParticles))
+
+	gl.Disable(gl.BLEND)
+	gl.DepthMask(true)
+	gl.Disable(gl.PROGRAM_POINT_SIZE)
+	// }
+}
+
 func (T *qGl3) drawEntitiesOnList() {
 	// int i;
 
@@ -412,21 +586,20 @@ func (T *qGl3) drawEntitiesOnList() {
 		if (T.currententity.Flags & shared.RF_BEAM) != 0 {
 			// 		GL3_DrawBeam(currententity);
 		} else {
-			T.currentmodel = T.currententity.Model.(*gl3model_t)
-
-			if T.currentmodel == nil {
-				// GL3_DrawNullModel()
+			if T.currententity.Model == nil {
+				T.drawNullModel()
 				continue
 			}
+			T.currentmodel = T.currententity.Model.(*gl3model_t)
 
 			switch T.currentmodel.mtype {
 			case mod_alias:
-				// 				GL3_DrawAliasModel(currententity);
-				// 				break;
+				T.drawAliasModel(T.currententity)
 			case mod_brush:
 				T.drawBrushModel(T.currententity)
 				break
 			case mod_sprite:
+				println("GL3_DrawSpriteModel")
 			// 				GL3_DrawSpriteModel(currententity);
 			// 				break;
 			default:
@@ -451,20 +624,17 @@ func (T *qGl3) drawEntitiesOnList() {
 		if (T.currententity.Flags & shared.RF_BEAM) != 0 {
 			// 		GL3_DrawBeam(currententity);
 		} else {
-			T.currentmodel = T.currententity.Model.(*gl3model_t)
-
-			if T.currentmodel == nil {
-				// GL3_DrawNullModel()
+			if T.currententity.Model == nil {
+				T.drawNullModel()
 				continue
 			}
+			T.currentmodel = T.currententity.Model.(*gl3model_t)
 
 			switch T.currentmodel.mtype {
 			case mod_alias:
-				// 				GL3_DrawAliasModel(currententity);
-				// 				break;
+				T.drawAliasModel(T.currententity)
 			case mod_brush:
 				T.drawBrushModel(T.currententity)
-				break
 			case mod_sprite:
 			// 				GL3_DrawSpriteModel(currententity);
 			// 				break;
@@ -547,8 +717,7 @@ func (T *qGl3) setupFrame() error {
 			// 		leaf = GL3_Mod_PointInLeaf(temp, gl3_worldmodel);
 
 			// 		if (!(leaf->contents & CONTENTS_SOLID) &&
-			// 			(leaf->cluster != gl3_viewcluster2))
-			// 		{
+			// 			(leaf->cluster != gl3_viewcluster2)) {
 			// 			gl3_viewcluster2 = leaf->cluster;
 			// 		}
 		} else {
@@ -560,8 +729,7 @@ func (T *qGl3) setupFrame() error {
 			// 		leaf = GL3_Mod_PointInLeaf(temp, gl3_worldmodel);
 
 			// 		if (!(leaf->contents & CONTENTS_SOLID) &&
-			// 			(leaf->cluster != gl3_viewcluster2))
-			// 		{
+			// 			(leaf->cluster != gl3_viewcluster2)) {
 			// 			gl3_viewcluster2 = leaf->cluster;
 			// 		}
 		}
@@ -576,6 +744,7 @@ func (T *qGl3) setupFrame() error {
 
 	/* clear out the portion of the screen that the NOWORLDMODEL defines */
 	if (T.gl3_newrefdef.Rdflags & shared.RDF_NOWORLDMODEL) != 0 {
+		println("RDF_NOWORLDMODEL")
 		// 	glEnable(GL_SCISSOR_TEST);
 		// 	glClearColor(0.3, 0.3, 0.3, 1);
 		// 	glScissor(gl3_newrefdef.x,
@@ -707,18 +876,17 @@ func (T *qGl3) BeginFrame(camera_separation float32) error {
 		// 	}
 	}
 
-	// /* texturemode stuff */
-	// if (gl_texturemode->modified || (gl3config.anisotropic && gl_anisotropic->modified))
-	// {
-	// 	GL3_TextureMode(gl_texturemode->string);
-	// 	gl_texturemode->modified = false;
-	// 	gl_anisotropic->modified = false;
-	// }
+	/* texturemode stuff */
+	if T.gl_texturemode.Modified || (T.gl3config.anisotropic && T.gl_anisotropic.Modified) {
+		T.textureMode(T.gl_texturemode.String)
+		T.gl_texturemode.Modified = false
+		T.gl_anisotropic.Modified = false
+	}
 
-	// if (r_vsync->modified) {
-	// 	r_vsync->modified = false;
-	// 	GL3_SetVsync();
-	// }
+	if T.r_vsync.Modified {
+		T.r_vsync.Modified = false
+		T.setVsync()
+	}
 
 	/* clear screen if desired */
 	T.clear()
@@ -851,16 +1019,14 @@ func (T *qGl3) renderView(fd shared.Refdef_t) error {
 		return T.ri.Sys_Error(shared.ERR_DROP, "R_RenderView: NULL worldmodel")
 	}
 
-	//  if (r_speeds->value) {
 	T.c_brush_polys = 0
 	T.c_alias_polys = 0
-	//  }
 
 	//  GL3_PushDlights();
 
-	//  if (gl_finish->value) {
-	// 	 glFinish();
-	//  }
+	if T.gl_finish.Bool() {
+		gl.Finish()
+	}
 
 	if err := T.setupFrame(); err != nil {
 		return err
@@ -879,19 +1045,47 @@ func (T *qGl3) renderView(fd shared.Refdef_t) error {
 	//  // kick the silly gl1_flashblend poly lights
 	//  // GL3_RenderDlights();
 
-	//  GL3_DrawParticles();
+	T.drawParticles()
 
 	//  GL3_DrawAlphaSurfaces();
 
 	//  // Note: R_Flash() is now GL3_Draw_Flash() and called from GL3_RenderFrame()
 
-	//  if (r_speeds->value) {
-	T.rPrintf(shared.PRINT_ALL, "%4v wpoly %4v epoly %v tex %v lmaps\n",
-		T.c_brush_polys, T.c_alias_polys, T.c_visible_textures,
-		T.c_visible_lightmaps)
-	//  }
+	if T.r_speeds.Bool() {
+		T.rPrintf(shared.PRINT_ALL, "%4v wpoly %4v epoly %v tex %v lmaps\n",
+			T.c_brush_polys, T.c_alias_polys, T.c_visible_textures,
+			T.c_visible_lightmaps)
+	}
 
 	return nil
+}
+
+func (T *qGl3) setLightLevel() {
+	// vec3_t shadelight = {0};
+
+	if (T.gl3_newrefdef.Rdflags & shared.RDF_NOWORLDMODEL) != 0 {
+		return
+	}
+
+	/* save off light value for server to look at */
+	// var shadelight [3]float32
+	// GL3_LightPoint(gl3_newrefdef.vieworg, shadelight);
+
+	// /* pick the greatest component, which should be the
+	//  * same as the mono value returned by software */
+	// if (shadelight[0] > shadelight[1]) {
+	// 	if (shadelight[0] > shadelight[2]) {
+	// 		T.r_lightlevel->value = 150 * shadelight[0];
+	// 	} else {
+	// 		T.r_lightlevel->value = 150 * shadelight[2];
+	// 	}
+	// } else {
+	// 	if (shadelight[1] > shadelight[2]) {
+	// 		T.r_lightlevel->value = 150 * shadelight[1];
+	// 	} else {
+	// 		T.r_lightlevel->value = 150 * shadelight[2];
+	// 	}
+	// }
 }
 
 func (T *qGl3) RenderFrame(fd shared.Refdef_t) error {
@@ -899,7 +1093,7 @@ func (T *qGl3) RenderFrame(fd shared.Refdef_t) error {
 	if err := T.renderView(fd); err != nil {
 		return err
 	}
-	// GL3_SetLightLevel();
+	T.setLightLevel()
 	T.setGL2D()
 
 	// if(v_blend[3] != 0.0f) {
@@ -917,7 +1111,7 @@ func (T *qGl3) RenderFrame(fd shared.Refdef_t) error {
 func (T *qGl3) bufferAndDraw3D(verts unsafe.Pointer, numVerts int, drawMode uint32) {
 	// if(!gl3config.useBigVBO)
 	// {
-	gl.BufferData(gl.ARRAY_BUFFER, gl3_3D_vtx_size*numVerts, verts, gl.STREAM_DRAW)
+	gl.BufferData(gl.ARRAY_BUFFER, 4*gl3_3D_vtx_size*numVerts, verts, gl.STREAM_DRAW)
 	gl.DrawArrays(drawMode, 0, int32(numVerts))
 	// 	}
 	// 	else // gl3config.useBigVBO == true

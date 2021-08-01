@@ -339,7 +339,7 @@ func (T *qCommon) loadPAK(packPath string) (*fsPack_t, error) {
 	/* Parse the directory. */
 	for i := 0; i < int(numFiles); i++ {
 		info := dpackFile(bfr[i*dpackfile_size:])
-		files[i].name = info.Name
+		files[i].name = strings.ToLower(info.Name)
 		files[i].size = int(info.Filelen)
 		files[i].offset = int64(info.Filepos)
 	}
@@ -543,7 +543,7 @@ func (T *qCommon) initFilesystem() error {
 	T.fs_basedir = T.Cvar_Get("basedir", ".", shared.CVAR_NOSET)
 	T.fs_cddir = T.Cvar_Get("cddir", "", shared.CVAR_NOSET)
 	T.fs_gamedirvar = T.Cvar_Get("game", "", shared.CVAR_LATCH|shared.CVAR_SERVERINFO)
-	T.fs_debug = T.Cvar_Get("fs_debug", "1", 0)
+	T.fs_debug = T.Cvar_Get("fs_debug", "0", 0)
 
 	// Deprecation warning, can be removed at a later time.
 	if T.fs_basedir.String != "." {

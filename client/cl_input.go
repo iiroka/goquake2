@@ -26,24 +26,118 @@
  */
 package client
 
+import "goquake2/shared"
+
+func (T *qClient) refreshCmd() {
+	// int ms;
+	// usercmd_t *cmd;
+
+	// CMD to fill
+	cmd := &T.cl.cmds[T.cls.netchan.Outgoing_sequence&(CMD_BACKUP-1)]
+
+	// Calculate delta
+	T.frame_msec = T.input.Sys_frame_time - T.old_sys_frame_time
+
+	// Check bounds
+	if T.frame_msec < 1 {
+		return
+	} else if T.frame_msec > 200 {
+		T.frame_msec = 200
+	}
+
+	// Add movement
+	// CL_BaseMove(cmd);
+	// IN_Move(cmd);
+
+	// Clamp angels for prediction
+	// CL_ClampPitch();
+
+	cmd.Angles[0] = shared.ANGLE2SHORT(T.cl.viewangles[0])
+	cmd.Angles[1] = shared.ANGLE2SHORT(T.cl.viewangles[1])
+	cmd.Angles[2] = shared.ANGLE2SHORT(T.cl.viewangles[2])
+
+	// Update time for prediction
+	ms := int(T.cls.nframetime * 1000.0)
+
+	if ms > 250 {
+		ms = 100
+	}
+
+	cmd.Msec = byte(ms)
+
+	// Update frame time for the next call
+	T.old_sys_frame_time = T.input.Sys_frame_time
+
+	// Important events are send immediately
+	// if (((in_attack.state & 2)) || (in_use.state & 2))
+	// {
+	// 	cls.forcePacket = true;
+	// }
+}
+
+func (T *qClient) refreshMove() {
+	// usercmd_t *cmd;
+
+	// CMD to fill
+	// cmd := &T.cl.cmds[T.cls.netchan.Outgoing_sequence&(CMD_BACKUP-1)]
+
+	// Calculate delta
+	T.frame_msec = T.input.Sys_frame_time - T.old_sys_frame_time
+
+	// Check bounds
+	if T.frame_msec < 1 {
+		return
+	} else if T.frame_msec > 200 {
+		T.frame_msec = 200
+	}
+
+	// Add movement
+	// CL_BaseMove(cmd);
+	// IN_Move(cmd);
+
+	T.old_sys_frame_time = T.input.Sys_frame_time
+}
+
+func (T *qClient) finalizeCmd() {
+
+	// CMD to fill
+	cmd := &T.cl.cmds[T.cls.netchan.Outgoing_sequence&(CMD_BACKUP-1)]
+
+	// Mouse button events
+	// if (in_attack.state & 3) != 0 {
+	// 	cmd->buttons |= BUTTON_ATTACK;
+	// }
+
+	// in_attack.state &= ~2;
+
+	// if (in_use.state & 3) != 0 {
+	// 	cmd->buttons |= BUTTON_USE;
+	// }
+
+	// in_use.state &= ~2;
+
+	// // Keyboard events
+	// if (anykeydown && cls.key_dest == key_game) {
+	// 	cmd->buttons |= BUTTON_ANY;
+	// }
+
+	// cmd->impulse = in_impulse;
+	// in_impulse = 0;
+
+	// Set light level for muzzle flash
+	cmd.Lightlevel = byte(T.cl_lightlevel.Int())
+}
+
 func (T *qClient) sendCmd() error {
-	// sizebuf_t buf;
-	// byte data[128];
-	// int i;
-	// usercmd_t *cmd, *oldcmd;
-	// usercmd_t nullcmd;
-	// int checksumIndex;
 
-	// memset(&buf, 0, sizeof(buf));
+	/* save this command off for prediction */
+	i := T.cls.netchan.Outgoing_sequence & (CMD_BACKUP - 1)
+	cmd := &T.cl.cmds[i]
+	T.cl.cmd_time[i] = T.cls.realtime /* for netgraph ping calculation */
 
-	// /* save this command off for prediction */
-	// i = cls.netchan.outgoing_sequence & (CMD_BACKUP - 1);
-	// cmd = &cl.cmds[i];
-	// cl.cmd_time[i] = cls.realtime; /* for netgraph ping calculation */
+	T.finalizeCmd()
 
-	// CL_FinalizeCmd();
-
-	// cl.cmd = *cmd;
+	T.cl.cmd.Copy(*cmd)
 
 	if (T.cls.state == ca_disconnected) || (T.cls.state == ca_connecting) {
 		return nil
@@ -57,9 +151,8 @@ func (T *qClient) sendCmd() error {
 		return nil
 	}
 
-	// /* send a userinfo update if needed */
-	// if (userinfo_modified)
-	// {
+	/* send a userinfo update if needed */
+	// if (userinfo_modified) {
 	// 	CL_FixUpGender();
 	// 	userinfo_modified = false;
 	// 	MSG_WriteByte(&cls.netchan.message, clc_userinfo);
@@ -70,8 +163,7 @@ func (T *qClient) sendCmd() error {
 
 	// if ((cls.realtime > abort_cinematic) && (cl.cinematictime > 0) &&
 	// 		!cl.attractloop && (cls.realtime - cl.cinematictime > 1000) &&
-	// 		(cls.key_dest == key_game))
-	// {
+	// 		(cls.key_dest == key_game)) {
 	// 	/* skip the rest of the cinematic */
 	// 	SCR_FinishCinematic();
 	// }
