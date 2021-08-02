@@ -335,11 +335,9 @@ func (T *qClient) Frame(packetdelta, renderdelta, timedelta int, packetframe, re
 	return nil
 }
 
-func (T *qClient) Init(common shared.QCommon) error {
+func (T *qClient) Init() error {
 
-	T.common = common
-
-	if common.IsDedicated() {
+	if T.common.IsDedicated() {
 		return nil /* nothing running on the client */
 	}
 
@@ -354,7 +352,7 @@ func (T *qClient) Init(common shared.QCommon) error {
 		return err
 	}
 
-	T.input.Init(T.common)
+	T.input.Init(T)
 
 	// 	V_Init();
 
@@ -362,7 +360,7 @@ func (T *qClient) Init(common shared.QCommon) error {
 
 	// 	net_message.maxsize = sizeof(net_message_buffer);
 
-	// 	M_Init();
+	T.mInit()
 
 	// #ifdef USE_CURL
 	// 	CL_InitHTTPDownloads();

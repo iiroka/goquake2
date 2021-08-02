@@ -129,9 +129,7 @@ func (T *qCommon) Init() error {
 	T.cmdInit()
 	T.cvarInit()
 
-	// #ifndef DEDICATED_ONLY
-	// 	Key_Init();
-	// #endif
+	T.client.KeyInit()
 
 	/* we need to add the early commands twice, because
 	   a basedir or cddir needs to be set before execing
@@ -205,7 +203,7 @@ func (T *qCommon) Init() error {
 	if err := T.server.Init(T); err != nil {
 		return err
 	}
-	if err := T.client.Init(T); err != nil {
+	if err := T.client.Init(); err != nil {
 		return err
 	}
 

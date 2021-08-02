@@ -106,6 +106,40 @@ func (T *qGl3) drawTexturedRectangle(x, y, w, h, sl, tl, sh, th float32) {
 	//glMultiDrawArrays(mode, first, count, drawcount) ??
 }
 
+/*
+ * Draws one 8*8 graphics character with 0 being transparent.
+ * It can be clipped to the top of the screen to allow the console to be
+ * smoothly scrolled off.
+ */
+func (T *qGl3) DrawCharScaled(x, y, num int, scale float32) {
+	// int row, col;
+	// float frow, fcol, size, scaledSize;
+	num &= 255
+
+	if (num & 127) == 32 {
+		return /* space */
+	}
+
+	if y <= -8 {
+		return /* totally off screen */
+	}
+
+	row := num >> 4
+	col := num & 15
+
+	frow := float32(row) * 0.0625
+	fcol := float32(col) * 0.0625
+	size := 0.0625
+
+	scaledSize := 8 * scale
+
+	// TODO: batchen?
+
+	T.useProgram(T.gl3state.si2D.shaderProgram)
+	T.bind(T.draw_chars.texnum)
+	T.drawTexturedRectangle(float32(x), float32(y), scaledSize, scaledSize, fcol, frow, fcol+float32(size), frow+float32(size))
+}
+
 func (T *qGl3) drawFindPic(name string) *gl3image_t {
 	if (name[0] != '/') && (name[0] != '\\') {
 		fullname := fmt.Sprintf("pics/%s.pcx", name)
@@ -117,6 +151,15 @@ func (T *qGl3) drawFindPic(name string) *gl3image_t {
 
 func (T *qGl3) DrawFindPic(name string) interface{} {
 	return T.drawFindPic(name)
+}
+
+func (T *qGl3) DrawGetPicSize(name string) (int, int) {
+	img := T.drawFindPic(name)
+	if img == nil {
+		return -1, -1
+	}
+
+	return img.width, img.height
 }
 
 func (T *qGl3) DrawStretchPic(x, y, w, h int, name string) {

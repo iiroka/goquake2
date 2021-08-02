@@ -11,6 +11,7 @@ func main() {
 	cl := client.CreateClient()
 	sv := server.CreateServer()
 	quake := common.CreateQCommon(cl, sv)
+	cl.SetCommon(quake)
 	quake.Init()
 
 }

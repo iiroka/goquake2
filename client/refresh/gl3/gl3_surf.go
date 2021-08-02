@@ -200,17 +200,16 @@ func (T *qGl3) renderBrushPoly(fa *msurface_t) {
 
 	image := T.textureAnimation(fa.texinfo)
 
-	// if (fa.flags & SURF_DRAWTURB) != 0 {
-	// 	GL3_Bind(image->texnum);
+	if (fa.flags & SURF_DRAWTURB) != 0 {
+		// 	GL3_Bind(image->texnum);
 
-	// 	GL3_EmitWaterPolys(fa);
+		// 	GL3_EmitWaterPolys(fa);
 
-	// 	return;
-	// }
-	// else
-	// {
-	T.bind(image.texnum)
-	// }
+		println("SURF_DRAWTURB BrushPoly")
+		return
+	} else {
+		T.bind(image.texnum)
+	}
 
 	var lmScales [MAX_LIGHTMAPS_PER_SURFACE][4]float32
 	for j := range lmScales[0] {
@@ -230,17 +229,16 @@ func (T *qGl3) renderBrushPoly(fa *msurface_t) {
 		lmScales[mmap][3] = 1.0
 	}
 
-	// if (fa.texinfo.flags & SURF_FLOWING) != 0 {
-	// 	GL3_UseProgram(gl3state.si3DlmFlow.shaderProgram);
-	// 	UpdateLMscales(lmScales, &gl3state.si3DlmFlow);
-	// 	GL3_DrawGLFlowingPoly(fa);
-	// }
-	// else
-	// {
-	T.useProgram(T.gl3state.si3Dlm.shaderProgram)
-	T.updateLMscales(lmScales, &T.gl3state.si3Dlm)
-	T.drawGLPoly(fa)
-	// }
+	if (fa.texinfo.flags & shared.SURF_FLOWING) != 0 {
+		// 	GL3_UseProgram(gl3state.si3DlmFlow.shaderProgram);
+		// 	UpdateLMscales(lmScales, &gl3state.si3DlmFlow);
+		// 	GL3_DrawGLFlowingPoly(fa);
+		println("SURF_FLOWING")
+	} else {
+		T.useProgram(T.gl3state.si3Dlm.shaderProgram)
+		T.updateLMscales(lmScales, &T.gl3state.si3Dlm)
+		T.drawGLPoly(fa)
+	}
 
 	// Note: lightmap chains are gone, lightmaps are rendered together with normal texture in one pass
 }
@@ -272,15 +270,16 @@ func (T *qGl3) drawAlphaSurfaces() {
 			T.updateUBO3D()
 		}
 
-		// 	 if (s->flags & SURF_DRAWTURB) != 0 {
-		// 		 GL3_EmitWaterPolys(s);
-		// 	 } else if (s->texinfo->flags & SURF_FLOWING) {
-		// 		 GL3_UseProgram(gl3state.si3DtransFlow.shaderProgram);
-		// 		 GL3_DrawGLFlowingPoly(s);
-		// 	 } else {
-		T.useProgram(T.gl3state.si3Dtrans.shaderProgram)
-		T.drawGLPoly(s)
-		// 	 }
+		if (s.flags & SURF_DRAWTURB) != 0 {
+			T.emitWaterPolys(s)
+		} else if (s.texinfo.flags & shared.SURF_FLOWING) != 0 {
+			println("SURF_FLOWING alpha")
+			// 		 GL3_UseProgram(gl3state.si3DtransFlow.shaderProgram);
+			// 		 GL3_DrawGLFlowingPoly(s);
+		} else {
+			T.useProgram(T.gl3state.si3Dtrans.shaderProgram)
+			T.drawGLPoly(s)
+		}
 	}
 
 	T.gl3state.uni3DData.setAlpha(1.0)
@@ -348,17 +347,16 @@ func (T *qGl3) renderLightmappedPoly(surf *msurface_t) {
 	T.bind(image.texnum)
 	T.bindLightmap(surf.lightmaptexturenum)
 
-	// if (surf.texinfo.flags & SURF_FLOWING) != 0 {
-	// 	GL3_UseProgram(gl3state.si3DlmFlow.shaderProgram);
-	// 	UpdateLMscales(lmScales, &gl3state.si3DlmFlow);
-	// 	GL3_DrawGLFlowingPoly(surf);
-	// }
-	// else
-	// {
-	T.useProgram(T.gl3state.si3Dlm.shaderProgram)
-	T.updateLMscales(lmScales, &T.gl3state.si3Dlm)
-	T.drawGLPoly(surf)
-	// }
+	if (surf.texinfo.flags & shared.SURF_FLOWING) != 0 {
+		println("SURF_FLOWING")
+		// 	GL3_UseProgram(gl3state.si3DlmFlow.shaderProgram);
+		// 	UpdateLMscales(lmScales, &gl3state.si3DlmFlow);
+		// 	GL3_DrawGLFlowingPoly(surf);
+	} else {
+		T.useProgram(T.gl3state.si3Dlm.shaderProgram)
+		T.updateLMscales(lmScales, &T.gl3state.si3Dlm)
+		T.drawGLPoly(surf)
+	}
 }
 
 func (T *qGl3) drawInlineBModel() {

@@ -1305,11 +1305,15 @@ type QCommon interface {
 }
 
 type QClient interface {
-	Init(common QCommon) error
+	SetCommon(common QCommon)
+	Init() error
 	Frame(packetdelta, renderdelta, timedelta int, packetframe, renderframe bool) error
 	IsVSyncActive() bool
 	GetRefreshRate() int
 	IsAttractloop() bool
+
+	KeyInit()
+	KeyEvent(key int, down, special bool)
 }
 
 type QServer interface {

@@ -390,6 +390,19 @@ func (T *qClient) Draw_FindPic(name string) interface{} {
 	return nil
 }
 
+func (T *qClient) Draw_GetPicSize(name string) (int, int) {
+	if T.re != nil {
+		return T.re.DrawGetPicSize(name)
+	}
+	return -1, -1
+}
+
+func (T *qClient) Draw_CharScaled(x, y, num int, scale float32) {
+	if T.re != nil {
+		T.re.DrawCharScaled(x, y, num, scale)
+	}
+}
+
 func (T *qClient) IsVSyncActive() bool {
 	if T.re != nil {
 		return T.re.IsVSyncActive()

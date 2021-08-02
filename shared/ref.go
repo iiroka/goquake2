@@ -132,6 +132,8 @@ type Refexport_t interface {
 	DrawTileClear(x, y, w, h int, name string)
 	DrawPicScaled(x, y int, pic string, factor float32)
 	DrawFill(x, y, w, h, c int)
+	DrawGetPicSize(name string) (int, int)
+	DrawCharScaled(x, y, num int, scale float32)
 
 	BeginFrame(camera_separation float32) error
 	EndFrame()

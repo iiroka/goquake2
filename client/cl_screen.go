@@ -815,7 +815,7 @@ func (T *qClient) scrUpdateScreen() error {
 
 		T.scrDrawConsole()
 
-		// 		 M_Draw();
+		T.mDraw()
 
 		// 		 SCR_DrawLoading();
 		// 	 }

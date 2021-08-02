@@ -30,6 +30,8 @@ import (
 	"fmt"
 	"goquake2/shared"
 	"math"
+
+	"github.com/go-gl/gl/v3.2-core/gl"
 )
 
 func rBoundPoly(numverts int, verts [][3]float32, mins, maxs [3]float32) {
@@ -192,6 +194,34 @@ func gl3SubdivideSurface(fa *msurface_t, loadmodel *gl3model_t) {
 	}
 
 	rSubdividePolygon(numverts, verts[:], fa)
+}
+
+/*
+ * Does a water warp on the pre-fragmented glpoly_t chain
+ */
+func (T *qGl3) emitWaterPolys(fa *msurface_t) {
+	var scroll float32 = 0
+
+	if (fa.texinfo.flags & shared.SURF_FLOWING) != 0 {
+		scroll = -64.0 * ((T.gl3_newrefdef.Time * 0.5) - float32(int(T.gl3_newrefdef.Time*0.5)))
+		if scroll == 0.0 { // this is done in GL3_DrawGLFlowingPoly() TODO: keep?
+			scroll = -64.0
+		}
+	}
+
+	if T.gl3state.uni3DData.getScroll() != scroll {
+		T.gl3state.uni3DData.setScroll(scroll)
+		T.updateUBO3D()
+	}
+
+	T.useProgram(T.gl3state.si3Dturb.shaderProgram)
+
+	T.bindVAO(T.gl3state.vao3D)
+	T.bindVBO(T.gl3state.vbo3D)
+
+	for bp := fa.polys; bp != nil; bp = bp.next {
+		T.bufferAndDraw3D(gl.Ptr(bp.verticesData), bp.numverts, gl.TRIANGLE_FAN)
+	}
 }
 
 // ########### below: Sky-specific stuff ##########

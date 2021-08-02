@@ -141,6 +141,10 @@ func (T *gl3Uni3D_t) getTransModelMat4() []float32 {
 	return r
 }
 
+func (T *gl3Uni3D_t) getScroll() float32 {
+	return T.data[3*16]
+}
+
 func (T *gl3Uni3D_t) setScroll(v float32) {
 	T.data[3*16] = v
 }

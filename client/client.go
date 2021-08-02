@@ -26,7 +26,6 @@
 package client
 
 import (
-	"goquake2/client/input"
 	"goquake2/shared"
 
 	"github.com/veandco/go-sdl2/sdl"
@@ -186,9 +185,18 @@ const (
 	ca_active        connstate_t = 4 /* game views should be displayed */
 )
 
+type keydest_t int
+
+const (
+	key_game    keydest_t = 0
+	key_console keydest_t = 1
+	key_message keydest_t = 2
+	key_menu    keydest_t = 3
+)
+
 type client_static_t struct {
-	state connstate_t
-	// 	keydest_t	key_dest;
+	state    connstate_t
+	key_dest keydest_t
 
 	framecount int
 	realtime   int     /* always increasing, no clamping, etc */
@@ -196,8 +204,8 @@ type client_static_t struct {
 	nframetime float32 /* network frame time */
 
 	/* screen rendering information */
-	// 	float		disable_screen; /* showing loading plaque between levels */
-	// 								/* or changing rendering dlls */
+	disable_screen float32 /* showing loading plaque between levels */
+	/* or changing rendering dlls */
 
 	/* if time gets > 30 seconds ahead, break it */
 	disable_servercount int /* when we receive a frame and cl.servercount */
@@ -269,7 +277,7 @@ type cdlight_t struct {
 
 type qClient struct {
 	common shared.QCommon
-	input  input.QInput
+	input  QInput
 
 	vid_gamma      *shared.CvarT
 	vid_fullscreen *shared.CvarT
@@ -422,6 +430,23 @@ type qClient struct {
 	lastofs       int
 
 	cl_dlights [shared.MAX_DLIGHTS]cdlight_t
+
+	// keyboard
+	key_lines   [NUM_KEY_LINES]string
+	key_linepos int
+	anykeydown  int
+
+	edit_line    int
+	history_line int
+
+	key_waiting int
+	keybindings [K_LAST]string
+	consolekeys [K_LAST]bool /* if true, can't be rebound while in console */
+	menubound   [K_LAST]bool /* if true, can't be rebound while in menu */
+	key_repeats [K_LAST]int  /* if > 1, it is autorepeating */
+	keydown     [K_LAST]bool
+
+	menu MenuStr
 }
 
 func CreateClient() shared.QClient {
@@ -431,6 +456,10 @@ func CreateClient() shared.QClient {
 	q.cl.model_draw = make([]interface{}, shared.MAX_MODELS)
 	q.cl_parse_entities = make([]shared.Entity_state_t, MAX_PARSE_ENTITIES)
 	return q
+}
+
+func (T *qClient) SetCommon(common shared.QCommon) {
+	T.common = common
 }
 
 func (T *qClient) IsAttractloop() bool {

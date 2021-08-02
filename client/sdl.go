@@ -26,20 +26,236 @@
  *
  * =======================================================================
  */
-package input
+package client
 
 import (
-	"goquake2/shared"
+	"fmt"
 
 	"github.com/veandco/go-sdl2/sdl"
 )
 
 type QInput struct {
-	common shared.QCommon
+	client *qClient
 
 	// The last time input events were processed.
 	// Used throughout the client.
 	Sys_frame_time int
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * This creepy function translates SDL keycodes into
+ * the id Tech 2 engines interal representation.
+ */
+func inTranslateSDLtoQ2Key(keysym sdl.Keycode) int {
+	key := 0
+
+	/* These must be translated */
+	switch keysym {
+	case sdl.K_TAB:
+		key = K_TAB
+		break
+	case sdl.K_RETURN:
+		key = K_ENTER
+		break
+	case sdl.K_ESCAPE:
+		key = K_ESCAPE
+		break
+	case sdl.K_BACKSPACE:
+		key = K_BACKSPACE
+		break
+	case sdl.K_LGUI:
+	case sdl.K_RGUI:
+		key = K_COMMAND // Win key
+		break
+	case sdl.K_CAPSLOCK:
+		key = K_CAPSLOCK
+		break
+	case sdl.K_POWER:
+		key = K_POWER
+		break
+	case sdl.K_PAUSE:
+		key = K_PAUSE
+		break
+
+	case sdl.K_UP:
+		key = K_UPARROW
+		break
+	case sdl.K_DOWN:
+		key = K_DOWNARROW
+		break
+	case sdl.K_LEFT:
+		key = K_LEFTARROW
+		break
+	case sdl.K_RIGHT:
+		key = K_RIGHTARROW
+		break
+
+	case sdl.K_RALT:
+	case sdl.K_LALT:
+		key = K_ALT
+		break
+	case sdl.K_LCTRL:
+	case sdl.K_RCTRL:
+		key = K_CTRL
+		break
+	case sdl.K_LSHIFT:
+	case sdl.K_RSHIFT:
+		key = K_SHIFT
+		break
+	case sdl.K_INSERT:
+		key = K_INS
+		break
+	case sdl.K_DELETE:
+		key = K_DEL
+		break
+	case sdl.K_PAGEDOWN:
+		key = K_PGDN
+		break
+	case sdl.K_PAGEUP:
+		key = K_PGUP
+		break
+	case sdl.K_HOME:
+		key = K_HOME
+		break
+	case sdl.K_END:
+		key = K_END
+		break
+
+	case sdl.K_F1:
+		key = K_F1
+		break
+	case sdl.K_F2:
+		key = K_F2
+		break
+	case sdl.K_F3:
+		key = K_F3
+		break
+	case sdl.K_F4:
+		key = K_F4
+		break
+	case sdl.K_F5:
+		key = K_F5
+		break
+	case sdl.K_F6:
+		key = K_F6
+		break
+	case sdl.K_F7:
+		key = K_F7
+		break
+	case sdl.K_F8:
+		key = K_F8
+		break
+	case sdl.K_F9:
+		key = K_F9
+		break
+	case sdl.K_F10:
+		key = K_F10
+		break
+	case sdl.K_F11:
+		key = K_F11
+		break
+	case sdl.K_F12:
+		key = K_F12
+		break
+	case sdl.K_F13:
+		key = K_F13
+		break
+	case sdl.K_F14:
+		key = K_F14
+		break
+	case sdl.K_F15:
+		key = K_F15
+		break
+
+	case sdl.K_KP_7:
+		key = K_KP_HOME
+		break
+	case sdl.K_KP_8:
+		key = K_KP_UPARROW
+		break
+	case sdl.K_KP_9:
+		key = K_KP_PGUP
+		break
+	case sdl.K_KP_4:
+		key = K_KP_LEFTARROW
+		break
+	case sdl.K_KP_5:
+		key = K_KP_5
+		break
+	case sdl.K_KP_6:
+		key = K_KP_RIGHTARROW
+		break
+	case sdl.K_KP_1:
+		key = K_KP_END
+		break
+	case sdl.K_KP_2:
+		key = K_KP_DOWNARROW
+		break
+	case sdl.K_KP_3:
+		key = K_KP_PGDN
+		break
+	case sdl.K_KP_ENTER:
+		key = K_KP_ENTER
+		break
+	case sdl.K_KP_0:
+		key = K_KP_INS
+		break
+	case sdl.K_KP_PERIOD:
+		key = K_KP_DEL
+		break
+	case sdl.K_KP_DIVIDE:
+		key = K_KP_SLASH
+		break
+	case sdl.K_KP_MINUS:
+		key = K_KP_MINUS
+		break
+	case sdl.K_KP_PLUS:
+		key = K_KP_PLUS
+		break
+	case sdl.K_NUMLOCKCLEAR:
+		key = K_KP_NUMLOCK
+		break
+	case sdl.K_KP_MULTIPLY:
+		key = K_KP_STAR
+		break
+	case sdl.K_KP_EQUALS:
+		key = K_KP_EQUALS
+		break
+
+	// TODO: K_SUPER ? Win Key is already K_COMMAND
+
+	case sdl.K_APPLICATION:
+		key = K_COMPOSE
+		break
+	case sdl.K_MODE:
+		key = K_MODE
+		break
+	case sdl.K_HELP:
+		key = K_HELP
+		break
+	case sdl.K_PRINTSCREEN:
+		key = K_PRINT
+		break
+	case sdl.K_SYSREQ:
+		key = K_SYSREQ
+		break
+	case sdl.K_SCROLLLOCK:
+		key = K_SCROLLOCK
+		break
+	case sdl.K_MENU:
+		key = K_MENU
+		break
+	case sdl.K_UNDO:
+		key = K_UNDO
+		break
+
+	default:
+		break
+	}
+
+	return key
 }
 
 /* ------------------------------------------------------------------ */
@@ -67,15 +283,14 @@ func (T *QInput) Update() {
 			break
 		}
 
-		println("SDLEvent", event.GetType())
 		switch event.GetType() {
-		// 		 case SDL_MOUSEWHEEL:
-		// 			 Key_Event((event.wheel.y > 0 ? K_MWHEELUP : K_MWHEELDOWN), true, true);
-		// 			 Key_Event((event.wheel.y > 0 ? K_MWHEELUP : K_MWHEELDOWN), false, true);
-		// 			 break;
+		case sdl.MOUSEWHEEL:
+			// 			 Key_Event((event.wheel.y > 0 ? K_MWHEELUP : K_MWHEELDOWN), true, true);
+			// 			 Key_Event((event.wheel.y > 0 ? K_MWHEELUP : K_MWHEELDOWN), false, true);
+			// 			 break;
 
-		// 		 case SDL_MOUSEBUTTONDOWN:
-		// 		 case SDL_MOUSEBUTTONUP:
+		case sdl.MOUSEBUTTONDOWN,
+			sdl.MOUSEBUTTONUP:
 		// 			 switch (event.button.button)
 		// 			 {
 		// 				 case SDL_BUTTON_LEFT:
@@ -100,92 +315,80 @@ func (T *QInput) Update() {
 		// 			 Key_Event(key, (event.type == SDL_MOUSEBUTTONDOWN), true);
 		// 			 break;
 
-		// 		 case SDL_MOUSEMOTION:
-		// 			 if (cls.key_dest == key_game && (int) cl_paused->value == 0)
-		// 			 {
-		// 				 mouse_x += event.motion.xrel;
-		// 				 mouse_y += event.motion.yrel;
-		// 			 }
-		// 			 break;
+		case sdl.MOUSEMOTION:
+			// 			 if (cls.key_dest == key_game && (int) cl_paused->value == 0)
+			// 			 {
+			// 				 mouse_x += event.motion.xrel;
+			// 				 mouse_y += event.motion.yrel;
+			// 			 }
+			// 			 break;
 
-		// 		 case SDL_TEXTINPUT:
-		// 		 {
-		// 			 int c = event.text.text[0];
-		// 			 // also make sure we don't get the char that corresponds to the
-		// 			 // "console key" (like "^" or "`") as text input
-		// 			 if ((c >= ' ') && (c <= '~') && c != consoleKeyCode)
-		// 			 {
-		// 				 Char_Event(c);
-		// 			 }
-		// 		 }
+			// 		 case SDL_TEXTINPUT:
+			// 		 {
+			// 			 int c = event.text.text[0];
+			// 			 // also make sure we don't get the char that corresponds to the
+			// 			 // "console key" (like "^" or "`") as text input
+			// 			 if ((c >= ' ') && (c <= '~') && c != consoleKeyCode)
+			// 			 {
+			// 				 Char_Event(c);
+			// 			 }
+			// 		 }
 
-		// 			 break;
+			// 			 break;
 
-		// 		 case SDL_KEYDOWN:
-		// 		 case SDL_KEYUP:
-		// 		 {
-		// 			 qboolean down = (event.type == SDL_KEYDOWN);
+		case sdl.KEYDOWN,
+			sdl.KEYUP:
+			// 		 {
+			down := (event.GetType() == sdl.KEYDOWN)
+			println("KEY EVENT")
 
-		// 			 /* workaround for AZERTY-keyboards, which don't have 1, 2, ..., 9, 0 in first row:
-		// 			  * always map those physical keys (scancodes) to those keycodes anyway
-		// 			  * see also https://bugzilla.libsdl.org/show_bug.cgi?id=3188 */
-		// 			 SDL_Scancode sc = event.key.keysym.scancode;
+			/* workaround for AZERTY-keyboards, which don't have 1, 2, ..., 9, 0 in first row:
+			 * always map those physical keys (scancodes) to those keycodes anyway
+			 * see also https://bugzilla.libsdl.org/show_bug.cgi?id=3188 */
+			kevent := event.(*sdl.KeyboardEvent)
+			sc := kevent.Keysym.Scancode
 
-		// 			 if (sc >= SDL_SCANCODE_1 && sc <= SDL_SCANCODE_0)
-		// 			 {
-		// 				 /* Note that the SDL_SCANCODEs are SDL_SCANCODE_1, _2, ..., _9, SDL_SCANCODE_0
-		// 				  * while in ASCII it's '0', '1', ..., '9' => handle 0 and 1-9 separately
-		// 				  * (quake2 uses the ASCII values for those keys) */
-		// 				 int key = '0'; /* implicitly handles SDL_SCANCODE_0 */
+			if sc >= sdl.SCANCODE_1 && sc <= sdl.SCANCODE_0 {
+				/* Note that the SDL_SCANCODEs are SDL_SCANCODE_1, _2, ..., _9, SDL_SCANCODE_0
+				 * while in ASCII it's '0', '1', ..., '9' => handle 0 and 1-9 separately
+				 * (quake2 uses the ASCII values for those keys) */
+				key := int('0') /* implicitly handles SDL_SCANCODE_0 */
 
-		// 				 if (sc <= SDL_SCANCODE_9)
-		// 				 {
-		// 					 key = '1' + (sc - SDL_SCANCODE_1);
-		// 				 }
+				if sc <= sdl.SCANCODE_9 {
+					key = int('1') + int(sc-sdl.SCANCODE_1)
+				}
 
-		// 				 Key_Event(key, down, false);
-		// 			 }
-		// 			 else
-		// 			 {
-		// 				 SDL_Keycode kc = event.key.keysym.sym;
-		// 				 if(sc == SDL_SCANCODE_GRAVE && kc != '\'' && kc != '"')
-		// 				 {
-		// 					 // special case/hack: open the console with the "console key"
-		// 					 // (beneath Esc, left of 1, above Tab)
-		// 					 // but not if the keycode for this is a quote (like on Brazilian
-		// 					 // keyboards) - otherwise you couldn't type them in the console
-		// 					 if((event.key.keysym.mod & (KMOD_CAPS|KMOD_SHIFT|KMOD_ALT|KMOD_CTRL|KMOD_GUI)) == 0)
-		// 					 {
-		// 						 // also, only do this if no modifiers like shift or AltGr or whatever are pressed
-		// 						 // so kc will most likely be the ascii char generated by this and can be ignored
-		// 						 // in case SDL_TEXTINPUT above (so we don't get ^ or whatever as text in console)
-		// 						 // (can't just check for mod == 0 because numlock is a KMOD too)
-		// 						 Key_Event(K_CONSOLE, down, true);
-		// 						 consoleKeyCode = kc;
-		// 					 }
-		// 				 }
-		// 				 else if ((kc >= SDLK_SPACE) && (kc < SDLK_DELETE))
-		// 				 {
-		// 					 Key_Event(kc, down, false);
-		// 				 }
-		// 				 else
-		// 				 {
-		// 					 int key = IN_TranslateSDLtoQ2Key(kc);
-		// 					 if(key == 0)
-		// 					 {
-		// 						 // fallback to scancodes if we don't know the keycode
-		// 						 key = IN_TranslateScancodeToQ2Key(sc);
-		// 					 }
-		// 					 if(key != 0)
-		// 					 {
-		// 						 Key_Event(key, down, true);
-		// 					 }
-		// 					 else
-		// 					 {
-		// 						 Com_DPrintf("Pressed unknown key with SDL_Keycode %d, SDL_Scancode %d.\n", kc, (int)sc);
-		// 					 }
-		// 				 }
-		// 			 }
+				T.client.KeyEvent(key, down, false)
+			} else {
+				kc := kevent.Keysym.Sym
+				if sc == sdl.SCANCODE_GRAVE && kc != '\'' && kc != '"' {
+					// special case/hack: open the console with the "console key"
+					// (beneath Esc, left of 1, above Tab)
+					// but not if the keycode for this is a quote (like on Brazilian
+					// keyboards) - otherwise you couldn't type them in the console
+					// 					 if((event.key.keysym.mod & (KMOD_CAPS|KMOD_SHIFT|KMOD_ALT|KMOD_CTRL|KMOD_GUI)) == 0) {
+					// 						 // also, only do this if no modifiers like shift or AltGr or whatever are pressed
+					// 						 // so kc will most likely be the ascii char generated by this and can be ignored
+					// 						 // in case SDL_TEXTINPUT above (so we don't get ^ or whatever as text in console)
+					// 						 // (can't just check for mod == 0 because numlock is a KMOD too)
+					// 						 Key_Event(K_CONSOLE, down, true);
+					// 						 consoleKeyCode = kc;
+					// 					 }
+				} else if (kc >= sdl.K_SPACE) && (kc < sdl.K_DELETE) {
+					T.client.KeyEvent(int(kc), down, false)
+				} else {
+					key := inTranslateSDLtoQ2Key(kc)
+					// 					 if(key == 0) {
+					// 						 // fallback to scancodes if we don't know the keycode
+					// 						 key = IN_TranslateScancodeToQ2Key(sc);
+					// 					 }
+					if key != 0 {
+						T.client.KeyEvent(key, down, true)
+					} else {
+						T.client.common.Com_DPrintf("Pressed unknown key with SDL_Keycode %d, SDL_Scancode %d.\n", kc, int(sc))
+					}
+				}
+			}
 
 		// 			 break;
 		// 		 }
@@ -403,7 +606,10 @@ func (T *QInput) Update() {
 			// 		 }
 
 		case sdl.QUIT:
-			T.common.Com_Quit()
+			T.client.common.Com_Quit()
+
+		default:
+			fmt.Printf("SDLEvent 0x%x\n", event.GetType())
 		}
 	}
 
@@ -424,17 +630,17 @@ func (T *QInput) Update() {
 
 	// We need to save the frame time so other subsystems
 	// know the exact time of the last input events.
-	T.Sys_frame_time = T.common.Sys_Milliseconds()
+	T.Sys_frame_time = T.client.common.Sys_Milliseconds()
 }
 
 /*
  * Initializes the backend
  */
-func (T *QInput) Init(common shared.QCommon) {
+func (T *QInput) Init(client *qClient) {
 
-	T.common = common
+	T.client = client
 
-	T.common.Com_Printf("------- input initialization -------\n")
+	T.client.common.Com_Printf("------- input initialization -------\n")
 
 	//  mouse_x = mouse_y = 0;
 	//  joystick_yaw = joystick_pitch = joystick_forwardmove = joystick_sidemove = 0;
@@ -578,5 +784,5 @@ func (T *QInput) Init(common shared.QCommon) {
 	// 	 }
 	//  }
 
-	T.common.Com_Printf("------------------------------------\n\n")
+	T.client.common.Com_Printf("------------------------------------\n\n")
 }
