@@ -76,22 +76,29 @@ func (T *qClient) mBanner(name string) {
 	T.Draw_PicScaled(T.viddef.width/2-int(float32(w)*scale)/2, T.viddef.height/2-int(110*scale), name, scale)
 }
 
+func (T *qClient) mForceMenuOff() {
+	T.menu.m_drawfunc = nil
+	T.menu.m_keyfunc = nil
+	T.cls.key_dest = key_game
+	T.menu.m_layers = make([]menulayer_t, 0)
+	// Key_MarkAllUp()
+	T.common.Cvar_Set("paused", "0")
+}
+
 func (T *qClient) mPopMenu() {
 	// S_StartLocalSound(menu_out_sound);
 
 	if len(T.menu.m_layers) < 1 {
 		log.Fatal("M_PopMenu: depth < 1")
+	} else if len(T.menu.m_layers) == 1 {
+		T.mForceMenuOff()
+	} else {
+		T.menu.m_layers = T.menu.m_layers[:len(T.menu.m_layers)-1]
+		last := T.menu.m_layers[len(T.menu.m_layers)-1]
+
+		T.menu.m_drawfunc = last.draw
+		T.menu.m_keyfunc = last.key
 	}
-
-	T.menu.m_layers = T.menu.m_layers[:len(T.menu.m_layers)-1]
-	last := T.menu.m_layers[len(T.menu.m_layers)-1]
-
-	T.menu.m_drawfunc = last.draw
-	T.menu.m_keyfunc = last.key
-
-	// if (!m_menudepth) {
-	//     M_ForceMenuOff();
-	// }
 }
 
 /*
@@ -243,6 +250,63 @@ func keyGetMenuKey(key int) int {
 	return key
 }
 
+func (T *qClient) defaultMenuKey(m *menuframework_t, key int) string {
+	// const char *sound = NULL;
+	menu_key := keyGetMenuKey(key)
+
+	// if (m) {
+	//     menucommon_s *item;
+
+	//     if ((item = Menu_ItemAtCursor(m)) != 0) {
+	//         if (item->type == MTYPE_FIELD) {
+	//             if (Field_Key((menufield_s *)item, key)) {
+	//                 return NULL;
+	//             }
+	//         }
+	//     }
+	// }
+
+	switch menu_key {
+	case K_ESCAPE:
+		T.mPopMenu()
+		return menu_out_sound
+
+	case K_UPARROW:
+		if m != nil {
+			m.cursor--
+			m.adjustCursor(-1)
+			return menu_move_sound
+		}
+
+	case K_DOWNARROW:
+		if m != nil {
+			m.cursor++
+			m.adjustCursor(1)
+			return menu_move_sound
+		}
+
+	case K_LEFTARROW:
+		if m != nil {
+			// Menu_SlideItem(m, -1)
+			return menu_move_sound
+		}
+
+	case K_RIGHTARROW:
+		if m != nil {
+			// Menu_SlideItem(m, 1)
+			return menu_move_sound
+		}
+
+	case K_ENTER:
+		if m != nil {
+			m.selectItem()
+		}
+		return menu_move_sound
+	}
+
+	return ""
+}
+
 /*
  * Draws an animating cursor with the point at
  * x,y. The pic will extend to the left of x,
@@ -315,7 +379,6 @@ func m_Main_Draw(T *qClient) {
 }
 
 func m_Main_Key(T *qClient, key int) string {
-	println("m_Main_Key")
 	menu_key := keyGetMenuKey(key)
 
 	switch menu_key {
@@ -370,6 +433,27 @@ func m_Menu_Main_f(args []string, a interface{}) error {
  * GAME MENU
  */
 
+func (T *qClient) startGame() {
+	if T.cls.state != ca_disconnected && T.cls.state != ca_uninitialized {
+		T.disconnect()
+	}
+
+	/* disable updates and start the cinematic going */
+	T.cl.servercount = -1
+	T.mForceMenuOff()
+	T.common.Cvar_Set("deathmatch", "0")
+	T.common.Cvar_Set("coop", "0")
+
+	T.common.Cbuf_AddText("loading ; killserver ; wait ; newgame\n")
+	T.cls.key_dest = key_game
+}
+
+func easyGameFunc(data *menucommon_t) {
+	T := data.parent.owner
+	T.common.Cvar_ForceSet("skill", "0")
+	T.startGame()
+}
+
 func (T *qClient) game_MenuInit() {
 	// Mods_NamesInit();
 
@@ -380,7 +464,7 @@ func (T *qClient) game_MenuInit() {
 	T.menu.s_easy_game_action.x = 0
 	T.menu.s_easy_game_action.y = 0
 	T.menu.s_easy_game_action.name = "easy"
-	// s_easy_game_action.generic.callback = EasyGameFunc;
+	T.menu.s_easy_game_action.callback = easyGameFunc
 
 	T.menu.s_medium_game_action.flags = QMF_LEFT_JUSTIFY
 	T.menu.s_medium_game_action.x = 0
@@ -453,8 +537,7 @@ func game_MenuDraw(T *qClient) {
 }
 
 func game_MenuKey(T *qClient, key int) string {
-	// return Default_MenuKey(&s_game_menu, key)
-	return ""
+	return T.defaultMenuKey(&T.menu.s_game_menu, key)
 }
 
 func m_Menu_Game_f(args []string, a interface{}) error {

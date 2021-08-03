@@ -55,9 +55,9 @@ func (T *qCommon) Cbuf_Execute() error {
 	if T.cmd_wait > 0 {
 		// make sure that "wait" in scripts waits for ~16.66ms (1 frame at 60fps)
 		// regardless of framerate
-		// if (Sys_Milliseconds() - cmd_wait <= 16) {
-		// 	return;
-		// }
+		if T.Sys_Milliseconds()-T.cmd_wait <= 16 {
+			return nil
+		}
 		T.cmd_wait = 0
 	}
 
@@ -224,11 +224,10 @@ func (T *qCommon) Cmd_ExecuteString(text string) error {
 		return nil
 	}
 
-	//  /* check cvars */
-	//  if (Cvar_Command())
-	//  {
-	// 	 return;
-	//  }
+	/* check cvars */
+	if T.cvar_Command(args) {
+		return nil
+	}
 
 	/* send it as a server command if we are connected */
 	// Cmd_ForwardToServer()
@@ -297,6 +296,17 @@ func cmd_Exec_f(args []string, arg interface{}) error {
 	return nil
 }
 
+/*
+ * Causes execution of the remainder of the command buffer to be delayed
+ * until next frame.  This allows commands like: bind g "impulse 5 ;
+ * +attack ; wait ; -attack ; impulse 2"
+ */
+func cmd_Wait_f(args []string, arg interface{}) error {
+	T := arg.(*qCommon)
+	T.cmd_wait = T.Sys_Milliseconds()
+	return nil
+}
+
 func (T *qCommon) cmdInit() {
 	/* register our commands */
 	// Cmd_AddCommand("cmdlist", Cmd_List_f)
@@ -304,5 +314,5 @@ func (T *qCommon) cmdInit() {
 	// Cmd_AddCommand("vstr", Cmd_Vstr_f)
 	// Cmd_AddCommand("echo", Cmd_Echo_f)
 	T.Cmd_AddCommand("alias", cmd_Alias_f, T)
-	// Cmd_AddCommand("wait", Cmd_Wait_f)
+	T.Cmd_AddCommand("wait", cmd_Wait_f, T)
 }

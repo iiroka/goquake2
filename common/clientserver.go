@@ -204,3 +204,7 @@ func (T *qCommon) Com_Quit() {
 	//  Sys_Quit();
 	T.running = false
 }
+
+func (T *qCommon) Showpackets() bool {
+	return T.showpackets.Bool()
+}

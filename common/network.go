@@ -28,7 +28,7 @@ package common
 import "goquake2/shared"
 
 func (T *qCommon) NET_GetPacket(sock shared.Netsrc_t) (*shared.Netadr_t, []byte) {
-	index := int(sock) ^ 1
+	index := (int(sock) + 1) & 1
 	select {
 	case c := <-T.loopback[index]:
 		a := &shared.Netadr_t{}

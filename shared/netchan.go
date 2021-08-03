@@ -121,10 +121,6 @@ func (ch *Netchan_t) needReliable() bool {
  * A 0 length will still generate a packet and deal with the reliable messages.
  */
 func (ch *Netchan_t) Transmit(data []byte) {
-	//  sizebuf_t send;
-	//  byte send_buf[MAX_MSGLEN];
-	//  qboolean send_reliable;
-	//  unsigned w1, w2;
 
 	/* check for message overflow */
 	if ch.Message.Overflowed {
@@ -137,10 +133,12 @@ func (ch *Netchan_t) Transmit(data []byte) {
 	send_reliable := ch.needReliable()
 
 	if ch.reliable_length == 0 && ch.Message.Cursize > 0 {
+		println("Send realiable", ch.Message.Cursize)
 		copy(ch.reliable_buf, ch.Message.Data())
 		ch.reliable_length = ch.Message.Cursize
 		ch.Message.Cursize = 0
-		ch.reliable_sequence ^= 1
+		ch.reliable_sequence++
+		ch.reliable_sequence &= 1
 	}
 
 	/* write the packet header */
@@ -181,23 +179,19 @@ func (ch *Netchan_t) Transmit(data []byte) {
 	/* send the datagram */
 	ch.common.NET_SendPacket(ch.sock, send.Data(), ch.remote_address)
 
-	//  if (showpackets->value)
-	//  {
-	// 	 if (send_reliable)
-	// 	 {
-	// 		 Com_Printf("send %4i : s=%i reliable=%i ack=%i rack=%i\n",
-	// 				 send.cursize, chan->outgoing_sequence - 1,
-	// 				 chan->reliable_sequence, chan->incoming_sequence,
-	// 				 chan->incoming_reliable_sequence);
-	// 	 }
-	// 	 else
-	// 	 {
-	// 		 Com_Printf("send %4i : s=%i ack=%i rack=%i\n",
-	// 				 send.cursize, chan->outgoing_sequence - 1,
-	// 				 chan->incoming_sequence,
-	// 				 chan->incoming_reliable_sequence);
-	// 	 }
-	//  }
+	if ch.common.Showpackets() {
+		if send_reliable {
+			ch.common.Com_Printf("send %v %4v : s=%v reliable=%v ack=%v rack=%v\n",
+				ch.sock, send.Cursize, ch.Outgoing_sequence-1,
+				ch.reliable_sequence, ch.incoming_sequence,
+				ch.incoming_reliable_sequence)
+		} else {
+			ch.common.Com_Printf("send %v %4v : s=%v ack=%v rack=%v\n",
+				ch.sock, send.Cursize, ch.Outgoing_sequence-1,
+				ch.incoming_sequence,
+				ch.incoming_reliable_sequence)
+		}
+	}
 }
 
 /*
@@ -205,8 +199,6 @@ func (ch *Netchan_t) Transmit(data []byte) {
  * modifies net_message so that it points to the packet payload
  */
 func (ch *Netchan_t) Process(msg *QReadbuf) bool {
-	//  unsigned sequence, sequence_ack;
-	//  unsigned reliable_ack, reliable_message;
 
 	/* get sequence numbers */
 	msg.BeginReading()
@@ -224,30 +216,27 @@ func (ch *Netchan_t) Process(msg *QReadbuf) bool {
 	sequence &= 0x7FFFFFFF
 	sequence_ack &= 0x7FFFFFFF
 
-	//  if (showpackets->value)
-	//  {
-	// 	 if (reliable_message)
-	// 	 {
-	// 		 Com_Printf("recv %4i : s=%i reliable=%i ack=%i rack=%i\n",
-	// 				 msg->cursize, sequence,
-	// 				 chan->incoming_reliable_sequence ^ 1,
-	// 				 sequence_ack, reliable_ack);
-	// 	 }
-	// 	 else
-	// 	 {
-	// 		 Com_Printf("recv %4i : s=%i ack=%i rack=%i\n",
-	// 				 msg->cursize, sequence, sequence_ack,
-	// 				 reliable_ack);
-	// 	 }
-	//  }
+	if ch.common.Showpackets() {
+		if reliable_message != 0 {
+			ch.common.Com_Printf("recv %v %4v : s=%v reliable=%v ack=%v rack=%v\n",
+				ch.sock, msg.Count(), sequence,
+				(ch.incoming_reliable_sequence+1)&1,
+				sequence_ack, reliable_ack)
+		} else {
+			ch.common.Com_Printf("recv %v %4v : s=%v ack=%v rack=%v\n",
+				ch.sock, msg.Count(), sequence, sequence_ack,
+				reliable_ack)
+		}
+	}
 
 	/* discard stale or duplicated packets */
 	if sequence <= ch.incoming_sequence {
 		// 	 if (showdrop->value)
 		// 	 {
-		// 		 Com_Printf("%s:Out of order packet %i at %i\n",
-		// 				 NET_AdrToString(chan->remote_address),
-		// 				 sequence, chan->incoming_sequence);
+		ch.common.Com_Printf("%s:Out of order packet %v at %v\n",
+			//  NET_AdrToString(ch.remote_address),
+			ch.remote_address,
+			sequence, ch.incoming_sequence)
 		// 	 }
 
 		return false
@@ -259,9 +248,10 @@ func (ch *Netchan_t) Process(msg *QReadbuf) bool {
 	if ch.dropped > 0 {
 		// 	 if (showdrop->value)
 		// 	 {
-		// 		 Com_Printf("%s:Dropped %i packets at %i\n",
-		// 				 NET_AdrToString(chan->remote_address),
-		// 				 chan->dropped, sequence);
+		ch.common.Com_Printf("%s:Dropped %v packets at %v (%v)\n",
+			//  NET_AdrToString(chan->remote_address),
+			ch.remote_address,
+			ch.dropped, sequence, ch.incoming_sequence)
 		// 	 }
 	}
 
@@ -277,7 +267,7 @@ func (ch *Netchan_t) Process(msg *QReadbuf) bool {
 	ch.incoming_reliable_acknowledged = reliable_ack
 
 	if reliable_message != 0 {
-		ch.incoming_reliable_sequence ^= 1
+		ch.incoming_reliable_sequence = (ch.incoming_reliable_sequence + 1) & 1
 	}
 
 	/* the message can now be read from the current message pointer */

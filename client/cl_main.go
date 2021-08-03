@@ -50,9 +50,10 @@ func cl_Precache_f(args []string, a interface{}) error {
 	T := a.(*qClient)
 	/* Yet another hack to let old demos work */
 	if len(args) < 2 {
-		//  unsigned map_checksum;    /* for detecting cheater maps */
-
-		//  CM_LoadMap(cl.configstrings[CS_MODELS + 1], true, &map_checksum);
+		var map_checksum uint32 /* for detecting cheater maps */
+		if _, err := T.common.CMLoadMap(T.cl.configstrings[shared.CS_MODELS+1], true, &map_checksum); err != nil {
+			return err
+		}
 		//  CL_RegisterSounds();
 		return T.prepRefresh()
 	}
@@ -141,7 +142,7 @@ func (T *qClient) initLocal() {
 	// #endif
 
 	// 	/* register our commands */
-	// 	Cmd_AddCommand("cmd", CL_ForwardToServer_f);
+	T.common.Cmd_AddCommand("cmd", cl_ForwardToServer_f, T)
 	// 	Cmd_AddCommand("pause", CL_Pause_f);
 	// 	Cmd_AddCommand("pingservers", CL_PingServers_f);
 	// 	Cmd_AddCommand("skins", CL_Skins_f);
@@ -149,7 +150,7 @@ func (T *qClient) initLocal() {
 	// 	Cmd_AddCommand("userinfo", CL_Userinfo_f);
 	// 	Cmd_AddCommand("snd_restart", CL_Snd_Restart_f);
 
-	// 	Cmd_AddCommand("changing", CL_Changing_f);
+	T.common.Cmd_AddCommand("changing", cl_Changing_f, T)
 	// 	Cmd_AddCommand("disconnect", CL_Disconnect_f);
 	// 	Cmd_AddCommand("record", CL_Record_f);
 	// 	Cmd_AddCommand("stop", CL_Stop_f);
@@ -157,7 +158,7 @@ func (T *qClient) initLocal() {
 	// 	Cmd_AddCommand("quit", CL_Quit_f);
 
 	// 	Cmd_AddCommand("connect", CL_Connect_f);
-	// 	Cmd_AddCommand("reconnect", CL_Reconnect_f);
+	T.common.Cmd_AddCommand("reconnect", cl_Reconnect_f, T)
 
 	// 	Cmd_AddCommand("rcon", CL_Rcon_f);
 

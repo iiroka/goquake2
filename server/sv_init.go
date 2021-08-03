@@ -61,8 +61,8 @@ func (T *qServer) spawnServer(server, spawnpoint string, serverstate server_stat
 	T.sv.loadgame = loadgame
 	T.sv.attractloop = attractloop
 
-	//  /* save name for levels that don't set message */
-	//  strcpy(sv.configstrings[CS_NAME], server);
+	/* save name for levels that don't set message */
+	T.sv.configstrings[shared.CS_NAME] = server
 
 	//  if (Cvar_VariableValue("deathmatch"))
 	//  {
@@ -75,6 +75,7 @@ func (T *qServer) spawnServer(server, spawnpoint string, serverstate server_stat
 	// 	 pm_airaccelerate = 0;
 	//  }
 
+	T.sv.multicast = shared.QWritebufCreate(shared.MAX_MSGLEN)
 	//  SZ_Init(&sv.multicast, sv.multicast_buf, sizeof(sv.multicast_buf));
 
 	T.sv.name = string(server)
@@ -93,19 +94,18 @@ func (T *qServer) spawnServer(server, spawnpoint string, serverstate server_stat
 
 	T.sv.time = 1000
 
-	//  strcpy(sv.configstrings[CS_NAME], server);
-
-	//  if (serverstate != ss_game)
-	//  {
-	// 	 sv.models[1] = CM_LoadMap("", false, &checksum); /* no real map */
-	//  }
-	//  else
-	//  {
-	// 	 Com_sprintf(sv.configstrings[CS_MODELS + 1],
-	// 			 sizeof(sv.configstrings[CS_MODELS + 1]), "maps/%s.bsp", server);
-	// 	 sv.models[1] = CM_LoadMap(sv.configstrings[CS_MODELS + 1],
-	// 			 false, &checksum);
-	//  }
+	var checksum uint32
+	var err error
+	if serverstate != ss_game {
+		T.sv.models[1], err = T.common.CMLoadMap("", false, &checksum) /* no real map */
+	} else {
+		T.sv.configstrings[shared.CS_MODELS+1] = fmt.Sprintf("maps/%s.bsp", server)
+		T.sv.models[1], err = T.common.CMLoadMap(T.sv.configstrings[shared.CS_MODELS+1],
+			false, &checksum)
+	}
+	if err != nil {
+		return err
+	}
 
 	//  Com_sprintf(sv.configstrings[CS_MAPCHECKSUM],
 	// 		 sizeof(sv.configstrings[CS_MAPCHECKSUM]),
@@ -221,6 +221,9 @@ func (T *qServer) initGame() {
 
 	T.svs.spawncount = shared.Randk()
 	T.svs.clients = make([]client_t, T.maxclients.Int())
+	for i := range T.svs.clients {
+		T.svs.clients[i].index = i
+	}
 	T.svs.num_client_entities = T.maxclients.Int() * shared.UPDATE_BACKUP * 64
 	// 	 svs.client_entities = Z_Malloc( sizeof(entity_state_t) * svs.num_client_entities);
 
@@ -315,25 +318,25 @@ func (T *qServer) svMap(attractloop bool, levelstring string, loadgame bool) err
 
 	if strings.HasSuffix(level, ".cin") {
 		// 		SCR_BeginLoadingPlaque(); /* for local system */
-		// 		SV_BroadcastCommand("changing\n");
+		T.svBroadcastCommand("changing\n")
 		if err := T.spawnServer(level, spawnpoint, ss_cinematic, attractloop, loadgame); err != nil {
 			return err
 		}
 	} else if strings.HasSuffix(level, ".dm2") {
 		// 		SCR_BeginLoadingPlaque(); /* for local system */
-		// 		SV_BroadcastCommand("changing\n");
+		T.svBroadcastCommand("changing\n")
 		if err := T.spawnServer(level, spawnpoint, ss_demo, attractloop, loadgame); err != nil {
 			return err
 		}
 	} else if strings.HasSuffix(level, ".pcx") {
 		// 		SCR_BeginLoadingPlaque(); /* for local system */
-		// 		SV_BroadcastCommand("changing\n");
+		T.svBroadcastCommand("changing\n")
 		if err := T.spawnServer(level, spawnpoint, ss_pic, attractloop, loadgame); err != nil {
 			return err
 		}
 	} else {
 		// 		SCR_BeginLoadingPlaque(); /* for local system */
-		// 		SV_BroadcastCommand("changing\n");
+		T.svBroadcastCommand("changing\n")
 		// 		SV_SendClientMessages();
 		if err := T.spawnServer(level, spawnpoint, ss_game, attractloop, loadgame); err != nil {
 			return err
@@ -341,6 +344,6 @@ func (T *qServer) svMap(attractloop bool, levelstring string, loadgame bool) err
 		// 		Cbuf_CopyToDefer();
 	}
 
-	// 	SV_BroadcastCommand("reconnect\n");
+	T.svBroadcastCommand("reconnect\n")
 	return nil
 }

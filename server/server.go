@@ -27,6 +27,11 @@ package server
 
 import "goquake2/shared"
 
+/* MAX_CHALLENGES is made large to prevent a denial
+   of service attack that could cycle all of them
+   out before legitimate users connected */
+const MAX_CHALLENGES = 1024
+
 type server_state_t int
 
 const (
@@ -47,16 +52,15 @@ type server_t struct {
 	time     uint /* always sv.framenum * 100 msec */
 	framenum int
 
-	name string /* map name, or cinematic name */
-	// struct cmodel_s *models[MAX_MODELS];
+	name   string /* map name, or cinematic name */
+	models [shared.MAX_MODELS]*shared.Cmodel_t
 
-	// char configstrings[MAX_CONFIGSTRINGS][MAX_QPATH];
-	// entity_state_t baselines[MAX_EDICTS];
+	configstrings [shared.MAX_CONFIGSTRINGS]string
+	baselines     [shared.MAX_EDICTS]shared.Entity_state_t
 
-	// /* the multicast buffer is used to send a message to a set of clients
-	//    it is only used to marshall data until SV_Multicast is called */
-	// sizebuf_t multicast;
-	// byte multicast_buf[MAX_MSGLEN];
+	/* the multicast buffer is used to send a message to a set of clients
+	   it is only used to marshall data until SV_Multicast is called */
+	multicast *shared.QWritebuf
 
 	/* demo server information */
 	demofile shared.QFileHandle
@@ -74,6 +78,7 @@ const (
 )
 
 type client_t struct {
+	index int
 	state client_state_t
 
 	userinfo string /* name, etc */
@@ -114,6 +119,12 @@ type client_t struct {
 	netchan shared.Netchan_t
 }
 
+type challenge_t struct {
+	adr       shared.Netadr_t
+	challenge int
+	time      int
+}
+
 type server_static_t struct {
 	initialized bool /* sv_init has completed */
 	realtime    int  /* always increasing, no clamping, etc */
@@ -130,7 +141,7 @@ type server_static_t struct {
 
 	last_heartbeat int
 
-	// challenge_t challenges[MAX_CHALLENGES];    /* to prevent invalid IPs from connecting */
+	challenges [MAX_CHALLENGES]challenge_t /* to prevent invalid IPs from connecting */
 
 	// /* serverrecord values */
 	// FILE *demofile;

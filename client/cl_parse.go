@@ -664,11 +664,11 @@ func (T *qClient) parseServerData(msg *shared.QReadbuf) error {
 	str = msg.ReadString()
 
 	if T.cl.playernum == -1 {
-		// 	/* playing a cinematic or showing a pic, not a level */
-		// 	SCR_PlayCinematic(str);
+		/* playing a cinematic or showing a pic, not a level */
+		T.scrPlayCinematic(str)
 	} else {
-		// 	/* seperate the printfs so the server
-		// 	 * message can have a color */
+		/* seperate the printfs so the server
+		 * message can have a color */
 		// 	Com_Printf("\n\n\35\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\37\n\n");
 		T.common.Com_Printf("%c%v\n", 2, str)
 

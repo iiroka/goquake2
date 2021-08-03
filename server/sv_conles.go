@@ -31,6 +31,46 @@ import (
 )
 
 /*
+ * Returns a challenge number that can be used
+ * in a subsequent client_connect command.
+ * We do this to prevent denial of service attacks that
+ * flood the server with invalid connection IPs.  With a
+ * challenge, they must give a valid IP address.
+ */
+func (T *qServer) getChallenge(args []string, adr shared.Netadr_t) error {
+
+	index := -1
+	oldest := 0
+	oldestTime := 0x7fffffff
+
+	/* see if we already have a challenge for this ip */
+	for i, clg := range T.svs.challenges {
+		// 	 if (NET_CompareBaseAdr(net_from, svs.challenges[i].adr))
+		// 	 {
+		// 		 break;
+		// 	 }
+
+		if clg.time < oldestTime {
+			oldestTime = clg.time
+			oldest = i
+		}
+	}
+
+	if index < 0 {
+		/* overwrite the oldest */
+		T.svs.challenges[oldest].challenge = shared.Randk() & 0x7fff
+		T.svs.challenges[oldest].adr = adr
+		T.svs.challenges[oldest].time = T.common.Curtime()
+		index = oldest
+	}
+
+	/* send it back */
+	println("getChallenge %v", T.svs.challenges[index].challenge)
+	return T.common.Netchan_OutOfBandPrint(shared.NS_SERVER, adr, "challenge %v p=34",
+		T.svs.challenges[index].challenge)
+}
+
+/*
  * A connection request that did not come from the master
  */
 func (T *qServer) directConnect(args []string, adr shared.Netadr_t) error {
@@ -154,6 +194,7 @@ func (T *qServer) directConnect(args []string, adr shared.Netadr_t) error {
 	/* build a new connection  accept the new client this
 	is the only place a client_t is ever initialized */
 	T.svs.clients[index] = client_t{}
+	T.svs.clients[index].index = index
 	// 	 *newcl = temp;
 	// 	 sv_client = newcl;
 	// 	 edictnum = (newcl - svs.clients) + 1;
@@ -241,21 +282,14 @@ func (T *qServer) connectionlessPacket(msg *shared.QReadbuf, from *shared.Netadr
 	//  {
 	// 	 SVC_Info();
 	//  }
-	//  else if (!strcmp(c, "getchallenge"))
-	//  {
-	// 	 SVC_GetChallenge();
-	//  }
+	case "getchallenge":
+		return T.getChallenge(args, *from)
 	case "connect":
 		return T.directConnect(args, *from)
-	//  {
-	// 	 SVC_DirectConnect();
-	//  }
 	//  else if (!strcmp(c, "rcon"))
 	//  {
 	// 	 SVC_RemoteCommand();
 	//  }
-	//  else
-	//  {
 	default:
 		T.common.Com_Printf("bad connectionless packet from %v:\n%v\n", from, s)
 	}

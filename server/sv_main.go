@@ -128,7 +128,6 @@ func (T *qServer) readPackets() error {
 		}
 		/* check for connectionless packet (0xffffffff) first */
 		id := shared.ReadInt32(data)
-		println("SV MSG", id)
 		if id == -1 {
 			T.connectionlessPacket(shared.QReadbufCreate(data), from)
 			continue
@@ -164,7 +163,7 @@ func (T *qServer) readPackets() error {
 			// 			cl->netchan.remote_address.port = net_from.port;
 			// 		}
 
-			if cl.netchan.Process(msg) {
+			if T.svs.clients[i].netchan.Process(msg) {
 				/* this is a valid, sequenced packet, so process it */
 				if cl.state != cs_zombie {
 					cl.lastmessage = T.svs.realtime /* don't timeout */
@@ -276,4 +275,41 @@ func (T *qServer) Frame(usec int) error {
 	// /* clear teleport flags, etc for next frame */
 	// SV_PrepWorldFrame();
 	return nil
+}
+
+/*
+ * Called when each game quits,
+ * before Sys_Quit or Sys_Error
+ */
+func (T *qServer) Shutdown(finalmsg string, reconnect bool) {
+	// if svs.clients {
+	// 	SV_FinalMessage(finalmsg, reconnect)
+	// }
+
+	// Master_Shutdown()
+	// SV_ShutdownGameProgs()
+
+	/* free current level */
+	if T.sv.demofile != nil {
+		T.sv.demofile.Close()
+		T.sv.demofile = nil
+	}
+
+	T.sv = server_t{}
+	T.common.SetServerState(int(T.sv.state))
+
+	// /* free server static data */
+	// if svs.clients {
+	// 	Z_Free(svs.clients)
+	// }
+
+	// if svs.client_entities {
+	// 	Z_Free(svs.client_entities)
+	// }
+
+	// if T.svs.demofile {
+	// 	fclose(svs.demofile)
+	// }
+
+	T.svs = server_static_t{}
 }

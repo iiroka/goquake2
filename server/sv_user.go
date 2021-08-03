@@ -28,6 +28,7 @@ package server
 import (
 	"fmt"
 	"goquake2/shared"
+	"strconv"
 )
 
 const maxSTRINGCMDS = 8
@@ -70,53 +71,182 @@ func sv_New_f(args []string, T *qServer) error {
 
 	/* serverdata needs to go over for all types of servers
 	to make sure the protocol is right, and to set the gamedir */
-	//  gamedir = (char *)Cvar_VariableString("gamedir");
+	gamedir := T.common.Cvar_VariableString("gamedir")
 
 	/* send the serverdata */
-	//  MSG_WriteByte(&sv_client->netchan.message, svc_serverdata);
-	//  MSG_WriteLong(&sv_client->netchan.message, PROTOCOL_VERSION);
-	//  MSG_WriteLong(&sv_client->netchan.message, svs.spawncount);
-	//  MSG_WriteByte(&sv_client->netchan.message, sv.attractloop);
-	//  MSG_WriteString(&sv_client->netchan.message, gamedir);
+	T.sv_client.netchan.Message.WriteByte(shared.SvcServerdata)
+	T.sv_client.netchan.Message.WriteLong(shared.PROTOCOL_VERSION)
+	T.sv_client.netchan.Message.WriteLong(T.svs.spawncount)
+	if T.sv.attractloop {
+		T.sv_client.netchan.Message.WriteByte(1)
+	} else {
+		T.sv_client.netchan.Message.WriteByte(0)
+	}
+	T.sv_client.netchan.Message.WriteString(gamedir)
 
-	//  if ((sv.state == ss_cinematic) || (sv.state == ss_pic))
-	//  {
-	// 	 playernum = -1;
-	//  }
-	//  else
-	//  {
-	// 	 playernum = sv_client - svs.clients;
-	//  }
+	var playernum int
+	if (T.sv.state == ss_cinematic) || (T.sv.state == ss_pic) {
+		playernum = -1
+	} else {
+		playernum = T.sv_client.index
+	}
 
-	//  MSG_WriteShort(&sv_client->netchan.message, playernum);
+	T.sv_client.netchan.Message.WriteShort(playernum)
 
-	//  /* send full levelname */
-	//  MSG_WriteString(&sv_client->netchan.message, sv.configstrings[CS_NAME]);
+	/* send full levelname */
+	T.sv_client.netchan.Message.WriteString(T.sv.configstrings[shared.CS_NAME])
 
-	//  /* game server */
-	//  if (sv.state == ss_game)
-	//  {
-	// 	 /* set up the entity for the client */
-	// 	 ent = EDICT_NUM(playernum + 1);
-	// 	 ent->s.number = playernum + 1;
-	// 	 sv_client->edict = ent;
-	// 	 memset(&sv_client->lastcmd, 0, sizeof(sv_client->lastcmd));
+	/* game server */
+	println("ServerState", T.sv.state)
+	if T.sv.state == ss_game {
+		// 	 /* set up the entity for the client */
+		// 	 ent = EDICT_NUM(playernum + 1);
+		// 	 ent->s.number = playernum + 1;
+		// 	 sv_client->edict = ent;
+		// 	 memset(&sv_client->lastcmd, 0, sizeof(sv_client->lastcmd));
 
-	// 	 /* begin fetching configstrings */
-	// 	 MSG_WriteByte(&sv_client->netchan.message, svc_stufftext);
-	// 	 MSG_WriteString(&sv_client->netchan.message,
-	// 			 va("cmd configstrings %i 0\n", svs.spawncount));
-	//  }
+		/* begin fetching configstrings */
+		T.sv_client.netchan.Message.WriteByte(shared.SvcStufftext)
+		T.sv_client.netchan.Message.WriteString(fmt.Sprintf("cmd configstrings %v 0\n", T.svs.spawncount))
+	}
+	return nil
+}
+
+func sv_Configstrings_f(args []string, T *qServer) error {
+	// int start;
+
+	T.common.Com_DPrintf("Configstrings() from %s\n", T.sv_client.name)
+
+	if T.sv_client.state != cs_connected {
+		T.common.Com_Printf("configstrings not valid -- already spawned\n")
+		return nil
+	}
+
+	/* handle the case of a level changing while a client was connecting */
+	sc, _ := strconv.ParseInt(args[1], 10, 32)
+	if int(sc) != T.svs.spawncount {
+		T.common.Com_Printf("SV_Configstrings_f from different level\n")
+		sv_New_f([]string{}, T)
+		return nil
+	}
+
+	start, _ := strconv.ParseInt(args[2], 10, 32)
+
+	/* write a packet full of data */
+	for T.sv_client.netchan.Message.Cursize < shared.MAX_MSGLEN/2 &&
+		start < shared.MAX_CONFIGSTRINGS {
+		if len(T.sv.configstrings[start]) > 0 {
+			T.sv_client.netchan.Message.WriteByte(shared.SvcConfigstring)
+			T.sv_client.netchan.Message.WriteShort(int(start))
+			T.sv_client.netchan.Message.WriteString(T.sv.configstrings[start])
+		}
+
+		start++
+	}
+
+	/* send next command */
+	if start == shared.MAX_CONFIGSTRINGS {
+		T.sv_client.netchan.Message.WriteByte(shared.SvcStufftext)
+		T.sv_client.netchan.Message.WriteString(fmt.Sprintf("cmd baselines %v 0\n", T.svs.spawncount))
+	} else {
+		T.sv_client.netchan.Message.WriteByte(shared.SvcStufftext)
+		T.sv_client.netchan.Message.WriteString(fmt.Sprintf("cmd configstrings %v %v\n", T.svs.spawncount, start))
+	}
+	return nil
+}
+
+func sv_Baselines_f(args []string, T *qServer) error {
+	// int start;
+	// entity_state_t nullstate;
+	// entity_state_t *base;
+
+	T.common.Com_DPrintf("Baselines() from %s\n", T.sv_client.name)
+
+	if T.sv_client.state != cs_connected {
+		T.common.Com_Printf("baselines not valid -- already spawned\n")
+		return nil
+	}
+
+	/* handle the case of a level changing while a client was connecting */
+	sc, _ := strconv.ParseInt(args[1], 10, 32)
+	if int(sc) != T.svs.spawncount {
+		T.common.Com_Printf("SV_Baselines_f from different level\n")
+		sv_New_f([]string{}, T)
+		return nil
+	}
+
+	start, _ := strconv.ParseInt(args[2], 10, 32)
+	nullstate := shared.Entity_state_t{}
+
+	/* write a packet full of data */
+	for T.sv_client.netchan.Message.Cursize < shared.MAX_MSGLEN/2 &&
+		start < shared.MAX_EDICTS {
+		base := &T.sv.baselines[start]
+
+		if base.Modelindex != 0 || base.Sound != 0 || base.Effects != 0 {
+			T.sv_client.netchan.Message.WriteByte(shared.SvcSpawnbaseline)
+			T.sv_client.netchan.Message.WriteDeltaEntity(&nullstate, base, true, true)
+		}
+
+		start++
+	}
+
+	/* send next command */
+	if start == shared.MAX_EDICTS {
+		T.sv_client.netchan.Message.WriteByte(shared.SvcStufftext)
+		T.sv_client.netchan.Message.WriteString(fmt.Sprintf("precache %v\n", T.svs.spawncount))
+	} else {
+		T.sv_client.netchan.Message.WriteByte(shared.SvcStufftext)
+		T.sv_client.netchan.Message.WriteString(fmt.Sprintf("cmd baselines %v %v\n", T.svs.spawncount, start))
+	}
+	return nil
+}
+
+func (T *qServer) svNextserver() {
+
+	if (T.sv.state == ss_game) ||
+		((T.sv.state == ss_pic) &&
+			!T.common.Cvar_VariableBool("coop")) {
+		return /* can't nextserver while playing a normal game */
+	}
+
+	T.svs.spawncount++ /* make sure another doesn't sneak in */
+	v := T.common.Cvar_VariableString("nextserver")
+
+	if len(v) == 0 {
+		T.common.Cbuf_AddText("killserver\n")
+	} else {
+		T.common.Cbuf_AddText(v)
+		T.common.Cbuf_AddText("\n")
+	}
+
+	T.common.Cvar_Set("nextserver", "")
+}
+
+/*
+ * A cinematic has completed or been aborted by a client, so move
+ * to the next server,
+ */
+func sv_Nextserver_f(args []string, T *qServer) error {
+	sc, _ := strconv.ParseInt(args[1], 10, 32)
+	if int(sc) != T.svs.spawncount {
+		T.common.Com_DPrintf("Nextserver() from wrong level, from %s\n", T.sv_client.name)
+		return nil /* leftover from last server */
+	}
+
+	T.common.Com_DPrintf("Nextserver() from %s\n", T.sv_client.name)
+
+	T.svNextserver()
 	return nil
 }
 
 var ucmds = map[string](func([]string, *qServer) error){
 	/* auto issued */
-	"new": sv_New_f,
-	// {"configstrings", SV_Configstrings_f},
-	// {"baselines", SV_Baselines_f},
+	"new":           sv_New_f,
+	"configstrings": sv_Configstrings_f,
+	"baselines":     sv_Baselines_f,
 	// {"begin", SV_Begin_f},
-	// {"nextserver", SV_Nextserver_f},
+	"nextserver": sv_Nextserver_f,
 	// {"disconnect", SV_Disconnect_f},
 
 	// /* issued by hand at client consoles */
@@ -135,7 +265,7 @@ func (T *qServer) executeUserCommand(s string) error {
 	   macro expand variables on the server.  It seems unlikely that a
 	   client ever ought to need to be able to do this... */
 	args := T.common.Cmd_TokenizeString(s, false)
-	println(args[0])
+	println("executeUserCommand", args[0])
 	// sv_player = sv_client->edict;
 
 	if u, ok := ucmds[args[0]]; ok {

@@ -99,6 +99,8 @@ type qCommon struct {
 
 	// from network
 	loopback [](chan []byte)
+
+	collision qCollision
 }
 
 func CreateQCommon(client shared.QClient, server shared.QServer) shared.QCommon {

@@ -52,6 +52,7 @@ type menuitem_t interface {
 	getY() int
 	getFlags() uint
 	getCursorOffset() int
+	doEnter() bool
 }
 
 type menucommon_t struct {
@@ -64,7 +65,7 @@ type menucommon_t struct {
 
 	// const char *statusbar;
 
-	// void (*callback)(void *self);
+	callback func(self *menucommon_t)
 	// void (*statusbarfunc)(void *self);
 	// void (*ownerdraw)(void *self);
 	// void (*cursordraw)(void *self);
@@ -247,6 +248,27 @@ func (T *menuframework_t) draw() {
 	// }
 }
 
+func (T *menuframework_t) selectItem() bool {
+	item := T.itemAtCursor()
+
+	if item != nil {
+		return item.doEnter()
+		// switch (item->type) {
+		// 	case MTYPE_FIELD:
+		// 		return Field_DoEnter((menufield_s *)item);
+		// 	case MTYPE_ACTION:
+		// 		Action_DoEnter((menuaction_s *)item);
+		// 		return true;
+		// 	case MTYPE_LIST:
+		// 		return false;
+		// 	case MTYPE_SPINCONTROL:
+		// 		return false;
+		// }
+	}
+
+	return false
+}
+
 func (T *menuframework_t) itemAtCursor() menuitem_t {
 	if (T.cursor < 0) || (T.cursor >= len(T.items)) {
 		return nil
@@ -277,6 +299,14 @@ func (T *menuframework_t) tallySlots() int {
 	return total
 }
 
+func (T *qClient) menuDrawString(x, y int, str string) {
+	scale := T.scrGetMenuScale()
+
+	for i := range str {
+		T.Draw_CharScaled(x+int(float32(i*8)*scale), int(float32(y)*scale), int(str[i]), scale)
+	}
+}
+
 func (T *menuaction_t) draw() {
 	Q := T.parent.owner
 	scale := Q.scrGetMenuScale()
@@ -303,11 +333,9 @@ func (T *menuaction_t) draw() {
 	// 	a->generic.ownerdraw(a);
 	// }
 }
-
-func (T *qClient) menuDrawString(x, y int, str string) {
-	scale := T.scrGetMenuScale()
-
-	for i := range str {
-		T.Draw_CharScaled(x+int(float32(i*8)*scale), int(float32(y)*scale), int(str[i]), scale)
+func (T *menuaction_t) doEnter() bool {
+	if T.callback != nil {
+		T.callback(&T.menucommon_t)
 	}
+	return true
 }

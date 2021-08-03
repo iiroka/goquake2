@@ -25,7 +25,32 @@
  */
 package client
 
-import "goquake2/shared"
+import (
+	"goquake2/shared"
+	"strings"
+)
+
+func cl_ForwardToServer_f(args []string, a interface{}) error {
+	T := a.(*qClient)
+	if (T.cls.state != ca_connected) && (T.cls.state != ca_active) {
+		T.common.Com_Printf("Can't \"%s\", not connected\n", args[0])
+		return nil
+	}
+
+	/* don't forward the first argument */
+	if len(args) > 1 {
+		T.cls.netchan.Message.WriteByte(shared.ClcStringcmd)
+		var arg strings.Builder
+		for i := 1; i < len(args); i++ {
+			arg.WriteString(args[i])
+			if i < len(args)-1 {
+				arg.WriteRune(' ')
+			}
+		}
+		T.cls.netchan.Message.Print(arg.String())
+	}
+	return nil
+}
 
 /*
  * We have gotten a challenge from the server, so try and
@@ -74,23 +99,160 @@ func (T *qClient) checkForResend() error {
 		return nil
 	}
 
-	//  if (!NET_StringToAdr(cls.servername, &adr))
-	//  {
-	// 	 Com_Printf("Bad server address\n");
-	// 	 cls.state = ca_disconnected;
-	// 	 return;
-	//  }
+	adr := shared.NET_StringToAdr(T.cls.servername)
+	if adr == nil {
+		T.common.Com_Printf("Bad server address\n")
+		T.cls.state = ca_disconnected
+		return nil
+	}
 
-	//  if (adr.port == 0)
-	//  {
-	// 	 adr.port = BigShort(PORT_SERVER);
-	//  }
+	if adr.Port == 0 {
+		adr.Port = shared.PORT_SERVER
+	}
 
 	T.cls.connect_time = float32(T.cls.realtime)
 
 	T.common.Com_Printf("Connecting to %v...\n", T.cls.servername)
 
-	//  Netchan_OutOfBandPrint(NS_CLIENT, adr, "getchallenge\n");
+	return T.common.Netchan_OutOfBandPrint(shared.NS_CLIENT, *adr, "getchallenge\n")
+}
+
+/*
+ * Goes from a connected state to full screen
+ * console state Sends a disconnect message to
+ * the server This is also called on Com_Error, so
+ * it shouldn't cause any errors
+ */
+func (T *qClient) disconnect() {
+	//  byte final[32];
+
+	if T.cls.state == ca_disconnected {
+		return
+	}
+
+	//  if (cl_timedemo && cl_timedemo->value) {
+	// 	 int time;
+
+	// 	 time = Sys_Milliseconds() - cl.timedemo_start;
+
+	// 	 if (time > 0)
+	// 	 {
+	// 		 Com_Printf("%i frames, %3.1f seconds: %3.1f fps\n",
+	// 				 cl.timedemo_frames, time / 1000.0,
+	// 				 cl.timedemo_frames * 1000.0 / time);
+	// 	 }
+	//  }
+
+	//  VectorClear(cl.refdef.blend);
+
+	//  R_SetPalette(NULL);
+
+	T.mForceMenuOff()
+
+	T.cls.connect_time = 0
+
+	//  SCR_StopCinematic();
+
+	//  OGG_Stop();
+
+	//  if (cls.demorecording)
+	//  {
+	// 	 CL_Stop_f();
+	//  }
+
+	/* send a disconnect message to the server */
+	final := shared.QWritebufCreate(32)
+	final.WriteByte(shared.ClcStringcmd)
+	final.WriteString("disconnect")
+
+	T.cls.netchan.Transmit(final.Data())
+	T.cls.netchan.Transmit(final.Data())
+	T.cls.netchan.Transmit(final.Data())
+
+	T.clearState()
+
+	/* stop file download */
+	// 	 if (cls.download) {
+	// 		 fclose(cls.download);
+	// 		 cls.download = NULL;
+	// 	 }
+
+	//  #ifdef USE_CURL
+	// 	 CL_CancelHTTPDownloads(true);
+	// 	 cls.downloadReferer[0] = 0;
+	// 	 cls.downloadname[0] = 0;
+	// 	 cls.downloadposition = 0;
+	//  #endif
+
+	T.cls.state = ca_disconnected
+
+	//  snd_is_underwater = false;
+
+	//  // save config for old game/mod
+	//  CL_WriteConfiguration();
+
+	// we disconnected, so revert to default game/mod (might have been different mod on MP server)
+	//  T.common.Cvar_Set("game", userGivenGame);
+}
+
+/*
+ * Just sent as a hint to the client that they should
+ * drop to full console
+ */
+func cl_Changing_f(args []string, a interface{}) error {
+	T := a.(*qClient)
+	/* if we are downloading, we don't change!
+	This so we don't suddenly stop downloading a map */
+	// 	 if (cls.download) {
+	// 		 return;
+	// 	 }
+
+	// 	 SCR_BeginLoadingPlaque();
+	T.cls.state = ca_connected /* not active anymore, but not disconnected */
+	T.common.Com_Printf("\nChanging map...\n")
+
+	//  #ifdef USE_CURL
+	// 	 if (cls.downloadServerRetry[0] != 0)
+	// 	 {
+	// 		 CL_SetHTTPServer(cls.downloadServerRetry);
+	// 	 }
+	//  #endif
+	return nil
+}
+
+/*
+ * The server is changing levels
+ */
+func cl_Reconnect_f(args []string, a interface{}) error {
+	T := a.(*qClient)
+	/* if we are downloading, we don't change!
+	This so we don't suddenly stop downloading a map */
+	//  if (cls.download) {
+	// 	 return;
+	//  }
+
+	//  S_StopAllSounds();
+
+	if T.cls.state == ca_connected {
+		T.common.Com_Printf("reconnecting...\n")
+		T.cls.state = ca_connected
+		T.cls.netchan.Message.WriteChar(shared.ClcStringcmd)
+		T.cls.netchan.Message.WriteString("new")
+		return nil
+	}
+
+	if len(T.cls.servername) > 0 {
+		if T.cls.state >= ca_connected {
+			T.disconnect()
+			T.cls.connect_time = float32(T.cls.realtime - 1500)
+		} else {
+			T.cls.connect_time = -99999 /* Hack: fire immediately */
+		}
+
+		T.cls.state = ca_connecting
+
+		T.common.Com_Printf("reconnecting...\n")
+	}
 	return nil
 }
 

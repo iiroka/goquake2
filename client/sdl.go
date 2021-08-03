@@ -340,7 +340,6 @@ func (T *QInput) Update() {
 			sdl.KEYUP:
 			// 		 {
 			down := (event.GetType() == sdl.KEYDOWN)
-			println("KEY EVENT")
 
 			/* workaround for AZERTY-keyboards, which don't have 1, 2, ..., 9, 0 in first row:
 			 * always map those physical keys (scancodes) to those keycodes anyway
@@ -394,8 +393,8 @@ func (T *QInput) Update() {
 		// 		 }
 
 		case sdl.WINDOWEVENT:
-			wevent := event.(*sdl.WindowEvent)
-			println("WINDOWEVENT", wevent.Event)
+			// wevent := event.(*sdl.WindowEvent)
+			// println("WINDOWEVENT", wevent.Event)
 			// 			 if (event.window.event == SDL_WINDOWEVENT_FOCUS_LOST ||
 			// 				 event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED)
 			// 			 {

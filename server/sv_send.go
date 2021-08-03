@@ -25,7 +25,11 @@
  */
 package server
 
-import "goquake2/shared"
+import (
+	"fmt"
+	"goquake2/shared"
+	"log"
+)
 
 func (T *qServer) svDemoCompleted() {
 	if T.sv.demofile != nil {
@@ -33,17 +37,124 @@ func (T *qServer) svDemoCompleted() {
 		T.sv.demofile = nil
 	}
 
-	// SV_Nextserver()
+	T.svNextserver()
+}
+
+/*
+ * Sends text to all active clients
+ */
+func (T *qServer) svBroadcastCommand(format string, a ...interface{}) {
+
+	if T.sv.state == ss_dead {
+		return
+	}
+
+	str := fmt.Sprintf(format, a...)
+
+	T.sv.multicast.WriteByte(shared.SvcStufftext)
+	T.sv.multicast.WriteString(str)
+	T.svMulticast(nil, shared.MULTICAST_ALL_R)
+}
+
+/*
+ * Sends the contents of sv.multicast to a subset of the clients,
+ * then clears sv.multicast.
+ *
+ * MULTICAST_ALL	same as broadcast (origin can be NULL)
+ * MULTICAST_PVS	send to clients potentially visible from org
+ * MULTICAST_PHS	send to clients potentially hearable from org
+ */
+func (T *qServer) svMulticast(origin []float32, to shared.Multicast_t) {
+	//  client_t *client;
+	//  byte *mask;
+	//  int leafnum = 0, cluster;
+	//  int j;
+	//  qboolean reliable;
+	//  int area1, area2;
+
+	reliable := false
+
+	//  if ((to != shared.MULTICAST_ALL_R) && (to != shared.MULTICAST_ALL)) {
+	// 	 leafnum = CM_PointLeafnum(origin);
+	// 	 area1 = CM_LeafArea(leafnum);
+	//  }
+	//  else
+	//  {
+	// 	 area1 = 0;
+	//  }
+
+	/* if doing a serverrecord, store everything */
+	//  if (svs.demofile) {
+	// 	 SZ_Write(&svs.demo_multicast, sv.multicast.data, sv.multicast.cursize);
+	//  }
+
+	switch to {
+	case shared.MULTICAST_ALL_R:
+		reliable = true /* intentional fallthrough */
+		fallthrough
+	case shared.MULTICAST_ALL:
+		//  mask = NULL;
+		break
+
+		//  case MULTICAST_PHS_R:
+		// 	 reliable = true; /* intentional fallthrough */
+		//  case MULTICAST_PHS:
+		// 	 leafnum = CM_PointLeafnum(origin);
+		// 	 cluster = CM_LeafCluster(leafnum);
+		// 	 mask = CM_ClusterPHS(cluster);
+		// 	 break;
+
+		//  case MULTICAST_PVS_R:
+		// 	 reliable = true; /* intentional fallthrough */
+		//  case MULTICAST_PVS:
+		// 	 leafnum = CM_PointLeafnum(origin);
+		// 	 cluster = CM_LeafCluster(leafnum);
+		// 	 mask = CM_ClusterPVS(cluster);
+		// 	 break;
+
+	default:
+		// mask = NULL
+		log.Fatalf("SV_Multicast: bad to:%v", to)
+	}
+
+	/* send the data to all relevent clients */
+	for j, client := range T.svs.clients {
+		if (client.state == cs_free) || (client.state == cs_zombie) {
+			continue
+		}
+
+		if (client.state != cs_spawned) && !reliable {
+			continue
+		}
+
+		//  if (mask) {
+		// 	 leafnum = CM_PointLeafnum(client->edict->s.origin);
+		// 	 cluster = CM_LeafCluster(leafnum);
+		// 	 area2 = CM_LeafArea(leafnum);
+
+		// 	 if (!CM_AreasConnected(area1, area2))
+		// 	 {
+		// 		 continue;
+		// 	 }
+
+		// 	 if (!(mask[cluster >> 3] & (1 << (cluster & 7))))
+		// 	 {
+		// 		 continue;
+		// 	 }
+		//  }
+
+		if reliable {
+			T.svs.clients[j].netchan.Message.Write(T.sv.multicast.Data())
+		} else {
+			// T.svs.clients[j].datagram.Write(T.sv.multicast.Data())
+		}
+	}
+
+	T.sv.multicast.Clear()
 }
 
 func (T *qServer) svSendClientMessages() {
-	// int i;
-	// client_t *c;
-	// int msglen;
-	// byte msgbuf[MAX_MSGLEN];
-	// size_t r;
 
-	// msglen = 0;
 	var msgbuf []byte
 
 	/* read the next demo message if needed */
@@ -84,12 +195,13 @@ func (T *qServer) svSendClientMessages() {
 		/* if the reliable message
 		   overflowed, drop the
 		   client */
-		// 	if (c->netchan.message.overflowed) {
-		// 		SZ_Clear(&c->netchan.message);
-		// 		SZ_Clear(&c->datagram);
-		// 		SV_BroadcastPrintf(PRINT_HIGH, "%s overflowed\n", c->name);
-		// 		SV_DropClient(c);
-		// 	}
+		if c.netchan.Message.Overflowed {
+			T.svs.clients[i].netchan.Message.Clear()
+			// 		SZ_Clear(&c->netchan.message);
+			// 		SZ_Clear(&c->datagram);
+			// SV_BroadcastPrintf(PRINT_HIGH, "%s overflowed\n", c->name);
+			// 		SV_DropClient(c);
+		}
 
 		if (T.sv.state == ss_cinematic) ||
 			(T.sv.state == ss_demo) ||
@@ -105,10 +217,9 @@ func (T *qServer) svSendClientMessages() {
 			// 		SV_SendClientDatagram(c);
 		} else {
 			/* just update reliable	if needed */
-			// 		if (c->netchan.message.cursize ||
-			// 			(curtime - c->netchan.last_sent > 1000)) {
-			// 			Netchan_Transmit(&c->netchan, 0, NULL);
-			// 		}
+			if c.netchan.Message.Cursize > 0 || (T.common.Curtime()-c.netchan.LastSent) > 1000 {
+				T.svs.clients[i].netchan.Transmit(msgbuf)
+			}
 		}
 	}
 }

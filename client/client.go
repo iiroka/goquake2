@@ -142,10 +142,10 @@ type client_state_t struct {
 	layout    string /* general 2D overlay */
 	inventory [shared.MAX_ITEMS]int
 
-	//    /* non-gameserver infornamtion */
-	//    fileHandle_t cinematic_file;
-	//    int			cinematictime; /* cls.realtime for first cinematic frame */
-	//    int			cinematicframe;
+	/* non-gameserver infornamtion */
+	cinematic_file shared.QFileHandle
+	cinematictime  int /* cls.realtime for first cinematic frame */
+	cinematicframe int
 	//    unsigned char	cinematicpalette[768];
 	//    qboolean	cinematicpalette_active;
 

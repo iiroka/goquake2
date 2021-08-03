@@ -338,6 +338,34 @@ func (T *qCommon) Cvar_ClearUserinfoModified() {
 }
 
 /*
+ * Handles variable inspection and changing from the console
+ */
+func (T *qCommon) cvar_Command(args []string) bool {
+
+	/* check variables */
+	v := T.cvarFindVar(args[0])
+	if v == nil {
+		return false
+	}
+
+	/* perform a variable print or set */
+	if len(args) == 1 {
+		T.Com_Printf("\"%s\" is \"%s\"\n", v.Name, v.String)
+		return true
+	}
+
+	/* Another evil hack: The user has just changed 'game' trough
+	the console. We reset userGivenGame to that value, otherwise
+	we would revert to the initialy given game at disconnect. */
+	//  if (strcmp(v->name, "game") == 0) {
+	// 	 Q_strlcpy(userGivenGame, Cmd_Argv(1), sizeof(userGivenGame));
+	//  }
+
+	T.Cvar_Set(v.Name, args[1])
+	return true
+}
+
+/*
  * Allows setting and defining of arbitrary cvars from console
  */
 func cvar_Set_f(args []string, arg interface{}) error {

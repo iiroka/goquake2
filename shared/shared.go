@@ -62,6 +62,18 @@ const (
 	PRINT_ALERT     = 2
 )
 
+type Multicast_t int
+
+const (
+	/* destination class for gi.multicast() */
+	MULTICAST_ALL   Multicast_t = 0
+	MULTICAST_PHS   Multicast_t = 1
+	MULTICAST_PVS   Multicast_t = 2
+	MULTICAST_ALL_R Multicast_t = 3
+	MULTICAST_PHS_R Multicast_t = 4
+	MULTICAST_PVS_R Multicast_t = 5
+)
+
 /*
  * ==========================================================
  *
@@ -121,6 +133,13 @@ type Cplane_t struct {
 	Dist     float32
 	Type     byte /* for fast side tests */
 	Signbits byte /* signx + (signy<<1) + (signz<<2) */
+}
+
+type Cmodel_t struct {
+	Mins     [3]float32
+	Maxs     [3]float32
+	Origin   [3]float32 /* for sounds or lights */
+	Headnode int
 }
 
 /* this structure needs to be communicated bit-accurate/
@@ -1272,6 +1291,7 @@ type QCommon interface {
 	Curtime() int
 	Sys_Milliseconds() int
 	QPort() int
+	Showpackets() bool
 
 	Com_VPrintf(print_level int, format string, a ...interface{})
 	Com_Printf(format string, a ...interface{})
@@ -1281,6 +1301,7 @@ type QCommon interface {
 
 	Cvar_Get(var_name, var_value string, flags int) *CvarT
 	Cvar_Set(var_name, value string) *CvarT
+	Cvar_ForceSet(var_name, value string) *CvarT
 	Cvar_FullSet(var_name, value string, flags int) *CvarT
 	Cvar_VariableBool(var_name string) bool
 	Cvar_VariableInt(var_name string) int
@@ -1302,6 +1323,8 @@ type QCommon interface {
 	LoadFile(path string) ([]byte, error)
 
 	Pmove(pmove *Pmove_t)
+
+	CMLoadMap(name string, clientload bool, checksum *uint32) (*Cmodel_t, error)
 }
 
 type QClient interface {
