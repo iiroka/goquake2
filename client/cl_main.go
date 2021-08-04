@@ -26,7 +26,10 @@
  */
 package client
 
-import "goquake2/shared"
+import (
+	"goquake2/shared"
+	"strconv"
+)
 
 func (T *qClient) clearState() {
 	// S_StopAllSounds();
@@ -58,13 +61,14 @@ func cl_Precache_f(args []string, a interface{}) error {
 		return T.prepRefresh()
 	}
 
-	//  precache_check = CS_MODELS;
+	T.precache_check = shared.CS_MODELS
 
-	//  precache_spawncount = (int)strtol(Cmd_Argv(1), (char **)NULL, 10);
-	//  precache_model = 0;
-	//  precache_model_skin = 0;
+	cnt, _ := strconv.ParseInt(args[1], 10, 32)
+	T.precache_spawncount = int(cnt)
+	T.precache_model = nil
+	T.precache_model_skin = 0
 
-	//  CL_RequestNextDownload();
+	T.requestNextDownload()
 	return nil
 }
 
@@ -127,6 +131,12 @@ func (T *qClient) initLocal() {
 	T.gender = T.common.Cvar_Get("gender", "male", shared.CVAR_USERINFO|shared.CVAR_ARCHIVE)
 	T.gender_auto = T.common.Cvar_Get("gender_auto", "1", shared.CVAR_ARCHIVE)
 	T.gender.Modified = false
+
+	T.allow_download = T.common.Cvar_Get("allow_download", "1", shared.CVAR_ARCHIVE)
+	T.allow_download_players = T.common.Cvar_Get("allow_download_players", "0", shared.CVAR_ARCHIVE)
+	T.allow_download_models = T.common.Cvar_Get("allow_download_models", "1", shared.CVAR_ARCHIVE)
+	T.allow_download_sounds = T.common.Cvar_Get("allow_download_sounds", "1", shared.CVAR_ARCHIVE)
+	T.allow_download_maps = T.common.Cvar_Get("allow_download_maps", "1", shared.CVAR_ARCHIVE)
 
 	// USERINFO cvars are special, they just need to be registered
 	T.common.Cvar_Get("password", "", shared.CVAR_USERINFO)

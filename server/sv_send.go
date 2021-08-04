@@ -209,8 +209,7 @@ func (T *qServer) svSendClientMessages() {
 			T.svs.clients[i].netchan.Transmit(msgbuf)
 		} else if c.state == cs_spawned {
 			// 		/* don't overrun bandwidth */
-			// 		if (SV_RateDrop(c))
-			// 		{
+			// 		if (SV_RateDrop(c)) {
 			// 			continue;
 			// 		}
 

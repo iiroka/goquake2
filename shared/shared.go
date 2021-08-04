@@ -1264,7 +1264,7 @@ func Info_ValueForKey(s, key string) string {
  * integer >0.
  */
 func Randk() int {
-	return int(rand.Uint32())
+	return int(rand.Int31())
 }
 
 /*
@@ -1325,6 +1325,7 @@ type QCommon interface {
 	Pmove(pmove *Pmove_t)
 
 	CMLoadMap(name string, clientload bool, checksum *uint32) (*Cmodel_t, error)
+	CMEntityString() string
 }
 
 type QClient interface {

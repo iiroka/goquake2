@@ -202,6 +202,26 @@ func sv_Baselines_f(args []string, T *qServer) error {
 	return nil
 }
 
+func sv_Begin_f(args []string, T *qServer) error {
+	T.common.Com_DPrintf("Begin() from %s\n", T.sv_client.name)
+
+	/* handle the case of a level changing while a client was connecting */
+	sc, _ := strconv.ParseInt(args[1], 10, 32)
+	if int(sc) != T.svs.spawncount {
+		T.common.Com_Printf("SV_Begin_f from different level\n")
+		sv_New_f([]string{}, T)
+		return nil
+	}
+
+	T.sv_client.state = cs_spawned
+
+	/* call the game begin function */
+	// ge.ClientBegin(sv_player);
+
+	// Cbuf_InsertFromDefer();
+	return nil
+}
+
 func (T *qServer) svNextserver() {
 
 	if (T.sv.state == ss_game) ||
@@ -230,7 +250,7 @@ func (T *qServer) svNextserver() {
 func sv_Nextserver_f(args []string, T *qServer) error {
 	sc, _ := strconv.ParseInt(args[1], 10, 32)
 	if int(sc) != T.svs.spawncount {
-		T.common.Com_DPrintf("Nextserver() from wrong level, from %s\n", T.sv_client.name)
+		T.common.Com_DPrintf("Nextserver() from wrong level, from %s %v != %v\n", T.sv_client.name, sc, T.svs.spawncount)
 		return nil /* leftover from last server */
 	}
 
@@ -245,8 +265,8 @@ var ucmds = map[string](func([]string, *qServer) error){
 	"new":           sv_New_f,
 	"configstrings": sv_Configstrings_f,
 	"baselines":     sv_Baselines_f,
-	// {"begin", SV_Begin_f},
-	"nextserver": sv_Nextserver_f,
+	"begin":         sv_Begin_f,
+	"nextserver":    sv_Nextserver_f,
 	// {"disconnect", SV_Disconnect_f},
 
 	// /* issued by hand at client consoles */
@@ -265,13 +285,13 @@ func (T *qServer) executeUserCommand(s string) error {
 	   macro expand variables on the server.  It seems unlikely that a
 	   client ever ought to need to be able to do this... */
 	args := T.common.Cmd_TokenizeString(s, false)
-	println("executeUserCommand", args[0])
 	// sv_player = sv_client->edict;
 
 	if u, ok := ucmds[args[0]]; ok {
 		return u(args, T)
 	}
 
+	println("executeUserCommand", args[0])
 	// if (!u->name && (sv.state == ss_game))
 	// {
 	// 	ge->ClientCommand(sv_player);

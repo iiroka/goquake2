@@ -96,9 +96,9 @@ type client_t struct {
 	rate          int
 	surpressCount int /* number of messages rate supressed */
 
-	// edict_t *edict;                     /* EDICT_NUM(clientnum+1) */
-	name         string /* extracted from userinfo, high bits masked */
-	messagelevel int    /* for filtering printed messages */
+	edict        shared.Edict_s /* EDICT_NUM(clientnum+1) */
+	name         string         /* extracted from userinfo, high bits masked */
+	messagelevel int            /* for filtering printed messages */
 
 	/* The datagram is written to by sound calls, prints,
 	   temp ents, etc. It can be harmlessly overflowed. */
@@ -176,6 +176,8 @@ type qServer struct {
 	svs server_static_t
 
 	sv_client *client_t
+
+	ge shared.Game_export_t
 }
 
 func CreateServer() shared.QServer {

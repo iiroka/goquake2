@@ -195,11 +195,10 @@ func (T *qServer) directConnect(args []string, adr shared.Netadr_t) error {
 	is the only place a client_t is ever initialized */
 	T.svs.clients[index] = client_t{}
 	T.svs.clients[index].index = index
-	// 	 *newcl = temp;
-	// 	 sv_client = newcl;
-	// 	 edictnum = (newcl - svs.clients) + 1;
-	// 	 ent = EDICT_NUM(edictnum);
-	// 	 newcl->edict = ent;
+	T.sv_client = &T.svs.clients[index]
+	edictnum := T.svs.clients[index].index + 1
+	ent := T.ge.Edict(edictnum)
+	T.svs.clients[index].edict = ent
 	T.svs.clients[index].challenge = int(challenge) /* save challenge for checksumming */
 
 	// 	 /* get the game a chance to reject this connection or modify the userinfo */

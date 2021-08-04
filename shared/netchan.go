@@ -133,7 +133,6 @@ func (ch *Netchan_t) Transmit(data []byte) {
 	send_reliable := ch.needReliable()
 
 	if ch.reliable_length == 0 && ch.Message.Cursize > 0 {
-		println("Send realiable", ch.Message.Cursize)
 		copy(ch.reliable_buf, ch.Message.Data())
 		ch.reliable_length = ch.Message.Cursize
 		ch.Message.Cursize = 0

@@ -29,8 +29,96 @@ package common
 import "goquake2/shared"
 
 type qCollision struct {
-	map_cmodels [shared.MAX_MAP_MODELS]shared.Cmodel_t
-	map_name    string
+	map_cmodels      [shared.MAX_MAP_MODELS]shared.Cmodel_t
+	map_name         string
+	map_entitystring string
+	numcmodels       int
+}
+
+func (T *qCommon) cmodLoadSubmodels(l shared.Lump_t, name string, buf []byte) error {
+	// dmodel_t *in;
+	// cmodel_t *out;
+	// int i, j, count;
+
+	// in = (void *)(cmod_base + l->fileofs);
+
+	if (l.Filelen % shared.Dmodel_size) != 0 {
+		return T.Com_Error(shared.ERR_DROP, "Mod_LoadSubmodels: funny lump size")
+	}
+
+	count := l.Filelen / shared.Dmodel_size
+
+	if count < 1 {
+		return T.Com_Error(shared.ERR_DROP, "Map with no models")
+	}
+
+	if count > shared.MAX_MAP_MODELS {
+		return T.Com_Error(shared.ERR_DROP, "Map has too many models")
+	}
+
+	T.collision.numcmodels = int(count)
+
+	for i := 0; i < int(count); i++ {
+		src := shared.Dmodel(buf[int(l.Fileofs)+i*shared.Dmodel_size:])
+		out := &T.collision.map_cmodels[i]
+
+		for j := 0; j < 3; j++ {
+			/* spread the mins / maxs by a pixel */
+			out.Mins[j] = src.Mins[j] - 1
+			out.Maxs[j] = src.Maxs[j] + 1
+			out.Origin[j] = src.Origin[j]
+		}
+
+		out.Headnode = int(src.Headnode)
+	}
+	return nil
+}
+
+func (T *qCommon) cmodLoadEntityString(l shared.Lump_t, name string, buf []byte) error {
+	// if (sv_entfile->value) {
+	// 	char s[MAX_QPATH];
+	// 	char *buffer = NULL;
+	// 	int nameLen, bufLen;
+
+	// 	nameLen = strlen(name);
+	// 	strcpy(s, name);
+	// 	s[nameLen-3] = 'e';	s[nameLen-2] = 'n';	s[nameLen-1] = 't';
+	// 	bufLen = FS_LoadFile(s, (void **)&buffer);
+
+	// 	if (buffer != NULL && bufLen > 1)
+	// 	{
+	// 		if (bufLen + 1 > sizeof(map_entitystring))
+	// 		{
+	// 			Com_Printf("CMod_LoadEntityString: .ent file %s too large: %i > %lu.\n", s, bufLen, (unsigned long)sizeof(map_entitystring));
+	// 			FS_FreeFile(buffer);
+	// 		}
+	// 		else
+	// 		{
+	// 			Com_Printf ("CMod_LoadEntityString: .ent file %s loaded.\n", s);
+	// 			numentitychars = bufLen;
+	// 			memcpy(map_entitystring, buffer, bufLen);
+	// 			map_entitystring[bufLen] = 0; /* jit entity bug - null terminate the entity string! */
+	// 			FS_FreeFile(buffer);
+	// 			return;
+	// 		}
+	// 	}
+	// 	else if (bufLen != -1)
+	// 	{
+	// 		/* If the .ent file is too small, don't load. */
+	// 		Com_Printf("CMod_LoadEntityString: .ent file %s too small.\n", s);
+	// 		FS_FreeFile(buffer);
+	// 	}
+	// }
+
+	// numentitychars = l->filelen;
+	// if (l.filelen + 1 > sizeof(map_entitystring)) {
+	// 	Com_Error(ERR_DROP, "Map has too large entity lump");
+	// }
+
+	T.collision.map_entitystring = string(buf[l.Fileofs : l.Fileofs+l.Filelen])
+	// memcpy(map_entitystring, cmod_base + l->fileofs, l->filelen);
+	// map_entitystring[l->filelen] = 0;
+	return nil
 }
 
 /*
@@ -60,10 +148,10 @@ func (T *qCommon) CMLoadMap(name string, clientload bool, checksum *uint32) (*sh
 	//  numplanes = 0;
 	//  numnodes = 0;
 	//  numleafs = 0;
-	//  numcmodels = 0;
+	T.collision.numcmodels = 0
 	//  numvisibility = 0;
 	//  numentitychars = 0;
-	//  map_entitystring[0] = 0;
+	T.collision.map_entitystring = ""
 	T.collision.map_name = ""
 
 	if len(name) == 0 {
@@ -101,13 +189,17 @@ func (T *qCommon) CMLoadMap(name string, clientload bool, checksum *uint32) (*sh
 	//  CMod_LoadPlanes(&header.lumps[LUMP_PLANES]);
 	//  CMod_LoadBrushes(&header.lumps[LUMP_BRUSHES]);
 	//  CMod_LoadBrushSides(&header.lumps[LUMP_BRUSHSIDES]);
-	//  CMod_LoadSubmodels(&header.lumps[LUMP_MODELS]);
+	if err := T.cmodLoadSubmodels(header.Lumps[shared.LUMP_MODELS], name, buf); err != nil {
+		return nil, err
+	}
 	//  CMod_LoadNodes(&header.lumps[LUMP_NODES]);
 	//  CMod_LoadAreas(&header.lumps[LUMP_AREAS]);
 	//  CMod_LoadAreaPortals(&header.lumps[LUMP_AREAPORTALS]);
 	//  CMod_LoadVisibility(&header.lumps[LUMP_VISIBILITY]);
 	/* From kmquake2: adding an extra parameter for .ent support. */
-	//  CMod_LoadEntityString(&header.lumps[LUMP_ENTITIES], name);
+	if err := T.cmodLoadEntityString(header.Lumps[shared.LUMP_ENTITIES], name, buf); err != nil {
+		return nil, err
+	}
 
 	//  FS_FreeFile(buf);
 
@@ -118,4 +210,8 @@ func (T *qCommon) CMLoadMap(name string, clientload bool, checksum *uint32) (*sh
 
 	T.collision.map_name = name
 	return &T.collision.map_cmodels[0], nil
+}
+
+func (T *qCommon) CMEntityString() string {
+	return T.collision.map_entitystring
 }

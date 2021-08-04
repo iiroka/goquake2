@@ -32,6 +32,32 @@ import (
 )
 
 /*
+ * Entity baselines are used to compress the update messages
+ * to the clients -- only the fields that differ from the
+ * baseline will be transmitted
+ */
+func (T *qServer) createBaseline() {
+
+	for entnum := 1; entnum < T.ge.NumEdicts(); entnum++ {
+		svent := T.ge.Edict(entnum)
+
+		if !svent.Inuse() {
+			continue
+		}
+
+		if svent.S().Modelindex == 0 && svent.S().Sound == 0 && svent.S().Effects == 0 {
+			continue
+		}
+
+		svent.S().Number = entnum
+
+		/* take current state as baseline */
+		//  VectorCopy(svent->s.origin, svent->s.old_origin);
+		T.sv.baselines[entnum].Copy(*svent.S())
+	}
+}
+
+/*
  * Change the server to a new map, taking all connected
  * clients along with it.
  */
@@ -51,7 +77,7 @@ func (T *qServer) spawnServer(server, spawnpoint string, serverstate server_stat
 	// 	 FS_FCloseFile(sv.demofile);
 	//  }
 
-	//  svs.spawncount++; /* any partially connected client will be restarted */
+	T.svs.spawncount++ /* any partially connected client will be restarted */
 	T.sv.state = ss_dead
 	T.common.SetServerState(int(T.sv.state))
 
@@ -76,21 +102,19 @@ func (T *qServer) spawnServer(server, spawnpoint string, serverstate server_stat
 	//  }
 
 	T.sv.multicast = shared.QWritebufCreate(shared.MAX_MSGLEN)
-	//  SZ_Init(&sv.multicast, sv.multicast_buf, sizeof(sv.multicast_buf));
+	T.sv.multicast = shared.QWritebufCreate(shared.MAX_MSGLEN)
 
 	T.sv.name = string(server)
 
-	//  /* leave slots at start for clients only */
-	//  for (i = 0; i < maxclients->value; i++)
-	//  {
-	// 	 /* needs to reconnect */
-	// 	 if (svs.clients[i].state > cs_connected)
-	// 	 {
-	// 		 svs.clients[i].state = cs_connected;
-	// 	 }
+	/* leave slots at start for clients only */
+	for i := range T.svs.clients {
+		/* needs to reconnect */
+		if T.svs.clients[i].state > cs_connected {
+			T.svs.clients[i].state = cs_connected
+		}
 
-	// 	 svs.clients[i].lastframe = -1;
-	//  }
+		T.svs.clients[i].lastframe = -1
+	}
 
 	T.sv.time = 1000
 
@@ -126,8 +150,10 @@ func (T *qServer) spawnServer(server, spawnpoint string, serverstate server_stat
 	T.sv.state = ss_loading
 	T.common.SetServerState(int(T.sv.state))
 
-	//  /* load and spawn all other entities */
-	//  ge->SpawnEntities(sv.name, CM_EntityString(), spawnpoint);
+	/* load and spawn all other entities */
+	if err := T.ge.SpawnEntities(T.sv.name, T.common.CMEntityString(), spawnpoint); err != nil {
+		return err
+	}
 
 	//  /* run two frames to allow everything to settle */
 	//  ge->RunFrame();
@@ -144,8 +170,8 @@ func (T *qServer) spawnServer(server, spawnpoint string, serverstate server_stat
 	T.sv.state = serverstate
 	T.common.SetServerState(int(T.sv.state))
 
-	//  /* create a baseline for more efficient communications */
-	//  SV_CreateBaseline();
+	/* create a baseline for more efficient communications */
+	T.createBaseline()
 
 	//  /* check for a savegame */
 	//  SV_CheckForSavegame();
@@ -160,7 +186,7 @@ func (T *qServer) spawnServer(server, spawnpoint string, serverstate server_stat
 /*
  * A brand new game has been started
  */
-func (T *qServer) initGame() {
+func (T *qServer) initGame() error {
 	// 	 int i;
 	// 	 edict_t *ent;
 	// 	 char idmaster[32];
@@ -249,8 +275,10 @@ func (T *qServer) initGame() {
 	// 	 Com_sprintf(idmaster, sizeof(idmaster), "192.246.40.37:%i", PORT_MASTER);
 	// 	 NET_StringToAdr(idmaster, &master_adr[0]);
 
-	// 	 /* init game */
-	// 	 SV_InitGameProgs();
+	/* init game */
+	if err := T.svInitGameProgs(); err != nil {
+		return err
+	}
 
 	// 	 for (i = 0; i < maxclients->value; i++)
 	// 	 {
@@ -259,6 +287,7 @@ func (T *qServer) initGame() {
 	// 		 svs.clients[i].edict = ent;
 	// 		 memset(&svs.clients[i].lastcmd, 0, sizeof(svs.clients[i].lastcmd));
 	// 	 }
+	return nil
 }
 
 /*
@@ -279,7 +308,9 @@ func (T *qServer) svMap(attractloop bool, levelstring string, loadgame bool) err
 	T.sv.attractloop = attractloop
 
 	if (T.sv.state == ss_dead) && !T.sv.loadgame {
-		T.initGame() /* the game is just starting */
+		if err := T.initGame(); err != nil { /* the game is just starting */
+			return err
+		}
 	}
 
 	level := string(levelstring)

@@ -447,6 +447,17 @@ type qClient struct {
 	keydown     [K_LAST]bool
 
 	menu MenuStr
+
+	precache_check         int
+	precache_spawncount    int
+	precache_tex           int
+	precache_model_skin    int
+	precache_model         []byte
+	allow_download         *shared.CvarT
+	allow_download_players *shared.CvarT
+	allow_download_models  *shared.CvarT
+	allow_download_sounds  *shared.CvarT
+	allow_download_maps    *shared.CvarT
 }
 
 func CreateClient() shared.QClient {
