@@ -136,6 +136,85 @@ func (sb *QWritebuf) WriteAngle(f float32) {
 	sb.WriteByte(int(f*256/360) & 255)
 }
 
+func (sb *QWritebuf) WriteAngle16(f float32) {
+	sb.WriteShort(int(ANGLE2SHORT(f)))
+}
+
+func (sb *QWritebuf) WriteDeltaUsercmd(from, cmd *Usercmd_t) {
+
+	/* Movement messages */
+	bits := 0
+
+	if cmd.Angles[0] != from.Angles[0] {
+		bits |= CM_ANGLE1
+	}
+
+	if cmd.Angles[1] != from.Angles[1] {
+		bits |= CM_ANGLE2
+	}
+
+	if cmd.Angles[2] != from.Angles[2] {
+		bits |= CM_ANGLE3
+	}
+
+	if cmd.Forwardmove != from.Forwardmove {
+		bits |= CM_FORWARD
+	}
+
+	if cmd.Sidemove != from.Sidemove {
+		bits |= CM_SIDE
+	}
+
+	if cmd.Upmove != from.Upmove {
+		bits |= CM_UP
+	}
+
+	if cmd.Buttons != from.Buttons {
+		bits |= CM_BUTTONS
+	}
+
+	if cmd.Impulse != from.Impulse {
+		bits |= CM_IMPULSE
+	}
+
+	sb.WriteByte(bits)
+
+	if (bits & CM_ANGLE1) != 0 {
+		sb.WriteShort(int(cmd.Angles[0]))
+	}
+
+	if (bits & CM_ANGLE2) != 0 {
+		sb.WriteShort(int(cmd.Angles[1]))
+	}
+
+	if (bits & CM_ANGLE3) != 0 {
+		sb.WriteShort(int(cmd.Angles[2]))
+	}
+
+	if (bits & CM_FORWARD) != 0 {
+		sb.WriteShort(int(cmd.Forwardmove))
+	}
+
+	if (bits & CM_SIDE) != 0 {
+		sb.WriteShort(int(cmd.Sidemove))
+	}
+
+	if (bits & CM_UP) != 0 {
+		sb.WriteShort(int(cmd.Upmove))
+	}
+
+	if (bits & CM_BUTTONS) != 0 {
+		sb.WriteByte(int(cmd.Buttons))
+	}
+
+	if (bits & CM_IMPULSE) != 0 {
+		sb.WriteByte(int(cmd.Impulse))
+	}
+
+	sb.WriteByte(int(cmd.Msec))
+	sb.WriteByte(int(cmd.Lightlevel))
+}
+
 /*
  * Writes part of a packetentities message.
  * Can delta from either a baseline or a previous packet_entity

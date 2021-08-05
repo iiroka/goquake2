@@ -251,7 +251,7 @@ func (T *qServer) initGame() error {
 		T.svs.clients[i].index = i
 	}
 	T.svs.num_client_entities = T.maxclients.Int() * shared.UPDATE_BACKUP * 64
-	// 	 svs.client_entities = Z_Malloc( sizeof(entity_state_t) * svs.num_client_entities);
+	T.svs.client_entities = make([]shared.Entity_state_t, T.svs.num_client_entities)
 
 	// 	 /* init network stuff */
 	// 	 if (dedicated->value)
@@ -280,13 +280,12 @@ func (T *qServer) initGame() error {
 		return err
 	}
 
-	// 	 for (i = 0; i < maxclients->value; i++)
-	// 	 {
-	// 		 ent = EDICT_NUM(i + 1);
-	// 		 ent->s.number = i + 1;
-	// 		 svs.clients[i].edict = ent;
-	// 		 memset(&svs.clients[i].lastcmd, 0, sizeof(svs.clients[i].lastcmd));
-	// 	 }
+	for i := 0; i < T.maxclients.Int(); i++ {
+		ent := T.ge.Edict(i + 1)
+		ent.S().Number = i + 1
+		T.svs.clients[i].edict = ent
+		// memset(&svs.clients[i].lastcmd, 0, sizeof(svs.clients[i].lastcmd))
+	}
 	return nil
 }
 

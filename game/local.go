@@ -131,7 +131,7 @@ type gclient_t struct {
 	ping int
 }
 
-func (G *gclient_t) PS() *shared.Player_state_t {
+func (G *gclient_t) Ps() *shared.Player_state_t {
 	return &G.ps
 }
 
@@ -151,19 +151,19 @@ type edict_t struct {
 
 	// link_t area; /* linked to a division node or leaf */
 
-	num_clusters int /* if -1, use headnode instead */
-	// int clusternums[MAX_ENT_CLUSTERS];
+	num_clusters      int /* if -1, use headnode instead */
+	clusternums       [shared.MAX_ENT_CLUSTERS]int
 	headnode          int /* unused if num_clusters != -1 */
 	areanum, areanum2 int
 
 	/* ================================ */
 
-	// int svflags;
+	svflags int
 	// vec3_t mins, maxs;
 	// vec3_t absmin, absmax, size;
 	solid shared.Solid_t
 	// int clipmask;
-	// edict_t *owner;
+	owner *edict_t
 
 	// /* DO NOT MODIFY ANYTHING ABOVE THIS, THE SERVER */
 	// /* EXPECTS THE FIELDS IN THAT ORDER! */
@@ -289,8 +289,40 @@ func (G *edict_t) S() *shared.Entity_state_t {
 	return &G.s
 }
 
+func (G *edict_t) Client() shared.Gclient_s {
+	return G.client
+}
+
 func (G *edict_t) Inuse() bool {
 	return G.inuse
+}
+
+func (G *edict_t) Svflags() int {
+	return G.svflags
+}
+
+func (G *edict_t) NumClusters() int {
+	return G.num_clusters
+}
+
+func (G *edict_t) Clusternums() []int {
+	return G.clusternums[:]
+}
+
+func (G *edict_t) Headnode() int {
+	return G.headnode
+}
+
+func (G *edict_t) Areanum() int {
+	return G.areanum
+}
+
+func (G *edict_t) Areanum2() int {
+	return G.areanum2
+}
+
+func (G *edict_t) Owner() shared.Edict_s {
+	return G.owner
 }
 
 /* fields are needed for spawning from the entity

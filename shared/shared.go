@@ -142,6 +142,17 @@ type Cmodel_t struct {
 	Headnode int
 }
 
+type Csurface_t struct {
+	Name  string
+	Flags int /* SURF_* */
+	Value int /* unused */
+}
+
+type Mapsurface_t struct { /* used internally due to name len probs */
+	C     Csurface_t
+	Rname string
+}
+
 /* this structure needs to be communicated bit-accurate/
  * from the server to the client to guarantee that
  * prediction stays in sync, so no floats are used.
@@ -1326,6 +1337,16 @@ type QCommon interface {
 
 	CMLoadMap(name string, clientload bool, checksum *uint32) (*Cmodel_t, error)
 	CMEntityString() string
+	CMPointLeafnum(p []float32) int
+	CMLeafCluster(leafnum int) int
+	CMLeafArea(leafnum int) int
+	CMNumClusters() int
+	CMWriteAreaBits(buffer []byte, area int) int
+	CMClusterPVS(cluster int) []byte
+	CMClusterPHS(cluster int) []byte
+	CMBoxLeafnums(mins, maxs []float32, list []int, listsize int, topnode *int) int
+	CMAreasConnected(area1, area2 int) bool
+	CMHeadnodeVisible(nodenum int, visbits []byte) bool
 }
 
 type QClient interface {

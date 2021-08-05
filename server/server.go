@@ -77,6 +77,15 @@ const (
 	cs_spawned   client_state_t = 3 /* client is fully in game */
 )
 
+type client_frame_t struct {
+	areabytes    int
+	areabits     [shared.MAX_MAP_AREAS / 8]byte /* portalarea visibility bits */
+	ps           shared.Player_state_t
+	num_entities int
+	first_entity int /* into the circular sv_packet_entities[] */
+	senttime     int /* for ping calculations */
+}
+
 type client_t struct {
 	index int
 	state client_state_t
@@ -105,7 +114,7 @@ type client_t struct {
 	// sizebuf_t datagram;
 	// byte datagram_buf[MAX_MSGLEN];
 
-	// client_frame_t frames[UPDATE_BACKUP];     /* updates can be delta'd from here */
+	frames [shared.UPDATE_BACKUP]client_frame_t /* updates can be delta'd from here */
 
 	// byte *download;                     /* file being downloaded */
 	// int downloadsize;                   /* total bytes (can't use EOF because of paks) */
@@ -134,10 +143,10 @@ type server_static_t struct {
 	spawncount int /* incremented each server start */
 	/* used to check late spawns */
 
-	clients              []client_t /* [maxclients->value]; */
-	num_client_entities  int        /* maxclients->value*UPDATE_BACKUP*MAX_PACKET_ENTITIES */
-	next_client_entities int        /* next client_entity to use */
-	// entity_state_t *client_entities;    /* [num_client_entities] */
+	clients              []client_t              /* [maxclients->value]; */
+	num_client_entities  int                     /* maxclients->value*UPDATE_BACKUP*MAX_PACKET_ENTITIES */
+	next_client_entities int                     /* next client_entity to use */
+	client_entities      []shared.Entity_state_t /* [num_client_entities] */
 
 	last_heartbeat int
 
@@ -178,6 +187,8 @@ type qServer struct {
 	sv_client *client_t
 
 	ge shared.Game_export_t
+
+	fatpvs [65536 / 8]byte
 }
 
 func CreateServer() shared.QServer {

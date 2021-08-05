@@ -70,22 +70,24 @@ type Gclient_s interface {
 
 type Edict_s interface {
 	S() *Entity_state_t
-	// struct gclient_s *client;
+	Client() Gclient_s
 	Inuse() bool
 	// int linkcount;
 
 	// link_t area;                    /* linked to a division node or leaf */
 
-	// int num_clusters;               /* if -1, use headnode instead */
-	// int clusternums[MAX_ENT_CLUSTERS];
-	// int headnode;                   /* unused if num_clusters != -1 */
-	// int areanum, areanum2;
+	NumClusters() int /* if -1, use headnode instead */
+	Clusternums() []int
+	Headnode() int /* unused if num_clusters != -1 */
+	Areanum() int
+	Areanum2() int
 
-	// int svflags;                    /* SVF_NOCLIENT, SVF_DEADMONSTER, SVF_MONSTER, etc */
+	Svflags() int /* SVF_NOCLIENT, SVF_DEADMONSTER, SVF_MONSTER, etc */
 	// vec3_t mins, maxs;
 	// vec3_t absmin, absmax, size;
 	// solid_t solid;
 	// int clipmask;
+	Owner() Edict_s
 	// edict_t *owner;
 
 	/* the game dll can add anything it wants

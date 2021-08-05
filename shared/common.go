@@ -118,6 +118,20 @@ const (
 	PS_WEAPONFRAME = (1 << 13)
 	PS_RDFLAGS     = (1 << 14)
 
+	/*============================================== */
+
+	/* user_cmd_t communication */
+
+	/* ms and light always sent, the others are optional */
+	CM_ANGLE1  = (1 << 0)
+	CM_ANGLE2  = (1 << 1)
+	CM_ANGLE3  = (1 << 2)
+	CM_FORWARD = (1 << 3)
+	CM_SIDE    = (1 << 4)
+	CM_UP      = (1 << 5)
+	CM_BUTTONS = (1 << 6)
+	CM_IMPULSE = (1 << 7)
+
 	NA_LOOPBACK      Netadrtype_t = 0
 	NA_BROADCAST     Netadrtype_t = 1
 	NA_IP            Netadrtype_t = 2

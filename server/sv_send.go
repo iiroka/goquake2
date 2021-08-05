@@ -31,6 +31,46 @@ import (
 	"log"
 )
 
+func (T *qServer) svSendClientDatagram(client *client_t) bool {
+	// byte msg_buf[MAX_MSGLEN];
+	// sizebuf_t msg;
+
+	T.svBuildClientFrame(client)
+
+	msg := shared.QWritebufCreate(shared.MAX_MSGLEN)
+	msg.Allowoverflow = true
+
+	/* send over all the relevant entity_state_t
+	   and the player_state_t */
+	T.svWriteFrameToClient(client, msg)
+
+	/* copy the accumulated multicast datagram
+	   for this client out to the message
+	   it is necessary for this to be after the WriteEntities
+	   so that entity references will be current */
+	// if (client->datagram.overflowed) {
+	// 	Com_Printf("WARNING: datagram overflowed for %s\n", client->name);
+	// } else {
+	// 	SZ_Write(&msg, client->datagram.data, client->datagram.cursize);
+	// }
+
+	// SZ_Clear(&client->datagram);
+
+	// if (msg.overflowed) {
+	// 	/* must have room left for the packet header */
+	// 	Com_Printf("WARNING: msg overflowed for %s\n", client->name);
+	// 	SZ_Clear(&msg);
+	// }
+
+	/* send the datagram */
+	client.netchan.Transmit(msg.Data())
+
+	/* record the size for rate estimation */
+	// client->message_size[sv.framenum % RATE_MESSAGES] = msg.cursize;
+
+	return true
+}
+
 func (T *qServer) svDemoCompleted() {
 	if T.sv.demofile != nil {
 		T.sv.demofile.Close()
@@ -213,7 +253,7 @@ func (T *qServer) svSendClientMessages() {
 			// 			continue;
 			// 		}
 
-			// 		SV_SendClientDatagram(c);
+			T.svSendClientDatagram(&T.svs.clients[i])
 		} else {
 			/* just update reliable	if needed */
 			if c.netchan.Message.Cursize > 0 || (T.common.Curtime()-c.netchan.LastSent) > 1000 {

@@ -159,7 +159,7 @@ func (T *qClient) sendCmd() error {
 	// 	MSG_WriteString(&cls.netchan.message, Cvar_Userinfo());
 	// }
 
-	// SZ_Init(&buf, data, sizeof(data));
+	buf := shared.QWritebufCreate(shared.MAX_MSGLEN)
 
 	// if ((cls.realtime > abort_cinematic) && (cl.cinematictime > 0) &&
 	// 		!cl.attractloop && (cls.realtime - cl.cinematictime > 1000) &&
@@ -168,52 +168,52 @@ func (T *qClient) sendCmd() error {
 	// 	SCR_FinishCinematic();
 	// }
 
-	// /* begin a client move command */
-	// MSG_WriteByte(&buf, clc_move);
+	/* begin a client move command */
+	buf.WriteByte(shared.ClcMove)
 
-	// /* save the position for a checksum byte */
+	/* save the position for a checksum byte */
 	// checksumIndex = buf.cursize;
-	// MSG_WriteByte(&buf, 0);
+	buf.WriteByte(0)
 
-	// /* let the server know what the last frame we
-	//    got was, so the next message can be delta
-	//    compressed */
+	/* let the server know what the last frame we
+	   got was, so the next message can be delta
+	   compressed */
 	// if (cl_nodelta->value || !cl.frame.valid || cls.demowaiting)
 	// {
 	// 	MSG_WriteLong(&buf, -1); /* no compression */
 	// }
 	// else
 	// {
-	// 	MSG_WriteLong(&buf, cl.frame.serverframe);
+	buf.WriteLong(T.cl.frame.serverframe)
 	// }
 
-	// /* send this and the previous cmds in the message, so
-	//    if the last packet was dropped, it can be recovered */
-	// i = (cls.netchan.outgoing_sequence - 2) & (CMD_BACKUP - 1);
-	// cmd = &cl.cmds[i];
-	// memset(&nullcmd, 0, sizeof(nullcmd));
-	// MSG_WriteDeltaUsercmd(&buf, &nullcmd, cmd);
-	// oldcmd = cmd;
+	/* send this and the previous cmds in the message, so
+	   if the last packet was dropped, it can be recovered */
+	i = (T.cls.netchan.Outgoing_sequence - 2) & (CMD_BACKUP - 1)
+	cmd = &T.cl.cmds[i]
+	nullcmd := shared.Usercmd_t{}
+	buf.WriteDeltaUsercmd(&nullcmd, cmd)
+	oldcmd := cmd
 
-	// i = (cls.netchan.outgoing_sequence - 1) & (CMD_BACKUP - 1);
-	// cmd = &cl.cmds[i];
-	// MSG_WriteDeltaUsercmd(&buf, oldcmd, cmd);
-	// oldcmd = cmd;
+	i = (T.cls.netchan.Outgoing_sequence - 1) & (CMD_BACKUP - 1)
+	cmd = &T.cl.cmds[i]
+	buf.WriteDeltaUsercmd(oldcmd, cmd)
+	oldcmd = cmd
 
-	// i = (cls.netchan.outgoing_sequence) & (CMD_BACKUP - 1);
-	// cmd = &cl.cmds[i];
-	// MSG_WriteDeltaUsercmd(&buf, oldcmd, cmd);
+	i = (T.cls.netchan.Outgoing_sequence) & (CMD_BACKUP - 1)
+	cmd = &T.cl.cmds[i]
+	buf.WriteDeltaUsercmd(oldcmd, cmd)
 
 	// /* calculate a checksum over the move commands */
 	// buf.data[checksumIndex] = COM_BlockSequenceCRCByte(
 	// 		buf.data + checksumIndex + 1, buf.cursize - checksumIndex - 1,
 	// 		cls.netchan.outgoing_sequence);
 
-	// /* deliver the message */
-	// Netchan_Transmit(&cls.netchan, buf.cursize, buf.data);
+	/* deliver the message */
+	T.cls.netchan.Transmit(buf.Data())
 
-	// /* Reinit the current cmd buffer */
-	// cmd = &cl.cmds[cls.netchan.outgoing_sequence & (CMD_BACKUP - 1)];
-	// memset(cmd, 0, sizeof(*cmd));
+	/* Reinit the current cmd buffer */
+	cmd = &T.cl.cmds[T.cls.netchan.Outgoing_sequence&(CMD_BACKUP-1)]
+	cmd.Copy(shared.Usercmd_t{})
 	return nil
 }
