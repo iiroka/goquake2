@@ -28,6 +28,84 @@ package gl3
 
 import "goquake2/shared"
 
+const DLIGHT_CUTOFF = 64
+
+// bit: 1 << i for light number i, will be or'ed into msurface_t::dlightbits if surface is affected by this light
+func (T *qGl3) markLights(light *shared.Dlight_t, bit int, anode mnode_or_leaf) {
+
+	if anode.Contents() != -1 {
+		return
+	}
+
+	node := anode.(*mnode_t)
+	splitplane := node.plane
+	dist := shared.DotProduct(light.Origin[:], splitplane.Normal[:]) - splitplane.Dist
+
+	if dist > light.Intensity-DLIGHT_CUTOFF {
+		T.markLights(light, bit, node.children[0])
+		return
+	}
+
+	if dist < -light.Intensity+DLIGHT_CUTOFF {
+		T.markLights(light, bit, node.children[1])
+		return
+	}
+
+	/* mark the polygons */
+	for i := 0; i < int(node.numsurfaces); i++ {
+		surf := T.gl3_worldmodel.surfaces[int(node.firstsurface)+i]
+		if surf.dlightframe != T.r_dlightframecount {
+			surf.dlightbits = 0
+			surf.dlightframe = T.r_dlightframecount
+		}
+
+		dist = shared.DotProduct(light.Origin[:], surf.plane.Normal[:]) - surf.plane.Dist
+		var sidebit int
+		if dist >= 0 {
+			sidebit = 0
+		} else {
+			sidebit = SURF_PLANEBACK
+		}
+
+		if (surf.flags & SURF_PLANEBACK) != sidebit {
+			continue
+		}
+
+		surf.dlightbits |= bit
+	}
+
+	T.markLights(light, bit, node.children[0])
+	T.markLights(light, bit, node.children[1])
+}
+
+func (T *qGl3) pushDlights() {
+
+	/* because the count hasn't advanced yet for this frame */
+	T.r_dlightframecount = T.gl3_framecount + 1
+
+	T.gl3state.uniLightsData.setNumDynLights(len(T.gl3_newrefdef.Dlights))
+
+	for i, l := range T.gl3_newrefdef.Dlights {
+		udl := &T.gl3state.uniLightsData.dynLights[i]
+		T.markLights(&T.gl3_newrefdef.Dlights[i], 1<<i, &T.gl3_worldmodel.nodes[0])
+
+		udl.setOrigin(l.Origin[:])
+		udl.setColor(l.Color[:])
+		udl.setIntensity(l.Intensity)
+	}
+
+	// assert(MAX_DLIGHTS == 32 && "If MAX_DLIGHTS changes, remember to adjust the uniform buffer definition in the shader!")
+
+	// if i < MAX_DLIGHTS {
+	// 	memset(&gl3state.uniLightsData.dynLights[i], 0, (MAX_DLIGHTS-i)*sizeof(gl3state.uniLightsData.dynLights[0]))
+	// }
+	for i := 4 + len(T.gl3_newrefdef.Dlights)*gl3UniDynLight_Size; i < gl3UniLights_Size; i++ {
+		T.gl3state.uniLightsData.data[i] = 0
+	}
+
+	T.updateUBOLights()
+}
+
 func (T *qGl3) lightPoint(p, color []float32) {
 	// vec3_t end;
 	// float r;
@@ -130,8 +208,8 @@ func (T *qGl3) buildLightMap(surf *msurface_t, offsetInLMbuf, stride int) error 
 			dest_i := offsetInLMbuf
 
 			for i := 0; i < tmax; i++ {
-				for j := 0; i < 4*smax; j++ {
-					T.gl3_lms.lightmap_buffers[mmap][dest_i+i] = byte(c)
+				for j := 0; j < 4*smax; j++ {
+					T.gl3_lms.lightmap_buffers[mmap][dest_i+j] = byte(c)
 				}
 				dest_i += 4*smax + stride
 			}
@@ -148,20 +226,17 @@ func (T *qGl3) buildLightMap(surf *msurface_t, offsetInLMbuf, stride int) error 
 	// the code has gotten a lot easier and we can copy directly from surf->samples to dest
 	// without converting to float first etc
 
-	lightmap := surf.samples
-	lm_i := 0
-
 	for mmap := 0; mmap < numMaps; mmap++ {
-		// 	 byte* dest = gl3_lms.lightmap_buffers[map] + offsetInLMbuf;
-		dest_i := offsetInLMbuf
+		dest := T.gl3_lms.lightmap_buffers[mmap][offsetInLMbuf:]
+		dest_i := 0
+		lightmap := surf.samples[mmap*size*3:]
 		idxInLightmap := 0
 		for i := 0; i < tmax; i++ {
-			// 	 for (i = 0; i < tmax; i++, dest += stride)
-			// 	 {
 			for j := 0; j < smax; j++ {
-				r := lightmap[idxInLightmap*3+lm_i+0]
-				g := lightmap[idxInLightmap*3+lm_i+1]
-				b := lightmap[idxInLightmap*3+lm_i+2]
+
+				r := lightmap[idxInLightmap*3+0]
+				g := lightmap[idxInLightmap*3+1]
+				b := lightmap[idxInLightmap*3+2]
 
 				/* determine the brightest of the three color components */
 				var max byte
@@ -178,20 +253,20 @@ func (T *qGl3) buildLightMap(surf *msurface_t, offsetInLMbuf, stride int) error 
 				reason we set it to the brightest of the color components
 				so that things don't get too dim. */
 				a := max
+				if a < 255 {
+					a = 255
+				}
 
-				T.gl3_lms.lightmap_buffers[mmap][dest_i+0] = r
-				T.gl3_lms.lightmap_buffers[mmap][dest_i+1] = g
-				T.gl3_lms.lightmap_buffers[mmap][dest_i+2] = b
-				T.gl3_lms.lightmap_buffers[mmap][dest_i+3] = a
+				dest[dest_i+0] = 255 // r
+				dest[dest_i+1] = 255 // g
+				dest[dest_i+2] = 255 // b
+				dest[dest_i+3] = a   // a
 
 				dest_i += 4
 				idxInLightmap++
 			}
-			//  }
 			dest_i += stride
 		}
-
-		lm_i += size + 3
 	}
 
 	for mmap := numMaps; mmap < MAX_LIGHTMAPS_PER_SURFACE; mmap++ {
@@ -200,7 +275,7 @@ func (T *qGl3) buildLightMap(surf *msurface_t, offsetInLMbuf, stride int) error 
 
 		for i := 0; i < tmax; i++ {
 			for j := 0; j < 4*smax; j++ {
-				T.gl3_lms.lightmap_buffers[mmap][dest_i+i] = 0
+				T.gl3_lms.lightmap_buffers[mmap][dest_i+j] = 255
 			}
 			dest_i += 4*smax + stride
 		}

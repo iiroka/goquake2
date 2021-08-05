@@ -458,6 +458,8 @@ type qClient struct {
 	allow_download_models  *shared.CvarT
 	allow_download_sounds  *shared.CvarT
 	allow_download_maps    *shared.CvarT
+
+	cl_explosions [MAX_EXPLOSIONS]explosion_t
 }
 
 func CreateClient() shared.QClient {

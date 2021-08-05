@@ -28,6 +28,7 @@ package gl3
 
 import (
 	"goquake2/shared"
+	"math"
 
 	"github.com/go-gl/gl/v3.2-core/gl"
 	"github.com/veandco/go-sdl2/sdl"
@@ -181,6 +182,22 @@ type gl3UniDynLight_t struct {
 
 const gl3UniDynLight_Size = 8
 
+func (T *gl3UniDynLight_t) setOrigin(v []float32) {
+	T.data[0] = math.Float32bits(v[0])
+	T.data[1] = math.Float32bits(v[1])
+	T.data[2] = math.Float32bits(v[2])
+}
+
+func (T *gl3UniDynLight_t) setColor(v []float32) {
+	T.data[4] = math.Float32bits(v[0])
+	T.data[5] = math.Float32bits(v[1])
+	T.data[6] = math.Float32bits(v[2])
+}
+
+func (T *gl3UniDynLight_t) setIntensity(v float32) {
+	T.data[7] = math.Float32bits(v)
+}
+
 type gl3UniLights_t struct {
 	dynLights []gl3UniDynLight_t
 	// GLuint numDynLights;
@@ -193,8 +210,12 @@ const gl3UniLights_Size = 4 + shared.MAX_DLIGHTS*gl3UniDynLight_Size
 func (T *gl3UniLights_t) initialize() {
 	T.dynLights = make([]gl3UniDynLight_t, shared.MAX_DLIGHTS)
 	for i := 0; i < shared.MAX_DLIGHTS; i++ {
-		T.dynLights[i].data = T.data[i*gl3UniDynLight_Size:]
+		T.dynLights[i].data = T.data[4+i*gl3UniDynLight_Size:]
 	}
+}
+
+func (T *gl3UniLights_t) setNumDynLights(v int) {
+	T.data[0] = uint32(v)
 }
 
 const (
@@ -469,6 +490,8 @@ type qGl3 struct {
 	tex_sky          [8]float32
 	index_vtx        int
 	index_tex        int
+
+	r_dlightframecount int
 }
 
 // gl3_lightmap.c

@@ -131,8 +131,8 @@ func (T *qGl3) lmBuildPolygonFromSurface(fa *msurface_t, mod *gl3model_t) {
 	copy(normal, fa.plane.Normal[:])
 
 	if (fa.flags & SURF_PLANEBACK) != 0 {
-		// 	// if for some reason the normal sticks to the back of the plane, invert it
-		// 	// so it's usable for the shader
+		// if for some reason the normal sticks to the back of the plane, invert it
+		// so it's usable for the shader
 		for i := 0; i < 3; i++ {
 			normal[i] = -normal[i]
 		}
@@ -183,7 +183,6 @@ func (T *qGl3) lmBuildPolygonFromSurface(fa *msurface_t, mod *gl3model_t) {
 }
 
 func (T *qGl3) lmCreateSurfaceLightmap(surf *msurface_t) error {
-	// int smax, tmax;
 
 	if (surf.flags & (SURF_DRAWSKY | SURF_DRAWTURB)) != 0 {
 		return nil

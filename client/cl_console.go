@@ -49,6 +49,13 @@ type console_t struct {
 	// float	times[NUM_CON_TIMES]; /* cls.realtime time the line was generated */
 }
 
+func (T *qClient) drawStringScaled(x, y int, s string, factor float32) {
+	for _, c := range s {
+		T.Draw_CharScaled(x, y, int(c), factor)
+		x += int(8 * factor)
+	}
+}
+
 /*
  * If the line width has changed, reformat the buffer.
  */

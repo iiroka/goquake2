@@ -25,7 +25,35 @@
  */
 package client
 
-import "goquake2/shared"
+import (
+	"goquake2/shared"
+	"math"
+)
+
+type exptype_t int
+
+const (
+	ex_free      exptype_t = 0
+	ex_explosion exptype_t = 1
+	ex_misc      exptype_t = 2
+	ex_flash     exptype_t = 3
+	ex_mflash    exptype_t = 4
+	ex_poly      exptype_t = 5
+	ex_poly2     exptype_t = 6
+)
+
+type explosion_t struct {
+	etype exptype_t
+	ent   shared.Entity_t
+
+	frames     int
+	light      float32
+	lightcolor [3]float32
+	start      float32
+	baseframe  int
+}
+
+const MAX_EXPLOSIONS = 64
 
 func (T *qClient) registerTEntModels() {
 	T.cl_mod_explode, _ = T.R_RegisterModel("models/objects/explode/tris.md2")
@@ -56,6 +84,33 @@ func (T *qClient) registerTEntModels() {
 	T.cl_mod_lightning, _ = T.R_RegisterModel("models/proj/lightning/tris.md2")
 	T.cl_mod_heatbeam, _ = T.R_RegisterModel("models/proj/beam/tris.md2")
 	T.cl_mod_monster_heatbeam, _ = T.R_RegisterModel("models/proj/widowbeam/tris.md2")
+}
+
+func (T *qClient) allocExplosion() *explosion_t {
+	// int i;
+	// float time;
+	// int index;
+
+	for i, exp := range T.cl_explosions {
+		if exp.etype == ex_free {
+			T.cl_explosions[i] = explosion_t{}
+			return &T.cl_explosions[i]
+		}
+	}
+
+	/* find the oldest explosion */
+	time := float32(T.cl.time)
+	index := 0
+
+	for i, exp := range T.cl_explosions {
+		if exp.start < time {
+			time = exp.start
+			index = i
+		}
+	}
+
+	T.cl_explosions[index] = explosion_t{}
+	return &T.cl_explosions[index]
 }
 
 func (T *qClient) parseTEnt(msg *shared.QReadbuf) error {
@@ -246,31 +301,28 @@ func (T *qClient) parseTEnt(msg *shared.QReadbuf) error {
 	// 	S_StartSound(pos2, 0, 0, cl_sfx_railg, 1, ATTN_NORM, 0);
 	// 	break;
 
-	// case TE_EXPLOSION2:
-	// case TE_GRENADE_EXPLOSION:
-	// case TE_GRENADE_EXPLOSION_WATER:
-	// 	MSG_ReadPos(&net_message, pos);
-	// 	ex = CL_AllocExplosion();
-	// 	VectorCopy(pos, ex->ent.origin);
-	// 	ex->type = ex_poly;
-	// 	ex->ent.flags = RF_FULLBRIGHT | RF_NOSHADOW;
-	// 	ex->start = cl.frame.servertime - 100.0f;
-	// 	ex->light = 350;
-	// 	ex->lightcolor[0] = 1.0;
-	// 	ex->lightcolor[1] = 0.5;
-	// 	ex->lightcolor[2] = 0.5;
-	// 	ex->ent.model = cl_mod_explo4;
-	// 	ex->frames = 19;
-	// 	ex->baseframe = 30;
-	// 	ex->ent.angles[1] = (float)(randk() % 360);
+	case shared.TE_EXPLOSION2,
+		shared.TE_GRENADE_EXPLOSION,
+		shared.TE_GRENADE_EXPLOSION_WATER:
+		pos := msg.ReadPos()
+		ex := T.allocExplosion()
+		copy(ex.ent.Origin[:], pos)
+		ex.etype = ex_poly
+		ex.ent.Flags = shared.RF_FULLBRIGHT | shared.RF_NOSHADOW
+		ex.start = float32(T.cl.frame.servertime) - 100.0
+		ex.light = 350
+		ex.lightcolor[0] = 1.0
+		ex.lightcolor[1] = 0.5
+		ex.lightcolor[2] = 0.5
+		ex.ent.Model = T.cl_mod_explo4
+		ex.frames = 19
+		ex.baseframe = 30
+		ex.ent.Angles[1] = float32(shared.Randk() % 360)
 	// 	EXPLOSION_PARTICLES(pos);
 
-	// 	if (type == TE_GRENADE_EXPLOSION_WATER)
-	// 	{
+	// 	if (type == TE_GRENADE_EXPLOSION_WATER) {
 	// 		S_StartSound(pos, 0, 0, cl_sfx_watrexp, 1, ATTN_NORM, 0);
-	// 	}
-	// 	else
-	// 	{
+	// 	} else {
 	// 		S_StartSound(pos, 0, 0, cl_sfx_grenexp, 1, ATTN_NORM, 0);
 	// 	}
 
@@ -300,41 +352,36 @@ func (T *qClient) parseTEnt(msg *shared.QReadbuf) error {
 	// 	S_StartSound(pos, 0, 0, cl_sfx_rockexp, 1, ATTN_NORM, 0);
 	// 	break;
 
-	// case TE_EXPLOSION1_BIG:
-	// case TE_EXPLOSION1_NP:
-	// case TE_EXPLOSION1:
-	// case TE_ROCKET_EXPLOSION:
-	// case TE_ROCKET_EXPLOSION_WATER:
-	// 	MSG_ReadPos(&net_message, pos);
-	// 	ex = CL_AllocExplosion();
-	// 	VectorCopy(pos, ex->ent.origin);
-	// 	ex->type = ex_poly;
-	// 	ex->ent.flags = RF_FULLBRIGHT | RF_NOSHADOW;
-	// 	ex->start = cl.frame.servertime - 100.0f;
-	// 	ex->light = 350;
-	// 	ex->lightcolor[0] = 1.0;
-	// 	ex->lightcolor[1] = 0.5;
-	// 	ex->lightcolor[2] = 0.5;
-	// 	ex->ent.angles[1] = (float)(randk() % 360);
+	case shared.TE_EXPLOSION1_BIG,
+		shared.TE_EXPLOSION1_NP,
+		shared.TE_EXPLOSION1,
+		shared.TE_ROCKET_EXPLOSION,
+		shared.TE_ROCKET_EXPLOSION_WATER:
+		pos := msg.ReadPos()
+		ex := T.allocExplosion()
+		copy(ex.ent.Origin[:], pos)
+		ex.etype = ex_poly
+		ex.ent.Flags = shared.RF_FULLBRIGHT | shared.RF_NOSHADOW
+		ex.start = float32(T.cl.frame.servertime) - 100.0
+		ex.light = 350
+		ex.lightcolor[0] = 1.0
+		ex.lightcolor[1] = 0.5
+		ex.lightcolor[2] = 0.5
+		ex.ent.Angles[1] = float32(shared.Randk() % 360)
 
-	// 	if (type != TE_EXPLOSION1_BIG)
-	// 	{
-	// 		ex->ent.model = cl_mod_explo4;
-	// 	}
-	// 	else
-	// 	{
-	// 		ex->ent.model = cl_mod_explo4_big;
-	// 	}
+		if mtype != shared.TE_EXPLOSION1_BIG {
+			ex.ent.Model = T.cl_mod_explo4
+		} else {
+			ex.ent.Model = T.cl_mod_explo4_big
+		}
 
-	// 	if (frandk() < 0.5)
-	// 	{
-	// 		ex->baseframe = 15;
-	// 	}
+		if shared.Frandk() < 0.5 {
+			ex.baseframe = 15
+		}
 
-	// 	ex->frames = 15;
+		ex.frames = 15
 
-	// 	if ((type != TE_EXPLOSION1_BIG) && (type != TE_EXPLOSION1_NP))
-	// 	{
+	// 	if ((type != TE_EXPLOSION1_BIG) && (type != TE_EXPLOSION1_NP)) {
 	// 		EXPLOSION_PARTICLES(pos);
 	// 	}
 
@@ -641,4 +688,114 @@ func (T *qClient) parseTEnt(msg *shared.QReadbuf) error {
 		return T.common.Com_Error(shared.ERR_DROP, "CL_ParseTEnt: bad type %v", mtype)
 	}
 	return nil
+}
+
+func (T *qClient) addExplosions() {
+
+	for _, ex := range T.cl_explosions {
+		if ex.etype == ex_free {
+			continue
+		}
+
+		frac := (float32(T.cl.time) - ex.start) / 100.0
+		f := int(math.Floor(float64(frac)))
+
+		ent := &ex.ent
+
+		switch ex.etype {
+		case ex_mflash:
+
+			if f >= ex.frames-1 {
+				ex.etype = ex_free
+			}
+
+			break
+		case ex_misc:
+
+			if f >= ex.frames-1 {
+				ex.etype = ex_free
+				break
+			}
+
+			ent.Alpha = 1.0 - float32(frac)/float32(ex.frames-1)
+			break
+		case ex_flash:
+
+			if f >= 1 {
+				ex.etype = ex_free
+				break
+			}
+
+			ent.Alpha = 1.0
+			break
+		case ex_poly:
+
+			if f >= ex.frames-1 {
+				ex.etype = ex_free
+				break
+			}
+
+			ent.Alpha = (16.0 - float32(f)) / 16.0
+
+			if f < 10 {
+				ent.Skinnum = (f >> 1)
+
+				if ent.Skinnum < 0 {
+					ent.Skinnum = 0
+				}
+			} else {
+				ent.Flags |= shared.RF_TRANSLUCENT
+
+				if f < 13 {
+					ent.Skinnum = 5
+				} else {
+					ent.Skinnum = 6
+				}
+			}
+
+			break
+		case ex_poly2:
+
+			if f >= ex.frames-1 {
+				ex.etype = ex_free
+				break
+			}
+
+			ent.Alpha = (5.0 - float32(f)) / 5.0
+			ent.Skinnum = 0
+			ent.Flags |= shared.RF_TRANSLUCENT
+			break
+		default:
+			break
+		}
+
+		if ex.etype == ex_free {
+			continue
+		}
+
+		if ex.light != 0 {
+			T.addLight(ent.Origin[:], ex.light*ent.Alpha,
+				ex.lightcolor[0], ex.lightcolor[1], ex.lightcolor[2])
+		}
+
+		copy(ent.Oldorigin[:], ent.Origin[:])
+
+		if f < 0 {
+			f = 0
+		}
+
+		ent.Frame = ex.baseframe + f + 1
+		ent.Oldframe = ex.baseframe + f
+		ent.Backlerp = 1.0 - T.cl.lerpfrac
+
+		T.addEntity(*ent)
+	}
+}
+
+func (T *qClient) addTEnts() {
+	// CL_AddBeams();
+	// CL_AddPlayerBeams();
+	T.addExplosions()
+	// CL_AddLasers();
+	// CL_ProcessSustain();
 }

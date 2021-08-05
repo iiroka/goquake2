@@ -155,7 +155,7 @@ func (T *qGl3) register() {
 
 	T.r_modulate = T.ri.Cvar_Get("r_modulate", "1", shared.CVAR_ARCHIVE)
 	T.gl_zfix = T.ri.Cvar_Get("gl_zfix", "0", 0)
-	T.r_clear = T.ri.Cvar_Get("r_clear", "0", 0)
+	T.r_clear = T.ri.Cvar_Get("r_clear", "1", 0)
 	T.gl_cull = T.ri.Cvar_Get("gl_cull", "1", 0)
 	T.r_lockpvs = T.ri.Cvar_Get("r_lockpvs", "0", 0)
 	T.r_novis = T.ri.Cvar_Get("r_novis", "0", 0)
@@ -1021,7 +1021,7 @@ func (T *qGl3) renderView(fd shared.Refdef_t) error {
 	T.c_brush_polys = 0
 	T.c_alias_polys = 0
 
-	//  GL3_PushDlights();
+	T.pushDlights()
 
 	if T.gl_finish.Bool() {
 		gl.Finish()
@@ -1041,8 +1041,8 @@ func (T *qGl3) renderView(fd shared.Refdef_t) error {
 
 	T.drawEntitiesOnList()
 
-	//  // kick the silly gl1_flashblend poly lights
-	//  // GL3_RenderDlights();
+	// kick the silly gl1_flashblend poly lights
+	// GL3_RenderDlights();
 
 	T.drawParticles()
 

@@ -188,13 +188,11 @@ func (T *qGl3) updateLMscales(lmScales [MAX_LIGHTMAPS_PER_SURFACE][4]float32, si
 	}
 
 	if hasChanged {
-		gl.Uniform4fv(si.uniLmScales, MAX_LIGHTMAPS_PER_SURFACE, (*float32)(gl.Ptr(si.lmScales[:])))
+		gl.Uniform4fv(si.uniLmScales, MAX_LIGHTMAPS_PER_SURFACE, &si.lmScales[0])
 	}
 }
 
 func (T *qGl3) renderBrushPoly(fa *msurface_t) {
-	// int map;
-	// gl3image_t *image;
 
 	T.c_brush_polys++
 
@@ -250,7 +248,7 @@ func (T *qGl3) renderBrushPoly(fa *msurface_t) {
  */
 func (T *qGl3) drawAlphaSurfaces() {
 
-	//  /* go back to the world matrix */
+	/* go back to the world matrix */
 	T.gl3state.uni3DData.setTransModelMat4(gl3_identityMat4)
 	T.updateUBO3D()
 
@@ -581,7 +579,6 @@ func (T *qGl3) recursiveWorldNode(anode mnode_or_leaf) {
 }
 
 func (T *qGl3) drawWorld() {
-	// entity_t ent;
 
 	if !T.r_drawworld.Bool() {
 		return
@@ -616,12 +613,6 @@ func (T *qGl3) drawWorld() {
  * in the PVS for the current cluster
  */
 func (T *qGl3) markLeaves() {
-	//  byte *vis;
-	//  YQ2_ALIGNAS_TYPE(int) byte fatvis[MAX_MAP_LEAFS / 8];
-	//  mnode_t *node;
-	//  int i, c;
-	//  mleaf_t *leaf;
-	//  int cluster;
 
 	if (T.gl3_oldviewcluster == T.gl3_viewcluster) &&
 		(T.gl3_oldviewcluster2 == T.gl3_viewcluster2) &&
@@ -640,62 +631,51 @@ func (T *qGl3) markLeaves() {
 	T.gl3_oldviewcluster = T.gl3_viewcluster
 	T.gl3_oldviewcluster2 = T.gl3_viewcluster2
 
-	//  if (r_novis->value || (gl3_viewcluster == -1) || !gl3_worldmodel->vis) {
-	// 	 /* mark everything */
+	if T.r_novis.Bool() || (T.gl3_viewcluster == -1) || T.gl3_worldmodel.vis == nil {
+		/* mark everything */
+		for i := 0; i < T.gl3_worldmodel.numleafs; i++ {
+			T.gl3_worldmodel.leafs[i].visframe = T.gl3_visframecount
+		}
+
+		for i := 0; i < len(T.gl3_worldmodel.nodes); i++ {
+			T.gl3_worldmodel.nodes[i].visframe = T.gl3_visframecount
+		}
+
+		return
+	}
+
+	vis := T.modClusterPVS(T.gl3_viewcluster, T.gl3_worldmodel)
+
+	var fatvis [shared.MAX_MAP_LEAFS / 8]byte
+	/* may have to combine two clusters because of solid water boundaries */
+	if T.gl3_viewcluster2 != T.gl3_viewcluster {
+		for i := 0; i < (T.gl3_worldmodel.numleafs+7)/8; i++ {
+			fatvis[i] = vis[i]
+		}
+		vis = T.modClusterPVS(T.gl3_viewcluster2, T.gl3_worldmodel)
+		for i := 0; i < (T.gl3_worldmodel.numleafs+7)/8; i++ {
+			fatvis[i] |= vis[i]
+		}
+		vis = fatvis[:]
+	}
+
 	for i := 0; i < T.gl3_worldmodel.numleafs; i++ {
-		T.gl3_worldmodel.leafs[i].visframe = T.gl3_visframecount
+		leaf := &T.gl3_worldmodel.leafs[i]
+		cluster := leaf.cluster
+
+		if cluster == -1 {
+			continue
+		}
+
+		if (vis[cluster>>3] & (1 << (cluster & 7))) != 0 {
+			if leaf.visframe != T.gl3_visframecount {
+				leaf.visframe = T.gl3_visframecount
+				node := leaf.parent
+				for node != nil && node.visframe != T.gl3_visframecount {
+					node.visframe = T.gl3_visframecount
+					node = node.parent
+				}
+			}
+		}
 	}
-
-	for i := 0; i < len(T.gl3_worldmodel.nodes); i++ {
-		T.gl3_worldmodel.nodes[i].visframe = T.gl3_visframecount
-	}
-
-	return
-	//  }
-
-	//  vis = GL3_Mod_ClusterPVS(gl3_viewcluster, gl3_worldmodel);
-
-	//  /* may have to combine two clusters because of solid water boundaries */
-	//  if (gl3_viewcluster2 != gl3_viewcluster)
-	//  {
-	// 	 memcpy(fatvis, vis, (gl3_worldmodel->numleafs + 7) / 8);
-	// 	 vis = GL3_Mod_ClusterPVS(gl3_viewcluster2, gl3_worldmodel);
-	// 	 c = (gl3_worldmodel->numleafs + 31) / 32;
-
-	// 	 for (i = 0; i < c; i++)
-	// 	 {
-	// 		 ((int *)fatvis)[i] |= ((int *)vis)[i];
-	// 	 }
-
-	// 	 vis = fatvis;
-	//  }
-
-	//  for (i = 0, leaf = gl3_worldmodel->leafs;
-	// 	  i < gl3_worldmodel->numleafs;
-	// 	  i++, leaf++)
-	//  {
-	// 	 cluster = leaf->cluster;
-
-	// 	 if (cluster == -1)
-	// 	 {
-	// 		 continue;
-	// 	 }
-
-	// 	 if (vis[cluster >> 3] & (1 << (cluster & 7)))
-	// 	 {
-	// 		 node = (mnode_t *)leaf;
-
-	// 		 do
-	// 		 {
-	// 			 if (node->visframe == gl3_visframecount)
-	// 			 {
-	// 				 break;
-	// 			 }
-
-	// 			 node->visframe = gl3_visframecount;
-	// 			 node = node->parent;
-	// 		 }
-	// 		 while (node);
-	// 	 }
-	//  }
 }

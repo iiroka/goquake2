@@ -580,26 +580,25 @@ func (T *qClient) scrExecuteLayoutString(s string) {
 		// 		continue;
 		// 	}
 
-		// 	if (!strcmp(token, "stat_string"))
-		// 	{
-		// 		token = COM_Parse(&s);
-		// 		index = (int)strtol(token, (char **)NULL, 10);
+		if token == "stat_string" {
+			token, index = shared.COM_Parse(s, index)
+			idx, _ := strconv.ParseInt(token, 10, 32)
 
-		// 		if ((index < 0) || (index >= MAX_CONFIGSTRINGS))
-		// 		{
-		// 			Com_Error(ERR_DROP, "Bad stat_string index");
-		// 		}
+			if (idx < 0) || (idx >= shared.MAX_CONFIGSTRINGS) {
+				T.common.Com_Error(shared.ERR_DROP, "Bad stat_string index")
+				return
+			}
 
-		// 		index = cl.frame.playerstate.stats[index];
+			idx = int64(T.cl.frame.playerstate.Stats[idx])
 
-		// 		if ((index < 0) || (index >= MAX_CONFIGSTRINGS))
-		// 		{
-		// 			Com_Error(ERR_DROP, "Bad stat_string index");
-		// 		}
+			if (idx < 0) || (idx >= shared.MAX_CONFIGSTRINGS) {
+				T.common.Com_Error(shared.ERR_DROP, "Bad stat_string index")
+				return
+			}
 
-		// 		DrawStringScaled(x, y, cl.configstrings[index], scale);
-		// 		continue;
-		// 	}
+			T.drawStringScaled(x, y, T.cl.configstrings[idx], scale)
+			continue
+		}
 
 		// 	if (!strcmp(token, "cstring"))
 		// 	{

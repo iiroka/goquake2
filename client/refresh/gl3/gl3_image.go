@@ -252,12 +252,11 @@ func (T *qGl3) loadPic(name string, pic []byte, width, realwidth,
 	//  GLuint texNum=0;
 	//  int i;
 
-	//  qboolean nolerp = false;
+	nolerp := false
 
-	//  if (gl_nolerp_list != NULL && gl_nolerp_list->string != NULL)
-	//  {
-	// 	 nolerp = strstr(gl_nolerp_list->string, name) != NULL;
-	//  }
+	if T.gl_nolerp_list != nil && len(T.gl_nolerp_list.String) > 0 {
+		nolerp = strings.Contains(T.gl_nolerp_list.String, name)
+	}
 	/* find a free gl3image_t */
 	var image *gl3image_t
 	for i := 0; i < T.numgl3textures; i++ {
@@ -290,7 +289,6 @@ func (T *qGl3) loadPic(name string, pic []byte, width, realwidth,
 
 	//  if ((type == it_skin) && (bits == 8)) {
 	// 	 FloodFillSkin(pic, width, height);
-
 	//  }
 
 	// image->scrap = false; // TODO: reintroduce scrap? would allow optimizations in 2D rendering..
@@ -312,26 +310,26 @@ func (T *qGl3) loadPic(name string, pic []byte, width, realwidth,
 			(image.itype != it_pic && image.itype != it_sky))
 	}
 
-	//  if (realwidth && realheight) {
-	// 	 if ((realwidth <= image->width) && (realheight <= image->height)) {
-	// 		 image->width = realwidth;
-	// 		 image->height = realheight;
-	// 	 } else {
-	// 		 R_Printf(PRINT_DEVELOPER,
-	// 				 "Warning, image '%s' has hi-res replacement smaller than the original! (%d x %d) < (%d x %d)\n",
-	// 				 name, image->width, image->height, realwidth, realheight);
-	// 	 }
-	//  }
+	if realwidth != 0 && realheight != 0 {
+		if (realwidth <= image.width) && (realheight <= image.height) {
+			image.width = realwidth
+			image.height = realheight
+		} else {
+			T.rPrintf(shared.PRINT_DEVELOPER,
+				"Warning, image '%s' has hi-res replacement smaller than the original! (%d x %d) < (%d x %d)\n",
+				name, image.width, image.height, realwidth, realheight)
+		}
+	}
 
 	image.sl = 0
 	image.sh = 1
 	image.tl = 0
 	image.th = 1
 
-	//  if (nolerp) {
-	// 	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	// 	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	//  }
+	if nolerp {
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+	}
 	return image
 }
 

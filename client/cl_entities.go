@@ -100,8 +100,7 @@ func (T *qClient) addPacketEntities(frame *frame_t) {
 		ent.Oldframe = cent.prev.Frame
 		ent.Backlerp = 1.0 - T.cl.lerpfrac
 
-		// 		if (renderfx & (RF_FRAMELERP | RF_BEAM))
-		// 		{
+		// 		if (renderfx & (RF_FRAMELERP | RF_BEAM)) != 0 {
 		// 			/* step origin discretely, because the
 		// 			   frames do the animation properly */
 		// 			VectorCopy(cent->current.origin, ent.origin);
@@ -207,23 +206,19 @@ func (T *qClient) addPacketEntities(frame *frame_t) {
 		if s1.Number == T.cl.playernum+1 {
 			ent.Flags |= shared.RF_VIEWERMODEL
 
-			// 			if (effects & EF_FLAG1)
-			// 			{
+			// 			if (effects & EF_FLAG1) != 0 {
 			// 				V_AddLight(ent.origin, 225, 1.0f, 0.1f, 0.1f);
 			// 			}
 
-			// 			else if (effects & EF_FLAG2)
-			// 			{
+			// 			else if (effects & EF_FLAG2) != 0 {
 			// 				V_AddLight(ent.origin, 225, 0.1f, 0.1f, 1.0f);
 			// 			}
 
-			// 			else if (effects & EF_TAGTRAIL)
-			// 			{
+			// 			else if (effects & EF_TAGTRAIL) != 0 {
 			// 				V_AddLight(ent.origin, 225, 1.0f, 1.0f, 0.0f);
 			// 			}
 
-			// 			else if (effects & EF_TRACKERTRAIL)
-			// 			{
+			// 			else if (effects & EF_TRACKERTRAIL) != 0 {
 			// 				V_AddLight(ent.origin, 225, -1.0f, -1.0f, -1.0f);
 			// 			}
 
@@ -566,18 +561,16 @@ func (T *qClient) calcViewValues() {
 		ops = ps /* don't interpolate */
 	}
 
-	//  if(cl_paused->value){
-	// 	 lerp = 1.0f;
-	//  }
-	//  else
-	//  {
-	lerp := T.cl.lerpfrac
-	//  }
+	var lerp float32
+	if T.cl_paused.Bool() {
+		lerp = 1.0
+	} else {
+		lerp = T.cl.lerpfrac
+	}
 
 	/* calculate the origin */
 	if (T.cl_predict.Bool()) && (T.cl.frame.playerstate.Pmove.Pm_flags&shared.PMF_NO_PREDICTION) == 0 {
-		// 	 /* use predicted values */
-		// 	 unsigned delta;
+		/* use predicted values */
 
 		backlerp := 1.0 - lerp
 
@@ -673,7 +666,7 @@ func (T *qClient) addEntities() {
 
 	T.calcViewValues()
 	T.addPacketEntities(&T.cl.frame)
-	// CL_AddTEnts();
+	T.addTEnts()
 	T.addParticles()
 	T.addDLights()
 	T.addLightStyles()

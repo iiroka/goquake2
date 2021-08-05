@@ -383,11 +383,12 @@ func (M *gl3model_t) Copy(other gl3model_t) {
 	// int numsurfedges;
 	M.surfedges = other.surfedges
 	// int nummarksurfaces;
+	M.marksurfaces = other.marksurfaces
 	// msurface_t **marksurfaces;
 	M.visBfr = other.visBfr
 	M.vis = other.vis
 	M.lightdata = other.lightdata
-	// gl3image_t *skins[MAX_MD2SKINS];
+	M.skins = other.skins
 	// int extradatasize;
 	// void *extradata;
 }

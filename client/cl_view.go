@@ -106,8 +106,8 @@ func (T *qClient) prepRefresh() error {
 		return nil
 	}
 
-	//  SCR_AddDirtyPoint(0, 0);
-	//  SCR_AddDirtyPoint(viddef.width - 1, viddef.height - 1);
+	T.scrAddDirtyPoint(0, 0)
+	T.scrAddDirtyPoint(T.viddef.width-1, T.viddef.height-1)
 
 	/* let the refresher load the map */
 	mapname := T.cl.configstrings[shared.CS_MODELS+1][5:]
@@ -312,11 +312,8 @@ func (T *qClient) renderView(stereo_separation float32) error {
 		// 		VectorClear(cl.refdef.blend);
 		// 	}
 
-		// 	cl.refdef.num_entities = r_numentities;
 		T.cl.refdef.Entities = T.r_entities
-		// 	cl.refdef.num_particles = r_numparticles;
 		T.cl.refdef.Particles = T.r_particles
-		// 	cl.refdef.num_dlights = r_numdlights;
 		T.cl.refdef.Dlights = T.r_dlights
 		T.cl.refdef.Lightstyles = T.r_lightstyles[:]
 

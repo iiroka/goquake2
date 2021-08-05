@@ -349,7 +349,7 @@ func (T *qGl3) initShader3D(shaderInfo *gl3ShaderInfo_t, vertSrc, fragSrc string
 			}
 		}
 
-		gl.Uniform4fv(lmScalesLoc, 4, (*float32)(gl.Ptr(shaderInfo.lmScales[:])))
+		gl.Uniform4fv(lmScalesLoc, 4, &shaderInfo.lmScales[0])
 	}
 
 	shaderInfo.shaderProgram = prog
@@ -545,6 +545,10 @@ func (T *qGl3) updateUBO2D() {
 
 func (T *qGl3) updateUBO3D() {
 	T.updateUBO(T.gl3state.uni3DUBO, len(T.gl3state.uni3DData.data)*4, gl.Ptr(T.gl3state.uni3DData.data))
+}
+
+func (T *qGl3) updateUBOLights() {
+	T.updateUBO(T.gl3state.uniLightsUBO, len(T.gl3state.uniLightsData.data)*4, gl.Ptr(T.gl3state.uniLightsData.data))
 }
 
 // ############## shaders for 2D rendering (HUD, menus, console, videos, ..) #####################
