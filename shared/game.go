@@ -56,7 +56,7 @@ const (
 
 /* link_t is only used for entity area links now */
 type Link_t struct {
-	prev, next *Link_t
+	Prev, Next *Link_t
 }
 
 type Gclient_s interface {
@@ -72,20 +72,28 @@ type Edict_s interface {
 	S() *Entity_state_t
 	Client() Gclient_s
 	Inuse() bool
-	// int linkcount;
+	Linkcount() int
+	SetLinkcount(v int)
 
-	// link_t area;                    /* linked to a division node or leaf */
+	Area() *Link_t /* linked to a division node or leaf */
 
 	NumClusters() int /* if -1, use headnode instead */
+	SetNumClusters(v int)
 	Clusternums() []int
 	Headnode() int /* unused if num_clusters != -1 */
+	SetHeadnode(v int)
 	Areanum() int
+	SetAreanum(v int)
 	Areanum2() int
+	SetAreanum2(v int)
 
 	Svflags() int /* SVF_NOCLIENT, SVF_DEADMONSTER, SVF_MONSTER, etc */
-	// vec3_t mins, maxs;
-	// vec3_t absmin, absmax, size;
-	// solid_t solid;
+	Mins() []float32
+	Maxs() []float32
+	Absmin() []float32
+	Absmax() []float32
+	Size() []float32
+	Solid() Solid_t
 	// int clipmask;
 	Owner() Edict_s
 	// edict_t *owner;
@@ -116,10 +124,10 @@ type Game_import_t interface {
 
 	Error(format string, a ...interface{}) error
 
-	// /* the *index functions create configstrings
-	//    and some internal server state */
+	/* the *index functions create configstrings
+	   and some internal server state */
 	// int (*modelindex)(char *name);
-	// int (*soundindex)(char *name);
+	Soundindex(name string) int
 	// int (*imageindex)(char *name);
 
 	// void (*setmodel)(edict_t *ent, char *name);
@@ -133,10 +141,10 @@ type Game_import_t interface {
 	// void (*SetAreaPortalState)(int portalnum, qboolean open);
 	// qboolean (*AreasConnected)(int area1, int area2);
 
-	// /* an entity will never be sent to a client or used for collision
-	//    if it is not passed to linkentity. If the size, position, or
-	//    solidity changes, it must be relinked. */
-	// void (*linkentity)(edict_t *ent);
+	/* an entity will never be sent to a client or used for collision
+	   if it is not passed to linkentity. If the size, position, or
+	   solidity changes, it must be relinked. */
+	Linkentity(ent Edict_s)
 	// void (*unlinkentity)(edict_t *ent); /* call before removing an interactive edict */
 	// int (*BoxEdicts)(vec3_t mins, vec3_t maxs, edict_t **list, int maxcount,
 	// 		int areatype);
@@ -203,14 +211,14 @@ type Game_export_t interface {
 	// void (*WriteLevel)(char *filename);
 	// void (*ReadLevel)(char *filename);
 
-	// qboolean (*ClientConnect)(edict_t *ent, char *userinfo);
-	// void (*ClientBegin)(edict_t *ent);
+	ClientConnect(ent Edict_s, userinfo string) bool
+	ClientBegin(ent Edict_s) error
 	// void (*ClientUserinfoChanged)(edict_t *ent, char *userinfo);
 	// void (*ClientDisconnect)(edict_t *ent);
 	// void (*ClientCommand)(edict_t *ent);
 	// void (*ClientThink)(edict_t *ent, usercmd_t *cmd);
 
-	// void (*RunFrame)(void);
+	RunFrame() error
 
 	// /* ServerCommand will be called when an "sv <command>"
 	//    command is issued on the  server console. The game can

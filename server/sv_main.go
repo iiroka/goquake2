@@ -181,7 +181,7 @@ func (T *qServer) readPackets() error {
 	}
 }
 
-func (T *qServer) runGameFrame() {
+func (T *qServer) runGameFrame() error {
 	// #ifndef DEDICATED_ONLY
 	// 	if (host_speeds->value)
 	// 	{
@@ -198,7 +198,9 @@ func (T *qServer) runGameFrame() {
 
 	/* don't run if paused */
 	if !T.sv_paused.Bool() || (T.maxclients.Int() > 1) {
-		// 		ge->RunFrame();
+		if err := T.ge.RunFrame(); err != nil {
+			return err
+		}
 
 		/* never get more than one tic behind */
 		if int(T.sv.time) < T.svs.realtime {
@@ -216,6 +218,7 @@ func (T *qServer) runGameFrame() {
 	// 		time_after_game = Sys_Milliseconds();
 	// 	}
 	// #endif
+	return nil
 }
 
 func (T *qServer) Frame(usec int) error {
@@ -231,7 +234,7 @@ func (T *qServer) Frame(usec int) error {
 	/* keep the random time dependent */
 	shared.Randk()
 
-	// /* check timeouts */
+	/* check timeouts */
 	// SV_CheckTimeouts();
 
 	/* get packets from clients */
@@ -254,25 +257,27 @@ func (T *qServer) Frame(usec int) error {
 		return nil
 	}
 
-	// /* update ping based on the last known frame from all clients */
+	/* update ping based on the last known frame from all clients */
 	// SV_CalcPings();
 
-	// /* give the clients some timeslices */
+	/* give the clients some timeslices */
 	// SV_GiveMsec();
 
 	/* let everything in the world think and move */
-	T.runGameFrame()
+	if err := T.runGameFrame(); err != nil {
+		return err
+	}
 
 	/* send messages back to the clients that had packets read this frame */
 	T.svSendClientMessages()
 
-	// /* save the entire world state if recording a serverdemo */
+	/* save the entire world state if recording a serverdemo */
 	// SV_RecordDemoMessage();
 
-	// /* send a heartbeat to the master if needed */
+	/* send a heartbeat to the master if needed */
 	// Master_Heartbeat();
 
-	// /* clear teleport flags, etc for next frame */
+	/* clear teleport flags, etc for next frame */
 	// SV_PrepWorldFrame();
 	return nil
 }

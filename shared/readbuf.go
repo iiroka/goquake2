@@ -176,6 +176,54 @@ func (msg *QReadbuf) ReadDir() []float32 {
 	return bytedirs[b]
 }
 
+func (msg *QReadbuf) ReadDeltaUsercmd(from, move *Usercmd_t) {
+
+	move.Copy(*from)
+
+	bits := msg.ReadByte()
+
+	/* read current angles */
+	if (bits & CM_ANGLE1) != 0 {
+		move.Angles[0] = int16(msg.ReadShort())
+	}
+
+	if (bits & CM_ANGLE2) != 0 {
+		move.Angles[1] = int16(msg.ReadShort())
+	}
+
+	if (bits & CM_ANGLE3) != 0 {
+		move.Angles[2] = int16(msg.ReadShort())
+	}
+
+	/* read movement */
+	if (bits & CM_FORWARD) != 0 {
+		move.Forwardmove = int16(msg.ReadShort())
+	}
+
+	if (bits & CM_SIDE) != 0 {
+		move.Sidemove = int16(msg.ReadShort())
+	}
+
+	if (bits & CM_UP) != 0 {
+		move.Upmove = int16(msg.ReadShort())
+	}
+
+	/* read buttons */
+	if (bits & CM_BUTTONS) != 0 {
+		move.Buttons = byte(msg.ReadByte())
+	}
+
+	if (bits & CM_IMPULSE) != 0 {
+		move.Impulse = byte(msg.ReadByte())
+	}
+
+	/* read time to run command */
+	move.Msec = byte(msg.ReadByte())
+
+	/* read the light level */
+	move.Lightlevel = byte(msg.ReadByte())
+}
+
 var bytedirs = [][]float32{
 	{-0.525731, 0.000000, 0.850651},
 	{-0.442863, 0.238856, 0.864188},

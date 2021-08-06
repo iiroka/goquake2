@@ -25,6 +25,60 @@
  */
 package game
 
+import (
+	"fmt"
+	"reflect"
+)
+
+/*
+ * Searches all active entities for the next
+ * one that holds the matching string at fieldofs
+ * (use the FOFS() macro) in the structure.
+ *
+ * Searches beginning at the edict after from, or
+ * the beginning. If NULL, NULL will be returned
+ * if the end of the list is reached.
+ */
+func (G *qGame) gFind(from *edict_t, fname, match string) *edict_t {
+
+	var index int = 0
+	if from != nil {
+		index = from.index + 1
+	}
+
+	if len(match) == 0 {
+		return nil
+	}
+
+	for ; index < G.num_edicts; index++ {
+		if !G.g_edicts[index].inuse {
+			continue
+		}
+
+		b := reflect.ValueOf(&G.g_edicts[index]).Elem()
+		f := b.FieldByName(fname)
+
+		if !f.IsValid() || f.Kind() != reflect.String {
+			continue
+		}
+
+		s := f.String()
+		if s == match {
+			return &G.g_edicts[index]
+		}
+	}
+
+	return nil
+}
+
+/*
+ * This is just a convenience function
+ * for printing vectors
+ */
+func vtos(v []float32) string {
+	return fmt.Sprintf("(%v %v %v)", int(v[0]), int(v[1]), int(v[2]))
+}
+
 func G_InitEdict(e *edict_t, index int) {
 	e.inuse = true
 	e.Classname = "noclass"

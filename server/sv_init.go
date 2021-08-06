@@ -31,6 +31,45 @@ import (
 	"strings"
 )
 
+func (T *qServer) svFindIndex(name string, start, max int, create bool) int {
+
+	if len(name) == 0 {
+		return 0
+	}
+
+	index := -1
+	for i := 1; i < max; i++ {
+		if len(T.sv.configstrings[start+i]) == 0 {
+			index = i
+			break
+		}
+		if T.sv.configstrings[start+i] == name {
+			return i
+		}
+	}
+
+	if !create {
+		return 0
+	}
+
+	if index < 0 {
+		T.common.Com_Error(shared.ERR_DROP, "*Index: overflow")
+		return 0
+	}
+
+	T.sv.configstrings[start+index] = name
+
+	if T.sv.state != ss_loading {
+		/* send the update to everyone */
+		// MSG_WriteChar(&sv.multicast, svc_configstring)
+		// MSG_WriteShort(&sv.multicast, start+i)
+		// MSG_WriteString(&sv.multicast, name)
+		// SV_Multicast(vec3_origin, MULTICAST_ALL_R)
+	}
+
+	return index
+}
+
 /*
  * Entity baselines are used to compress the update messages
  * to the clients -- only the fields that differ from the
@@ -135,8 +174,8 @@ func (T *qServer) spawnServer(server, spawnpoint string, serverstate server_stat
 	// 		 sizeof(sv.configstrings[CS_MAPCHECKSUM]),
 	// 		 "%i", checksum);
 
-	//  /* clear physics interaction links */
-	//  SV_ClearWorld();
+	/* clear physics interaction links */
+	T.svClearWorld()
 
 	//  for (i = 1; i < CM_NumInlineModels(); i++)
 	//  {
@@ -155,9 +194,13 @@ func (T *qServer) spawnServer(server, spawnpoint string, serverstate server_stat
 		return err
 	}
 
-	//  /* run two frames to allow everything to settle */
-	//  ge->RunFrame();
-	//  ge->RunFrame();
+	/* run two frames to allow everything to settle */
+	if err := T.ge.RunFrame(); err != nil {
+		return err
+	}
+	if err := T.ge.RunFrame(); err != nil {
+		return err
+	}
 
 	//  /* verify game didn't clobber important stuff */
 	//  if ((int)checksum !=

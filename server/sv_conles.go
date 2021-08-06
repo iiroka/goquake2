@@ -202,23 +202,22 @@ func (T *qServer) directConnect(args []string, adr shared.Netadr_t) error {
 	T.svs.clients[index].challenge = int(challenge) /* save challenge for checksumming */
 
 	// 	 /* get the game a chance to reject this connection or modify the userinfo */
-	// 	 if (!(ge->ClientConnect(ent, userinfo)))
-	// 	 {
-	// 		 if (*Info_ValueForKey(userinfo, "rejmsg"))
-	// 		 {
-	// 			 Netchan_OutOfBandPrint(NS_SERVER, adr,
-	// 					 "print\n%s\nConnection refused.\n",
-	// 					 Info_ValueForKey(userinfo, "rejmsg"));
-	// 		 }
-	// 		 else
-	// 		 {
-	// 			 Netchan_OutOfBandPrint(NS_SERVER, adr,
-	// 					 "print\nConnection refused.\n");
-	// 		 }
+	if !(T.ge.ClientConnect(ent, userinfo)) {
+		// 		 if (*Info_ValueForKey(userinfo, "rejmsg"))
+		// 		 {
+		// 			 Netchan_OutOfBandPrint(NS_SERVER, adr,
+		// 					 "print\n%s\nConnection refused.\n",
+		// 					 Info_ValueForKey(userinfo, "rejmsg"));
+		// 		 }
+		// 		 else
+		// 		 {
+		// 			 Netchan_OutOfBandPrint(NS_SERVER, adr,
+		// 					 "print\nConnection refused.\n");
+		// 		 }
 
-	// 		 Com_DPrintf("Game rejected a connection.\n");
-	// 		 return;
-	// 	 }
+		T.common.Com_DPrintf("Game rejected a connection.\n")
+		return nil
+	}
 
 	/* parse some info from the info strings */
 	T.svs.clients[index].userinfo = userinfo

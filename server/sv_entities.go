@@ -33,12 +33,6 @@ import "goquake2/shared"
  * Writes a delta update of an entity_state_t list to the message.
  */
 func (T *qServer) svEmitPacketEntities(from, to *client_frame_t, msg *shared.QWritebuf) {
-	//  entity_state_t *oldent, *newent;
-	//  int oldindex, newindex;
-	//  int oldnum, newnum;
-	//  int from_num_entities;
-	//  int bits;
-
 	msg.WriteByte(shared.SvcPacketentities)
 
 	var from_num_entities int

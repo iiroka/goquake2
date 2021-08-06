@@ -216,7 +216,9 @@ func sv_Begin_f(args []string, T *qServer) error {
 	T.sv_client.state = cs_spawned
 
 	/* call the game begin function */
-	// ge.ClientBegin(sv_player);
+	if err := T.ge.ClientBegin(T.sv_player); err != nil {
+		return err
+	}
 
 	// Cbuf_InsertFromDefer();
 	return nil
@@ -285,7 +287,7 @@ func (T *qServer) executeUserCommand(s string) error {
 	   macro expand variables on the server.  It seems unlikely that a
 	   client ever ought to need to be able to do this... */
 	args := T.common.Cmd_TokenizeString(s, false)
-	// sv_player = sv_client->edict;
+	T.sv_player = T.sv_client.edict
 
 	if u, ok := ucmds[args[0]]; ok {
 		return u(args, T)
@@ -319,7 +321,7 @@ func (T *qServer) executeClientMessage(cl *client_t, msg *shared.QReadbuf) error
 	//  sv_player = sv_client->edict;
 
 	/* only allow one move command */
-	//  move_issued = false;
+	move_issued := false
 	stringCmdCount := 0
 
 	for {
@@ -345,39 +347,38 @@ func (T *qServer) executeClientMessage(cl *client_t, msg *shared.QReadbuf) error
 			// 			 SV_UserinfoChanged(cl);
 			// 			 break;
 
-			// 		 case clc_move:
+		case shared.ClcMove:
 
-			// 			 if (move_issued)
-			// 			 {
-			// 				 return; /* someone is trying to cheat... */
-			// 			 }
+			if move_issued {
+				return nil /* someone is trying to cheat... */
+			}
 
-			// 			 move_issued = true;
+			move_issued = true
 			// 			 checksumIndex = net_message.readcount;
-			// 			 checksum = MSG_ReadByte(&net_message);
-			// 			 lastframe = MSG_ReadLong(&net_message);
+			_ = msg.ReadByte()
+			lastframe := msg.ReadLong()
 
-			// 			 if (lastframe != cl->lastframe)
-			// 			 {
-			// 				 cl->lastframe = lastframe;
+			if lastframe != cl.lastframe {
+				cl.lastframe = lastframe
 
-			// 				 if (cl->lastframe > 0)
-			// 				 {
-			// 					 cl->frame_latency[cl->lastframe & (LATENCY_COUNTS - 1)] =
-			// 						 svs.realtime - cl->frames[cl->lastframe & UPDATE_MASK].senttime;
-			// 				 }
-			// 			 }
+				// if cl.lastframe > 0 {
+				// 	cl.frame_latency[cl.lastframe&(LATENCY_COUNTS-1)] =
+				// 		svs.realtime - cl.frames[cl.lastframe&UPDATE_MASK].senttime
+				// }
+			}
 
 			// 			 memset(&nullcmd, 0, sizeof(nullcmd));
-			// 			 MSG_ReadDeltaUsercmd(&net_message, &nullcmd, &oldest);
-			// 			 MSG_ReadDeltaUsercmd(&net_message, &oldest, &oldcmd);
-			// 			 MSG_ReadDeltaUsercmd(&net_message, &oldcmd, &newcmd);
+			oldest := shared.Usercmd_t{}
+			msg.ReadDeltaUsercmd(&shared.Usercmd_t{}, &oldest)
+			oldcmd := shared.Usercmd_t{}
+			msg.ReadDeltaUsercmd(&oldest, &oldcmd)
+			newcmd := shared.Usercmd_t{}
+			msg.ReadDeltaUsercmd(&oldcmd, &newcmd)
 
-			// 			 if (cl->state != cs_spawned)
-			// 			 {
-			// 				 cl->lastframe = -1;
-			// 				 break;
-			// 			 }
+			if cl.state != cs_spawned {
+				cl.lastframe = -1
+				break
+			}
 
 			// 			 /* if the checksum fails, ignore the rest of the packet */
 			// 			 calculatedChecksum = COM_BlockSequenceCRCByte(
@@ -385,34 +386,28 @@ func (T *qServer) executeClientMessage(cl *client_t, msg *shared.QReadbuf) error
 			// 				 net_message.readcount - checksumIndex - 1,
 			// 				 cl->netchan.incoming_sequence);
 
-			// 			 if (calculatedChecksum != checksum)
-			// 			 {
+			// 			 if (calculatedChecksum != checksum) {
 			// 				 Com_DPrintf("Failed command checksum for %s (%d != %d)/%d\n",
 			// 						 cl->name, calculatedChecksum, checksum,
 			// 						 cl->netchan.incoming_sequence);
 			// 				 return;
 			// 			 }
 
-			// 			 if (!sv_paused->value)
-			// 			 {
+			// 			 if (!sv_paused->value) {
 			// 				 net_drop = cl->netchan.dropped;
 
-			// 				 if (net_drop < 20)
-			// 				 {
-			// 					 while (net_drop > 2)
-			// 					 {
+			// 				 if (net_drop < 20) {
+			// 					 while (net_drop > 2) {
 			// 						 SV_ClientThink(cl, &cl->lastcmd);
 
 			// 						 net_drop--;
 			// 					 }
 
-			// 					 if (net_drop > 1)
-			// 					 {
+			// 					 if (net_drop > 1) {
 			// 						 SV_ClientThink(cl, &oldest);
 			// 					 }
 
-			// 					 if (net_drop > 0)
-			// 					 {
+			// 					 if (net_drop > 0) {
 			// 						 SV_ClientThink(cl, &oldcmd);
 			// 					 }
 			// 				 }
@@ -420,8 +415,7 @@ func (T *qServer) executeClientMessage(cl *client_t, msg *shared.QReadbuf) error
 			// 				 SV_ClientThink(cl, &newcmd);
 			// 			 }
 
-			// 			 cl->lastcmd = newcmd;
-			// 			 break;
+			// cl.lastcmd = newcmd
 
 		case shared.ClcStringcmd:
 			s := msg.ReadString()

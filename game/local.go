@@ -27,6 +27,25 @@ package game
 
 import "goquake2/shared"
 
+const FRAMETIME = 0.1
+
+/* edict->movetype values */
+type movetype_t int
+
+const (
+	MOVETYPE_NONE   movetype_t = 0 /* never moves */
+	MOVETYPE_NOCLIP movetype_t = 1 /* origin and angles change with no interaction */
+	MOVETYPE_PUSH   movetype_t = 2 /* no clip to world, push on box contact */
+	MOVETYPE_STOP   movetype_t = 3 /* no clip to world, stops on box contact */
+
+	MOVETYPE_WALK       movetype_t = 4 /* gravity */
+	MOVETYPE_STEP       movetype_t = 5 /* gravity, special edge handling */
+	MOVETYPE_FLY        movetype_t = 6
+	MOVETYPE_TOSS       movetype_t = 7 /* gravity */
+	MOVETYPE_FLYMISSILE movetype_t = 8 /* extra size to monsters */
+	MOVETYPE_BOUNCE     movetype_t = 9
+)
+
 /* this structure is left intact through an entire game
    it should be initialized at dll load time, and read/written to
    the server.ssv file for savegames */
@@ -112,7 +131,7 @@ type spawn_temp_t struct {
 	//    int lip;
 	//    int distance;
 	//    int height;
-	//    char *noise;
+	Noise string
 	//    float pausetime;
 	//    char *item;
 	//    char *gravity;
@@ -129,6 +148,83 @@ type gclient_t struct {
 	/* known to server */
 	ps   shared.Player_state_t /* communicated by server to clients */
 	ping int
+
+	// /* private to game */
+	// client_persistant_t pers;
+	// client_respawn_t resp;
+	// pmove_state_t old_pmove; /* for detecting out-of-pmove changes */
+
+	// qboolean showscores; /* set layout stat */
+	// qboolean showinventory; /* set layout stat */
+	// qboolean showhelp;
+	// qboolean showhelpicon;
+
+	// int ammo_index;
+
+	// int buttons;
+	// int oldbuttons;
+	latched_buttons int
+
+	// qboolean weapon_thunk;
+
+	// gitem_t *newweapon;
+
+	// /* sum up damage over an entire frame, so
+	//    shotgun blasts give a single big kick */
+	// int damage_armor; /* damage absorbed by armor */
+	// int damage_parmor; /* damage absorbed by power armor */
+	// int damage_blood; /* damage taken out of health */
+	// int damage_knockback; /* impact damage */
+	// vec3_t damage_from; /* origin for vector calculation */
+
+	// float killer_yaw; /* when dead, look at killer */
+
+	// weaponstate_t weaponstate;
+	// vec3_t kick_angles; /* weapon kicks */
+	// vec3_t kick_origin;
+	// float v_dmg_roll, v_dmg_pitch, v_dmg_time; /* damage kicks */
+	// float fall_time, fall_value; /* for view drop on fall */
+	// float damage_alpha;
+	// float bonus_alpha;
+	// vec3_t damage_blend;
+	// vec3_t v_angle; /* aiming direction */
+	// float bobtime; /* so off-ground doesn't change it */
+	// vec3_t oldviewangles;
+	// vec3_t oldvelocity;
+
+	// float next_drown_time;
+	// int old_waterlevel;
+	// int breather_sound;
+
+	// int machinegun_shots; /* for weapon raising */
+
+	// /* animation vars */
+	// int anim_end;
+	// int anim_priority;
+	// qboolean anim_duck;
+	// qboolean anim_run;
+
+	// /* powerup timers */
+	// float quad_framenum;
+	// float invincible_framenum;
+	// float breather_framenum;
+	// float enviro_framenum;
+
+	// qboolean grenade_blew_up;
+	// float grenade_time;
+	// int silencer_shots;
+	// int weapon_sound;
+
+	// float pickup_msg_time;
+
+	// float flood_locktill; /* locked from talking */
+	// float flood_when[10]; /* when messages were said */
+	// int flood_whenhead; /* head pointer for when said */
+
+	// float respawn_time; /* can respawn when time > this */
+
+	// edict_t *chase_target; /* player we are chasing */
+	// qboolean update_chase; /* need to update chase info? */
 }
 
 func (G *gclient_t) Ps() *shared.Player_state_t {
@@ -140,6 +236,7 @@ func (G *gclient_t) Ping() int {
 }
 
 type edict_t struct {
+	index  int
 	s      shared.Entity_state_t
 	client *gclient_t /* NULL if not a player
 	   the server expects the first part
@@ -149,7 +246,7 @@ type edict_t struct {
 	inuse     bool
 	linkcount int
 
-	// link_t area; /* linked to a division node or leaf */
+	area shared.Link_t /* linked to a division node or leaf */
 
 	num_clusters      int /* if -1, use headnode instead */
 	clusternums       [shared.MAX_ENT_CLUSTERS]int
@@ -158,10 +255,10 @@ type edict_t struct {
 
 	/* ================================ */
 
-	svflags int
-	// vec3_t mins, maxs;
-	// vec3_t absmin, absmax, size;
-	solid shared.Solid_t
+	svflags              int
+	mins, maxs           [3]float32
+	absmin, absmax, size [3]float32
+	solid                shared.Solid_t
 	// int clipmask;
 	owner *edict_t
 
@@ -169,8 +266,8 @@ type edict_t struct {
 	// /* EXPECTS THE FIELDS IN THAT ORDER! */
 
 	/* ================================ */
-	// int movetype;
-	// int flags;
+	movetype movetype_t
+	flags    int
 
 	Model    string
 	freetime float32 /* sv.time when the object was freed */
@@ -208,7 +305,7 @@ type edict_t struct {
 	// float yaw_speed;
 	// float ideal_yaw;
 
-	// float nextthink;
+	nextthink float32
 	// void (*prethink)(edict_t *ent);
 	// void (*think)(edict_t *self);
 	// void (*blocked)(edict_t *self, edict_t *other);
@@ -255,12 +352,12 @@ type edict_t struct {
 	// edict_t *mynoise; /* can go in client only */
 	// edict_t *mynoise2;
 
-	// int noise_index;
-	// int noise_index2;
-	// float volume;
-	// float attenuation;
+	noise_index  int
+	noise_index2 int
+	volume       float32
+	attenuation  float32
 
-	// /* timing variables */
+	/* timing variables */
 	// float wait;
 	// float delay; /* before firing targets */
 	// float random;
@@ -293,16 +390,56 @@ func (G *edict_t) Client() shared.Gclient_s {
 	return G.client
 }
 
+func (G *edict_t) Area() *shared.Link_t {
+	return &G.area
+}
+
 func (G *edict_t) Inuse() bool {
 	return G.inuse
+}
+
+func (G *edict_t) Linkcount() int {
+	return G.linkcount
+}
+
+func (G *edict_t) SetLinkcount(v int) {
+	G.linkcount = v
 }
 
 func (G *edict_t) Svflags() int {
 	return G.svflags
 }
 
+func (G *edict_t) Mins() []float32 {
+	return G.mins[:]
+}
+
+func (G *edict_t) Maxs() []float32 {
+	return G.maxs[:]
+}
+
+func (G *edict_t) Absmin() []float32 {
+	return G.absmin[:]
+}
+
+func (G *edict_t) Absmax() []float32 {
+	return G.absmax[:]
+}
+
+func (G *edict_t) Size() []float32 {
+	return G.size[:]
+}
+
+func (G *edict_t) Solid() shared.Solid_t {
+	return G.solid
+}
+
 func (G *edict_t) NumClusters() int {
 	return G.num_clusters
+}
+
+func (G *edict_t) SetNumClusters(v int) {
+	G.num_clusters = v
 }
 
 func (G *edict_t) Clusternums() []int {
@@ -313,12 +450,24 @@ func (G *edict_t) Headnode() int {
 	return G.headnode
 }
 
+func (G *edict_t) SetHeadnode(v int) {
+	G.headnode = v
+}
+
 func (G *edict_t) Areanum() int {
 	return G.areanum
 }
 
+func (G *edict_t) SetAreanum(v int) {
+	G.areanum = v
+}
+
 func (G *edict_t) Areanum2() int {
 	return G.areanum2
+}
+
+func (G *edict_t) SetAreanum2(v int) {
+	G.areanum2 = v
 }
 
 func (G *edict_t) Owner() shared.Edict_s {

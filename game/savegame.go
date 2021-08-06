@@ -140,6 +140,9 @@ func (G *qGame) Init() {
 	/* initialize all entities for this game */
 	G.game.maxentities = G.maxentities.Int()
 	G.g_edicts = make([]edict_t, G.maxentities.Int()) //gi.TagMalloc(game.maxentities * sizeof(g_edicts[0]), TAG_GAME);
+	for i := range G.g_edicts {
+		G.g_edicts[i].index = i
+	}
 
 	// /* initialize all clients for this game */
 	G.game.maxclients = G.maxclients.Int()
@@ -218,7 +221,7 @@ var fields = []field_t{
 	// {"lip", STOFS(lip), F_INT, FFL_SPAWNTEMP},
 	// {"distance", STOFS(distance), F_INT, FFL_SPAWNTEMP},
 	// {"height", STOFS(height), F_INT, FFL_SPAWNTEMP},
-	// {"noise", STOFS(noise), F_LSTRING, FFL_SPAWNTEMP},
+	{"noise", "Noise", F_LSTRING, FFL_SPAWNTEMP},
 	// {"pausetime", STOFS(pausetime), F_FLOAT, FFL_SPAWNTEMP},
 	// {"item", STOFS(item), F_LSTRING, FFL_SPAWNTEMP},
 	// {"item", FOFS(item), F_ITEM},

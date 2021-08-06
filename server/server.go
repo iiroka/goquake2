@@ -189,6 +189,16 @@ type qServer struct {
 	ge shared.Game_export_t
 
 	fatpvs [65536 / 8]byte
+
+	sv_areanodes    [AREA_NODES]areanode_t
+	sv_numareanodes int
+
+	area_mins, area_maxs      []float32
+	area_list                 []shared.Edict_s
+	area_count, area_maxcount int
+	area_type                 int
+
+	sv_player shared.Edict_s
 }
 
 func CreateServer() shared.QServer {

@@ -70,6 +70,14 @@ func (G *qGameImp) Configstring(num int, str string) error {
 	return nil
 }
 
+func (G *qGameImp) Soundindex(name string) int {
+	return G.T.svFindIndex(name, shared.CS_SOUNDS, shared.MAX_SOUNDS, true)
+}
+
+func (G *qGameImp) Linkentity(ent shared.Edict_s) {
+	G.T.svLinkEdict(ent)
+}
+
 /*
  * Init the game subsystem for a new map
  */

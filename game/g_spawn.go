@@ -34,8 +34,10 @@ import (
 )
 
 var spawns = map[string]func(ent *edict_t, G *qGame) error{
-	"worldspawn": spWorldspawn,
-	"light":      spLight,
+	"info_player_start": spInfoPlayerStart,
+	"target_speaker":    spTargetSpeaker,
+	"worldspawn":        spWorldspawn,
+	"light":             spLight,
 }
 
 /*
@@ -195,6 +197,187 @@ func (G *qGame) edParseEdict(data string, index int, ent *edict_t) (int, error) 
 	return index, nil
 }
 
+/*
+ * Creates a server's entity / program execution context by
+ * parsing textual entity definitions out of an ent file.
+ */
+func (G *qGame) SpawnEntities(mapname, entities, spawnpoint string) error {
+	//  edict_t *ent;
+	//  int inhibit;
+	//  const char *com_token;
+	//  int i;
+	//  float skill_level;
+	//  static qboolean monster_count_city2 = false;
+	//  static qboolean monster_count_city3 = false;
+	//  static qboolean monster_count_cool1 = false;
+	//  static qboolean monster_count_lab = false;
+
+	//  if (!mapname || !entities || !spawnpoint)
+	//  {
+	// 	 return;
+	//  }
+
+	skill_level := math.Floor(float64(G.skill.Float()))
+
+	if skill_level < 0 {
+		skill_level = 0
+	}
+
+	if skill_level > 3 {
+		skill_level = 3
+	}
+
+	if float64(G.skill.Float()) != skill_level {
+		//  gi.cvar_forceset("skill", va("%f", skill_level));
+	}
+
+	//  SaveClientData();
+
+	//  gi.FreeTags(TAG_LEVEL);
+
+	G.level = level_locals_t{}
+	G.g_edicts = make([]edict_t, G.maxentities.Int())
+	for i := range G.g_edicts {
+		G.g_edicts[i].index = i
+	}
+
+	G.level.mapname = mapname
+	G.game.spawnpoint = spawnpoint
+
+	/* set client fields on player ents */
+	for i := 0; i < G.game.maxclients; i++ {
+		G.g_edicts[i+1].client = &G.game.clients[i]
+	}
+
+	var ent *edict_t
+	inhibit := 0
+
+	/* parse ents */
+	index := 0
+	var err error
+	for index >= 0 && index < len(entities) {
+		// 	 /* parse the opening brace */
+		var token string
+		token, index = shared.COM_Parse(entities, index)
+		if index < 0 {
+			break
+		}
+
+		if token[0] != '{' {
+			return G.gi.Error("ED_LoadFromFile: found %s when expecting {", token)
+		}
+
+		if ent == nil {
+			ent = &G.g_edicts[0]
+		} else {
+			ent, err = G.gSpawn()
+			if err != nil {
+				return err
+			}
+		}
+
+		index, err = G.edParseEdict(entities, index, ent)
+		if err != nil {
+			return err
+		}
+
+		// 	 /* yet another map hack */
+		// 	 if (!Q_stricmp(level.mapname, "command") &&
+		// 		 !Q_stricmp(ent->classname, "trigger_once") &&
+		// 			!Q_stricmp(ent->model, "*27")) {
+		// 		 ent->spawnflags &= ~SPAWNFLAG_NOT_HARD;
+		// 	 }
+
+		/*
+		 * The 'monsters' count in city3.bsp is wrong.
+		 * There're two monsters triggered in a hidden
+		 * and unreachable room next to the security
+		 * pass.
+		 *
+		 * We need to make sure that this hack is only
+		 * applied once!
+		 */
+		// 	 if (!Q_stricmp(level.mapname, "city3") && !monster_count_city3)
+		// 	 {
+		// 		 level.total_monsters = level.total_monsters - 2;
+		// 		 monster_count_city3 = true;
+		// 	 }
+
+		/* A slightly other problem in city2.bsp. There's a floater
+		 * with missing trigger on the right gallery above the data
+		 * spinner console, right before the door to the staircase.
+		 */
+		// 	 if ((skill->value > 0) && !Q_stricmp(level.mapname, "city2") && !monster_count_city2)
+		// 	 {
+		// 		 level.total_monsters = level.total_monsters - 1;
+		// 		 monster_count_city2 = true;
+		// 	 }
+
+		/*
+		 * Nearly the same problem exists in cool1.bsp.
+		 * On medium skill a gladiator is spawned in a
+		 * crate that's never triggered.
+		 */
+		// 	 if ((skill->value == 1) && !Q_stricmp(level.mapname, "cool1") && !monster_count_cool1)
+		// 	 {
+		// 		 level.total_monsters = level.total_monsters - 1;
+		// 		 monster_count_cool1 = true;
+		// 	 }
+
+		/*
+		 * Nearly the same problem exists in lab.bsp.
+		 * On medium skill two parasites are spawned
+		 * in a hidden place that never triggers.
+		 */
+		// 	 if ((skill->value == 1) && !Q_stricmp(level.mapname, "lab") && !monster_count_lab)
+		// 	 {
+		// 		 level.total_monsters = level.total_monsters - 2;
+		// 		 monster_count_lab = true;
+		// 	 }
+
+		/* remove things (except the world) from
+		different skill levels or deathmatch */
+		// 	 if (ent != g_edicts) {
+		// 		 if (deathmatch->value) {
+		// 			 if (ent->spawnflags & SPAWNFLAG_NOT_DEATHMATCH) != 0 {
+		// 				 G_FreeEdict(ent);
+		// 				 inhibit++;
+		// 				 continue;
+		// 			 }
+		// 		 } else {
+		// 			 if (((skill->value == SKILL_EASY) &&
+		// 				  (ent->spawnflags & SPAWNFLAG_NOT_EASY)) ||
+		// 				 ((skill->value == SKILL_MEDIUM) &&
+		// 				  (ent->spawnflags & SPAWNFLAG_NOT_MEDIUM)) ||
+		// 				 (((skill->value == SKILL_HARD) ||
+		// 				   (skill->value == SKILL_HARDPLUS)) &&
+		// 				  (ent->spawnflags & SPAWNFLAG_NOT_HARD))
+		// 				 ) {
+		// 				 G_FreeEdict(ent);
+		// 				 inhibit++;
+		// 				 continue;
+		// 			 }
+		// 		 }
+
+		// 		 ent->spawnflags &=
+		// 			 ~(SPAWNFLAG_NOT_EASY | SPAWNFLAG_NOT_MEDIUM |
+		// 			   SPAWNFLAG_NOT_HARD |
+		// 			   SPAWNFLAG_NOT_COOP | SPAWNFLAG_NOT_DEATHMATCH);
+		// 	 }
+
+		if err := G.edCallSpawn(ent); err != nil {
+			return err
+		}
+	}
+
+	G.gi.Dprintf("%v entities inhibited.\n", inhibit)
+
+	//  G_FindTeams();
+
+	//  PlayerTrail_Init();
+	return nil
+}
+
 /* =================================================================== */
 
 const single_statusbar = "yb	-24 " +
@@ -330,184 +513,6 @@ const dm_statusbar = "yb	-24 " +
 	"stat_string 16 " +
 	"endif "
 
-/*
- * Creates a server's entity / program execution context by
- * parsing textual entity definitions out of an ent file.
- */
-func (G *qGame) SpawnEntities(mapname, entities, spawnpoint string) error {
-	//  edict_t *ent;
-	//  int inhibit;
-	//  const char *com_token;
-	//  int i;
-	//  float skill_level;
-	//  static qboolean monster_count_city2 = false;
-	//  static qboolean monster_count_city3 = false;
-	//  static qboolean monster_count_cool1 = false;
-	//  static qboolean monster_count_lab = false;
-
-	//  if (!mapname || !entities || !spawnpoint)
-	//  {
-	// 	 return;
-	//  }
-
-	skill_level := math.Floor(float64(G.skill.Float()))
-
-	if skill_level < 0 {
-		skill_level = 0
-	}
-
-	if skill_level > 3 {
-		skill_level = 3
-	}
-
-	if float64(G.skill.Float()) != skill_level {
-		//  gi.cvar_forceset("skill", va("%f", skill_level));
-	}
-
-	//  SaveClientData();
-
-	//  gi.FreeTags(TAG_LEVEL);
-
-	//  memset(&level, 0, sizeof(level));
-	//  memset(g_edicts, 0, game.maxentities * sizeof(g_edicts[0]));
-
-	//  Q_strlcpy(level.mapname, mapname, sizeof(level.mapname));
-	//  Q_strlcpy(game.spawnpoint, spawnpoint, sizeof(game.spawnpoint));
-
-	/* set client fields on player ents */
-	for i := 0; i < G.game.maxclients; i++ {
-		G.g_edicts[i+1].client = &G.game.clients[i]
-	}
-
-	var ent *edict_t
-	inhibit := 0
-
-	/* parse ents */
-	index := 0
-	var err error
-	for index >= 0 && index < len(entities) {
-		// 	 /* parse the opening brace */
-		var token string
-		token, index = shared.COM_Parse(entities, index)
-		if index < 0 {
-			break
-		}
-
-		if token[0] != '{' {
-			return G.gi.Error("ED_LoadFromFile: found %s when expecting {", token)
-		}
-
-		if ent == nil {
-			ent = &G.g_edicts[0]
-		} else {
-			ent, err = G.gSpawn()
-			if err != nil {
-				return err
-			}
-		}
-
-		index, err = G.edParseEdict(entities, index, ent)
-		if err != nil {
-			return err
-		}
-
-		// 	 /* yet another map hack */
-		// 	 if (!Q_stricmp(level.mapname, "command") &&
-		// 		 !Q_stricmp(ent->classname, "trigger_once") &&
-		// 			!Q_stricmp(ent->model, "*27")) {
-		// 		 ent->spawnflags &= ~SPAWNFLAG_NOT_HARD;
-		// 	 }
-
-		// 	 /*
-		// 	  * The 'monsters' count in city3.bsp is wrong.
-		// 	  * There're two monsters triggered in a hidden
-		// 	  * and unreachable room next to the security
-		// 	  * pass.
-		// 	  *
-		// 	  * We need to make sure that this hack is only
-		// 	  * applied once!
-		// 	  */
-		// 	 if (!Q_stricmp(level.mapname, "city3") && !monster_count_city3)
-		// 	 {
-		// 		 level.total_monsters = level.total_monsters - 2;
-		// 		 monster_count_city3 = true;
-		// 	 }
-
-		// 	 /* A slightly other problem in city2.bsp. There's a floater
-		// 	  * with missing trigger on the right gallery above the data
-		// 	  * spinner console, right before the door to the staircase.
-		// 	  */
-		// 	 if ((skill->value > 0) && !Q_stricmp(level.mapname, "city2") && !monster_count_city2)
-		// 	 {
-		// 		 level.total_monsters = level.total_monsters - 1;
-		// 		 monster_count_city2 = true;
-		// 	 }
-
-		// 	 /*
-		// 	  * Nearly the same problem exists in cool1.bsp.
-		// 	  * On medium skill a gladiator is spawned in a
-		// 	  * crate that's never triggered.
-		// 	  */
-		// 	 if ((skill->value == 1) && !Q_stricmp(level.mapname, "cool1") && !monster_count_cool1)
-		// 	 {
-		// 		 level.total_monsters = level.total_monsters - 1;
-		// 		 monster_count_cool1 = true;
-		// 	 }
-
-		// 	 /*
-		// 	  * Nearly the same problem exists in lab.bsp.
-		// 	  * On medium skill two parasites are spawned
-		// 	  * in a hidden place that never triggers.
-		// 	  */
-		// 	 if ((skill->value == 1) && !Q_stricmp(level.mapname, "lab") && !monster_count_lab)
-		// 	 {
-		// 		 level.total_monsters = level.total_monsters - 2;
-		// 		 monster_count_lab = true;
-		// 	 }
-
-		// 	 /* remove things (except the world) from
-		// 		different skill levels or deathmatch */
-		// 	 if (ent != g_edicts) {
-		// 		 if (deathmatch->value) {
-		// 			 if (ent->spawnflags & SPAWNFLAG_NOT_DEATHMATCH) != 0 {
-		// 				 G_FreeEdict(ent);
-		// 				 inhibit++;
-		// 				 continue;
-		// 			 }
-		// 		 } else {
-		// 			 if (((skill->value == SKILL_EASY) &&
-		// 				  (ent->spawnflags & SPAWNFLAG_NOT_EASY)) ||
-		// 				 ((skill->value == SKILL_MEDIUM) &&
-		// 				  (ent->spawnflags & SPAWNFLAG_NOT_MEDIUM)) ||
-		// 				 (((skill->value == SKILL_HARD) ||
-		// 				   (skill->value == SKILL_HARDPLUS)) &&
-		// 				  (ent->spawnflags & SPAWNFLAG_NOT_HARD))
-		// 				 ) {
-		// 				 G_FreeEdict(ent);
-		// 				 inhibit++;
-		// 				 continue;
-		// 			 }
-		// 		 }
-
-		// 		 ent->spawnflags &=
-		// 			 ~(SPAWNFLAG_NOT_EASY | SPAWNFLAG_NOT_MEDIUM |
-		// 			   SPAWNFLAG_NOT_HARD |
-		// 			   SPAWNFLAG_NOT_COOP | SPAWNFLAG_NOT_DEATHMATCH);
-		// 	 }
-
-		if err := G.edCallSpawn(ent); err != nil {
-			return err
-		}
-	}
-
-	G.gi.Dprintf("%v entities inhibited.\n", inhibit)
-
-	//  G_FindTeams();
-
-	//  PlayerTrail_Init();
-	return nil
-}
-
 /*QUAKED worldspawn (0 0 0) ?
  *
  * Only used for the world.
@@ -589,39 +594,39 @@ func spWorldspawn(ent *edict_t, G *qGame) error {
 
 	//  PrecacheItem(FindItem("Blaster"));
 
-	//  gi.soundindex("player/lava1.wav");
-	//  gi.soundindex("player/lava2.wav");
+	G.gi.Soundindex("player/lava1.wav")
+	G.gi.Soundindex("player/lava2.wav")
 
-	//  gi.soundindex("misc/pc_up.wav");
-	//  gi.soundindex("misc/talk1.wav");
+	G.gi.Soundindex("misc/pc_up.wav")
+	G.gi.Soundindex("misc/talk1.wav")
 
-	//  gi.soundindex("misc/udeath.wav");
+	G.gi.Soundindex("misc/udeath.wav")
 
-	//  /* gibs */
-	//  gi.soundindex("items/respawn1.wav");
+	/* gibs */
+	G.gi.Soundindex("items/respawn1.wav")
 
-	//  /* sexed sounds */
-	//  gi.soundindex("*death1.wav");
-	//  gi.soundindex("*death2.wav");
-	//  gi.soundindex("*death3.wav");
-	//  gi.soundindex("*death4.wav");
-	//  gi.soundindex("*fall1.wav");
-	//  gi.soundindex("*fall2.wav");
-	//  gi.soundindex("*gurp1.wav"); /* drowning damage */
-	//  gi.soundindex("*gurp2.wav");
-	//  gi.soundindex("*jump1.wav"); /* player jump */
-	//  gi.soundindex("*pain25_1.wav");
-	//  gi.soundindex("*pain25_2.wav");
-	//  gi.soundindex("*pain50_1.wav");
-	//  gi.soundindex("*pain50_2.wav");
-	//  gi.soundindex("*pain75_1.wav");
-	//  gi.soundindex("*pain75_2.wav");
-	//  gi.soundindex("*pain100_1.wav");
-	//  gi.soundindex("*pain100_2.wav");
+	/* sexed sounds */
+	G.gi.Soundindex("*death1.wav")
+	G.gi.Soundindex("*death2.wav")
+	G.gi.Soundindex("*death3.wav")
+	G.gi.Soundindex("*death4.wav")
+	G.gi.Soundindex("*fall1.wav")
+	G.gi.Soundindex("*fall2.wav")
+	G.gi.Soundindex("*gurp1.wav") /* drowning damage */
+	G.gi.Soundindex("*gurp2.wav")
+	G.gi.Soundindex("*jump1.wav") /* player jump */
+	G.gi.Soundindex("*pain25_1.wav")
+	G.gi.Soundindex("*pain25_2.wav")
+	G.gi.Soundindex("*pain50_1.wav")
+	G.gi.Soundindex("*pain50_2.wav")
+	G.gi.Soundindex("*pain75_1.wav")
+	G.gi.Soundindex("*pain75_2.wav")
+	G.gi.Soundindex("*pain100_1.wav")
+	G.gi.Soundindex("*pain100_2.wav")
 
-	//  /* sexed models: THIS ORDER MUST MATCH THE DEFINES IN g_local.h
-	// 	you can add more, max 19 (pete change)these models are only
-	// 	loaded in coop or deathmatch. not singleplayer. */
+	/* sexed models: THIS ORDER MUST MATCH THE DEFINES IN g_local.h
+	you can add more, max 19 (pete change)these models are only
+	loaded in coop or deathmatch. not singleplayer. */
 	//  if (coop->value || deathmatch->value) {
 	// 	 gi.modelindex("#w_blaster.md2");
 	// 	 gi.modelindex("#w_shotgun.md2");
@@ -636,29 +641,29 @@ func spWorldspawn(ent *edict_t, G *qGame) error {
 	// 	 gi.modelindex("#w_bfg.md2");
 	//  }
 
-	//  /* ------------------- */
+	/* ------------------- */
 
-	//  gi.soundindex("player/gasp1.wav"); /* gasping for air */
-	//  gi.soundindex("player/gasp2.wav"); /* head breaking surface, not gasping */
+	G.gi.Soundindex("player/gasp1.wav") /* gasping for air */
+	G.gi.Soundindex("player/gasp2.wav") /* head breaking surface, not gasping */
 
-	//  gi.soundindex("player/watr_in.wav"); /* feet hitting water */
-	//  gi.soundindex("player/watr_out.wav"); /* feet leaving water */
+	G.gi.Soundindex("player/watr_in.wav")  /* feet hitting water */
+	G.gi.Soundindex("player/watr_out.wav") /* feet leaving water */
 
-	//  gi.soundindex("player/watr_un.wav"); /* head going underwater */
+	G.gi.Soundindex("player/watr_un.wav") /* head going underwater */
 
-	//  gi.soundindex("player/u_breath1.wav");
-	//  gi.soundindex("player/u_breath2.wav");
+	G.gi.Soundindex("player/u_breath1.wav")
+	G.gi.Soundindex("player/u_breath2.wav")
 
-	//  gi.soundindex("items/pkup.wav"); /* bonus item pickup */
-	//  gi.soundindex("world/land.wav"); /* landing thud */
-	//  gi.soundindex("misc/h2ohit1.wav"); /* landing splash */
+	G.gi.Soundindex("items/pkup.wav")   /* bonus item pickup */
+	G.gi.Soundindex("world/land.wav")   /* landing thud */
+	G.gi.Soundindex("misc/h2ohit1.wav") /* landing splash */
 
-	//  gi.soundindex("items/damage.wav");
-	//  gi.soundindex("items/protect.wav");
-	//  gi.soundindex("items/protect4.wav");
-	//  gi.soundindex("weapons/noammo.wav");
+	G.gi.Soundindex("items/damage.wav")
+	G.gi.Soundindex("items/protect.wav")
+	G.gi.Soundindex("items/protect4.wav")
+	G.gi.Soundindex("weapons/noammo.wav")
 
-	//  gi.soundindex("infantry/inflies1.wav");
+	G.gi.Soundindex("infantry/inflies1.wav")
 
 	//  sm_meat_index = gi.modelindex("models/objects/gibs/sm_meat/tris.md2");
 	//  gi.modelindex("models/objects/gibs/arm/tris.md2");
