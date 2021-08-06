@@ -25,7 +25,43 @@
  */
 package game
 
-import "goquake2/shared"
+import (
+	"goquake2/shared"
+	"strconv"
+)
+
+/* ======================================================================= */
+
+/*
+ * This is only called when the game first
+ * initializes in single player, but is called
+ * after each death and level change in deathmatch
+ */
+func (G *qGame) initClientPersistant(client *gclient_t) {
+	if client == nil {
+		return
+	}
+
+	client.pers.copy(client_persistant_t{})
+
+	//  item = FindItem("Blaster");
+	//  client->pers.selected_item = ITEM_INDEX(item);
+	//  client->pers.inventory[client->pers.selected_item] = 1;
+
+	//  client->pers.weapon = item;
+
+	client.pers.health = 100
+	client.pers.max_health = 100
+
+	client.pers.max_bullets = 200
+	client.pers.max_shells = 100
+	client.pers.max_rockets = 50
+	client.pers.max_grenades = 50
+	client.pers.max_cells = 200
+	client.pers.max_slugs = 50
+
+	client.pers.connected = true
+}
 
 /*
  * Chooses a player start, deathmatch start, coop start, etc
@@ -137,8 +173,8 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 		return nil
 	}
 
-	//  vec3_t mins = {-16, -16, -24};
-	//  vec3_t maxs = {16, 16, 32};
+	mins := []float32{-16, -16, -24}
+	maxs := []float32{16, 16, 32}
 	//  int index;
 	//  gclient_t *client;
 	//  int i;
@@ -157,7 +193,8 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 	index := ent.index - 1
 	client := ent.client
 
-	//  /* deathmatch wipes most client data every spawn */
+	resp := client_respawn_t{}
+	/* deathmatch wipes most client data every spawn */
 	//  if (deathmatch->value)
 	//  {
 	// 	 resp = client->resp;
@@ -179,25 +216,21 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 	// 		 client->pers.score = resp.score;
 	// 	 }
 	//  }
-	//  else
-	//  {
-	// 	 memset(&resp, 0, sizeof(resp));
-	//  }
 
-	//  memcpy(userinfo, client->pers.userinfo, sizeof(userinfo));
+	// userinfo := string(client.pers.userinfo)
 	//  ClientUserinfoChanged(ent, userinfo);
 
-	//  /* clear everything but the persistant data */
-	//  saved = client->pers;
-	//  memset(client, 0, sizeof(*client));
-	//  client->pers = saved;
+	/* clear everything but the persistant data */
+	var saved client_persistant_t
+	saved.copy(client.pers)
+	client.copy(gclient_t{})
+	client.pers.copy(saved)
 
-	//  if (client->pers.health <= 0)
-	//  {
-	// 	 InitClientPersistant(client);
-	//  }
+	if client.pers.health <= 0 {
+		G.initClientPersistant(client)
+	}
 
-	//  client->resp = resp;
+	client.resp = resp
 
 	//  /* copy some data from the client to the entity */
 	//  FetchClientEntData(ent);
@@ -223,8 +256,8 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 	//  ent->flags &= ~FL_NO_KNOCKBACK;
 	ent.svflags = 0
 
-	//  VectorCopy(mins, ent->mins);
-	//  VectorCopy(maxs, ent->maxs);
+	copy(ent.mins[:], mins)
+	copy(ent.maxs[:], maxs)
 	//  VectorClear(ent->velocity);
 
 	/* clear playerstate values */
@@ -240,16 +273,13 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 	//  }
 	//  else
 	//  {
-	// 	 client->ps.fov = (int)strtol(Info_ValueForKey(client->pers.userinfo, "fov"), (char **)NULL, 10);
-
-	// 	 if (client->ps.fov < 1)
-	// 	 {
-	client.ps.Fov = 90
-	// 	 }
-	// 	 else if (client->ps.fov > 160)
-	// 	 {
-	// 		 client->ps.fov = 160;
-	// 	 }
+	fv, _ := strconv.ParseInt(shared.Info_ValueForKey(client.pers.userinfo, "fov"), 10, 32)
+	client.ps.Fov = float32(fv)
+	if client.ps.Fov < 1 {
+		client.ps.Fov = 90
+	} else if client.ps.Fov > 160 {
+		client.ps.Fov = 160
+	}
 	//  }
 
 	//  client->ps.gunindex = gi.modelindex(client->pers.weapon->view_model);
@@ -269,17 +299,16 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 	copy(ent.s.Old_origin[:], ent.s.Origin[:])
 
 	//  /* set the delta angle */
-	//  for (i = 0; i < 3; i++)
-	//  {
-	// 	 client->ps.pmove.delta_angles[i] = ANGLE2SHORT(
-	// 			 spawn_angles[i] - client->resp.cmd_angles[i]);
-	//  }
+	for i := 0; i < 3; i++ {
+		client.ps.Pmove.Delta_angles[i] = shared.ANGLE2SHORT(
+			spawn_angles[i] - client.resp.cmd_angles[i])
+	}
 
 	ent.s.Angles[shared.PITCH] = 0
 	ent.s.Angles[shared.YAW] = spawn_angles[shared.YAW]
 	ent.s.Angles[shared.ROLL] = 0
 	copy(client.ps.Viewangles[:], ent.s.Angles[:])
-	// copy(client.v_angle[:], ent.s.Angles[:])
+	copy(client.v_angle[:], ent.s.Angles[:])
 
 	//  /* spawn a spectator */
 	//  if (client->pers.spectator)
@@ -297,7 +326,7 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 	//  }
 	//  else
 	//  {
-	// 	 client->resp.spectator = false;
+	client.resp.spectator = false
 	//  }
 
 	//  if (!KillBox(ent))

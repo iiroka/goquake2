@@ -134,11 +134,10 @@ func rSubdividePolygon(numverts int, verts [][3]float32, warpface *msurface_t) {
 	/* add a point in the center to help keep warp valid */
 	poly := glpoly_t{}
 	poly.verticesData = make([]uint32, (numverts+2)*gl3_3D_vtx_size)
-	// poly = Hunk_Alloc(sizeof(glpoly_t) + ((numverts - 4) + 2) * sizeof(gl3_3D_vtx_t));
 	poly.next = warpface.polys
 	warpface.polys = &poly
 	poly.numverts = numverts + 2
-	var total [3]float32
+	total := []float32{0, 0, 0}
 	var total_s float32 = 0
 	var total_t float32 = 0
 
@@ -150,7 +149,7 @@ func rSubdividePolygon(numverts int, verts [][3]float32, warpface *msurface_t) {
 
 		total_s += s
 		total_t += t
-		shared.VectorAdd(total[:], verts[i][:], total[:])
+		shared.VectorAdd(total, verts[i][:], total)
 
 		v.setTexCoord(s, t)
 
@@ -164,7 +163,7 @@ func rSubdividePolygon(numverts int, verts [][3]float32, warpface *msurface_t) {
 	v.setNormal(normal[:])
 
 	/* copy first vertex to last */
-	copy(poly.verticesData[(numverts+1)*gl3_3D_vtx_size:(numverts+2)*gl3_3D_vtx_size],
+	copy(poly.verticesData[(numverts+1)*gl3_3D_vtx_size:],
 		poly.verticesData[gl3_3D_vtx_size:2*gl3_3D_vtx_size])
 }
 
@@ -294,11 +293,6 @@ func (T *qGl3) SetSky(name string, rotate float32, axis []float32) {
 }
 
 func (T *qGl3) drawSkyPolygon(nump int, vecs [][3]float32) {
-	// int i, j;
-	// vec3_t v, av;
-	// float s, t, dv;
-	// int axis;
-	// float *vp;
 
 	T.c_sky++
 
@@ -387,15 +381,6 @@ func (T *qGl3) drawSkyPolygon(nump int, vecs [][3]float32) {
 }
 
 func (T *qGl3) clipSkyPolygon(nump int, vecs [][3]float32, stage int) {
-	// float *norm;
-	// float *v;
-	// qboolean front, back;
-	// float d, e;
-	// float dists[MAX_CLIP_VERTS];
-	// int sides[MAX_CLIP_VERTS];
-	// vec3_t newv[2][MAX_CLIP_VERTS];
-	// int newc[2];
-	// int i, j;
 
 	if nump > MAX_CLIP_VERTS-2 {
 		T.ri.Sys_Error(shared.ERR_DROP, "R_ClipSkyPolygon: MAX_CLIP_VERTS")
@@ -507,8 +492,6 @@ func (T *qGl3) clearSkyBox() {
 }
 
 func (T *qGl3) makeSkyVec(s, t float32, axis int) {
-	// vec3_t v, b;
-	// int j, k;
 
 	var b [3]float32
 	if !T.r_farsee.Bool() {

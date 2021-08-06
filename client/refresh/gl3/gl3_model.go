@@ -327,20 +327,15 @@ type gl3model_t struct {
 	vertexes []mvertex_t
 	edges    []medge_t
 
-	// int numnodes;
 	firstnode int
 	nodes     []mnode_t
 
-	// int numtexinfo;
 	texinfo []mtexinfo_t
 
-	// int numsurfaces;
 	surfaces []msurface_t
 
-	// int numsurfedges;
 	surfedges []int
 
-	// int nummarksurfaces;
 	marksurfaces [][]msurface_t
 
 	vis    *shared.Dvis_t
@@ -351,7 +346,6 @@ type gl3model_t struct {
 	/* for alias models and skins */
 	skins []*gl3image_t
 
-	// int extradatasize;
 	extradata interface{}
 }
 
@@ -380,23 +374,16 @@ func (M *gl3model_t) Copy(other gl3model_t) {
 	M.nodes = other.nodes
 	M.texinfo = other.texinfo
 	M.surfaces = other.surfaces
-	// int numsurfedges;
 	M.surfedges = other.surfedges
-	// int nummarksurfaces;
 	M.marksurfaces = other.marksurfaces
-	// msurface_t **marksurfaces;
 	M.visBfr = other.visBfr
 	M.vis = other.vis
 	M.lightdata = other.lightdata
 	M.skins = other.skins
-	// int extradatasize;
-	// void *extradata;
+	M.extradata = other.extradata
 }
 
 func (T *qGl3) modPointInLeaf(p []float32, model *gl3model_t) (*mleaf_t, error) {
-	// mnode_t *node;
-	// float d;
-	// cplane_t *plane;
 
 	if model == nil || len(model.nodes) == 0 {
 		return nil, T.ri.Sys_Error(shared.ERR_DROP, "modPointInLeaf: bad model")

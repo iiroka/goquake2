@@ -275,6 +275,13 @@ type cdlight_t struct {
 	minlight float32 /* don't add when contributing less */
 }
 
+type kbutton_t struct {
+	down     [2]int /* key nums holding it down */
+	downtime uint   /* msec timestamp */
+	msec     uint   /* msec down this frame */
+	state    int
+}
+
 type qClient struct {
 	common shared.QCommon
 	input  QInput
@@ -341,6 +348,14 @@ type qClient struct {
 
 	cl  client_state_t
 	cls client_static_t
+
+	cl_upspeed       *shared.CvarT
+	cl_forwardspeed  *shared.CvarT
+	cl_sidespeed     *shared.CvarT
+	cl_yawspeed      *shared.CvarT
+	cl_pitchspeed    *shared.CvarT
+	cl_run           *shared.CvarT
+	cl_anglespeedkey *shared.CvarT
 
 	// screen
 	scr_con_current float32 /* aproaches scr_conlines at scr_conspeed */
@@ -460,6 +475,14 @@ type qClient struct {
 	allow_download_maps    *shared.CvarT
 
 	cl_explosions [MAX_EXPLOSIONS]explosion_t
+
+	in_klook                                          kbutton_t
+	in_left, in_right, in_forward, in_back            kbutton_t
+	in_lookup, in_lookdown, in_moveleft, in_moveright kbutton_t
+	in_strafe, in_speed, in_use, in_attack            kbutton_t
+	in_up, in_down                                    kbutton_t
+
+	in_impulse int
 }
 
 func CreateClient() shared.QClient {

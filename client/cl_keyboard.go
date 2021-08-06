@@ -29,6 +29,7 @@
 package client
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -203,7 +204,7 @@ func (T *qClient) KeyEvent(key int, down, special bool) {
 	// char cmd[1024];
 	// char *kb;
 	// cvar_t *fullscreen;
-	// unsigned int time = Sys_Milliseconds();
+	time := T.common.Sys_Milliseconds()
 
 	// // evil hack for the joystick key altselector, which turns K_JOYx into K_JOYx_ALT
 	// if(joy_altselector_pressed && key >= K_JOY1 && key <= K_JOY_LAST_REGULAR)
@@ -366,33 +367,30 @@ func (T *qClient) KeyEvent(key int, down, special bool) {
 	   started before a console switch. Button commands include the
 	   kenum as a parameter, so multiple downs can be matched with ups */
 	if !down {
-		// 	kb = keybindings[key];
+		kb := T.keybindings[key]
 
-		// 	if (kb && (kb[0] == '+'))
-		// 	{
-		// 		Com_sprintf(cmd, sizeof(cmd), "-%s %i %i\n", kb + 1, key, time);
-		// 		Cbuf_AddText(cmd);
-		// 	}
+		if len(kb) > 0 && (kb[0] == '+') {
+			cmd := fmt.Sprintf("-%s %v %v\n", kb[1:], key, time)
+			T.common.Cbuf_AddText(cmd)
+		}
 
 		return
 	} else if ((T.cls.key_dest == key_menu) && T.menubound[key]) ||
 		((T.cls.key_dest == key_console) && !T.consolekeys[key]) ||
 		((T.cls.key_dest == key_game) && ((T.cls.state == ca_active) ||
 			!T.consolekeys[key])) {
-		// 	kb = keybindings[key];
+		kb := T.keybindings[key]
 
-		// 	if (kb) {
-		// 		if (kb[0] == '+') {
-		// 			/* button commands add keynum and time as a parm */
-		// 			Com_sprintf(cmd, sizeof(cmd), "%s %i %i\n", kb, key, time);
-		// 			Cbuf_AddText(cmd);
-		// 		}
-		// 		else
-		// 		{
-		// 			Cbuf_AddText(kb);
-		// 			Cbuf_AddText("\n");
-		// 		}
-		// 	}
+		if len(kb) > 0 {
+			if kb[0] == '+' {
+				/* button commands add keynum and time as a parm */
+				cmd := fmt.Sprintf("%s %v %v\n", kb, key, time)
+				T.common.Cbuf_AddText(cmd)
+			} else {
+				T.common.Cbuf_AddText(kb)
+				T.common.Cbuf_AddText("\n")
+			}
+		}
 
 		return
 	}

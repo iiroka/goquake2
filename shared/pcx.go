@@ -71,15 +71,6 @@ func readPcx(data []byte) pcx_t {
 }
 
 func LoadPCX(ri Refimport_t, origname string, loadPic, loadPal bool) ([]byte, []byte, int, int) {
-	// byte *raw;
-	// pcx_t *pcx;
-	// int x, y;
-	// int len, full_size;
-	// int pcx_width, pcx_height;
-	// qboolean image_issues = false;
-	// int dataByte, runLength;
-	// byte *out, *pix;
-	// char filename[256];
 
 	filename := origname
 
@@ -90,11 +81,6 @@ func LoadPCX(ri Refimport_t, origname string, loadPic, loadPal bool) ([]byte, []
 
 	var pic []byte = nil
 	var palette []byte = nil
-
-	// if (palette)
-	// {
-	// 	*palette = NULL;
-	// }
 
 	/* load the file */
 	raw, err := ri.LoadFile(filename)

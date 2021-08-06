@@ -29,6 +29,7 @@ package gl3
 import (
 	"fmt"
 	"goquake2/shared"
+	"log"
 	"strings"
 	"unsafe"
 
@@ -193,50 +194,34 @@ func (T *qGl3) upload32(data unsafe.Pointer, width, height int, mipmap bool) boo
  * Returns has_alpha
  */
 func (T *qGl3) upload8(data []byte, width, height int, mipmap, is_sky bool) bool {
-	//  unsigned trans[512 * 256];
-	//  int i, s;
-	//  int p;
 
 	s := width * height
 
-	//  if (s > sizeof(trans) / 4)
-	//  {
-	// 	 ri.Sys_Error(ERR_DROP, "GL3_Upload8: too large");
-	//  }
+	if s > len(data) {
+		log.Fatalf("GL3_Upload8: too large %v %v %v > %v", width, height, s, len(data))
+	}
 	trans := make([]uint32, s)
 
 	for i := 0; i < s; i++ {
-		p := data[i]
+		p := int(data[i]) & 0xFF
 		trans[i] = T.d_8to24table[p]
 
 		/* transparent, so scan around for
 		another color to avoid alpha fringes */
 		if p == 255 {
-			// 		 if ((i > width) && (data[i - width] != 255))
-			// 		 {
-			// 			 p = data[i - width];
-			// 		 }
-			// 		 else if ((i < s - width) && (data[i + width] != 255))
-			// 		 {
-			// 			 p = data[i + width];
-			// 		 }
-			// 		 else if ((i > 0) && (data[i - 1] != 255))
-			// 		 {
-			// 			 p = data[i - 1];
-			// 		 }
-			// 		 else if ((i < s - 1) && (data[i + 1] != 255))
-			// 		 {
-			// 			 p = data[i + 1];
-			// 		 }
-			// 		 else
-			// 		 {
-			// 			 p = 0;
-			// 		 }
-
-			// 		 /* copy rgb components */
-			// 		 ((byte *)&trans[i])[0] = ((byte *)&d_8to24table[p])[0];
-			// 		 ((byte *)&trans[i])[1] = ((byte *)&d_8to24table[p])[1];
-			// 		 ((byte *)&trans[i])[2] = ((byte *)&d_8to24table[p])[2];
+			if (i > width) && (data[i-width] != 255) {
+				p = int(data[i-width]) & 0xFF
+			} else if (i < s-width) && (data[i+width] != 255) {
+				p = int(data[i+width]) & 0xFF
+			} else if (i > 0) && (data[i-1] != 255) {
+				p = int(data[i-1]) & 0xFF
+			} else if (i < s-1) && (data[i+1] != 255) {
+				p = int(data[i+1]) & 0xFF
+			} else {
+				p = 0
+			}
+			/* copy rgb components */
+			trans[i] = (trans[i] & 0xFF000000) | (T.d_8to24table[p] & 0x00FFFFFF)
 		}
 	}
 
@@ -248,9 +233,6 @@ func (T *qGl3) upload8(data []byte, width, height int, mipmap, is_sky bool) bool
  */
 func (T *qGl3) loadPic(name string, pic []byte, width, realwidth,
 	height, realheight int, itype imagetype_t, bits int) *gl3image_t {
-	//  gl3image_t *image = NULL;
-	//  GLuint texNum=0;
-	//  int i;
 
 	nolerp := false
 
@@ -274,11 +256,6 @@ func (T *qGl3) loadPic(name string, pic []byte, width, realwidth,
 		image = &T.gl3textures[T.numgl3textures]
 		T.numgl3textures++
 	}
-
-	//  if (strlen(name) >= sizeof(image->name))
-	//  {
-	// 	 ri.Sys_Error(ERR_DROP, "GL3_LoadPic: \"%s\" is too long", name);
-	//  }
 
 	image.name = name
 	image.registration_sequence = T.registration_sequence
@@ -334,10 +311,6 @@ func (T *qGl3) loadPic(name string, pic []byte, width, realwidth,
 }
 
 func (T *qGl3) loadWal(origname string, itype imagetype_t) *gl3image_t {
-	// miptex_t *mt;
-	// int width, height, ofs, size;
-	// gl3image_t *image;
-	// char name[256];
 
 	name := origname
 
@@ -360,13 +333,17 @@ func (T *qGl3) loadWal(origname string, itype imagetype_t) *gl3image_t {
 	// }
 
 	mt := shared.Miptex(buf)
-	if (mt.Offsets[0] <= 0) || (mt.Width <= 0) || (mt.Height <= 0) ||
-		(((len(buf) - int(mt.Offsets[0])) / int(mt.Height)) < int(mt.Width)) {
+	width := int(mt.Width)
+	height := int(mt.Height)
+	offset := int(mt.Offsets[0])
+
+	if (offset <= 0) || (width <= 0) || (height <= 0) ||
+		(((len(buf) - offset) / height) < width) {
 		T.rPrintf(shared.PRINT_ALL, "LoadWal: can't load %s, small body\n", name)
 		return T.gl3_notexture
 	}
 
-	return T.loadPic(name, buf[mt.Offsets[0]:], int(mt.Width), 0, int(mt.Height), 0, itype, 8)
+	return T.loadPic(name, buf[offset:], width, 0, height, 0, itype, 8)
 }
 
 /*
@@ -418,9 +395,7 @@ func (T *qGl3) findImage(name string, itype imagetype_t) *gl3image_t {
 		}
 	}
 
-	//  /* load the pic from disk */
-	//  pic = NULL;
-
+	/* load the pic from disk */
 	if strings.HasSuffix(name, ".pcx") {
 		// 	 if (gl_retexturing->value)
 		// 	 {

@@ -217,10 +217,7 @@ func (T *qGl3) renderBrushPoly(fa *msurface_t) {
 	T.bindLightmap(fa.lightmaptexturenum)
 
 	// Any dynamic lights on this surface?
-	for mmap := 0; mmap < MAX_LIGHTMAPS_PER_SURFACE; mmap++ {
-		if fa.styles[mmap] == 255 {
-			break
-		}
+	for mmap := 0; mmap < MAX_LIGHTMAPS_PER_SURFACE && fa.styles[mmap] != 255; mmap++ {
 		lmScales[mmap][0] = T.gl3_newrefdef.Lightstyles[fa.styles[mmap]].Rgb[0]
 		lmScales[mmap][1] = T.gl3_newrefdef.Lightstyles[fa.styles[mmap]].Rgb[1]
 		lmScales[mmap][2] = T.gl3_newrefdef.Lightstyles[fa.styles[mmap]].Rgb[2]
@@ -330,10 +327,7 @@ func (T *qGl3) renderLightmappedPoly(surf *msurface_t) {
 	// 		&& "RenderLightMappedPoly mustn't be called with transparent, sky or warping surfaces!");
 
 	// Any dynamic lights on this surface?
-	for mmap := 0; mmap < MAX_LIGHTMAPS_PER_SURFACE; mmap++ {
-		if surf.styles[mmap] == 255 {
-			break
-		}
+	for mmap := 0; mmap < MAX_LIGHTMAPS_PER_SURFACE && surf.styles[mmap] != 255; mmap++ {
 		lmScales[mmap][0] = T.gl3_newrefdef.Lightstyles[surf.styles[mmap]].Rgb[0]
 		lmScales[mmap][1] = T.gl3_newrefdef.Lightstyles[surf.styles[mmap]].Rgb[1]
 		lmScales[mmap][2] = T.gl3_newrefdef.Lightstyles[surf.styles[mmap]].Rgb[2]
@@ -358,18 +352,11 @@ func (T *qGl3) renderLightmappedPoly(surf *msurface_t) {
 }
 
 func (T *qGl3) drawInlineBModel() {
-	// int i, k;
-	// cplane_t *pplane;
-	// float dot;
-	// msurface_t *psurf;
-	// dlight_t *lt;
 
-	// /* calculate dynamic lighting for bmodel */
-	// lt = gl3_newrefdef.dlights;
-
-	// for (k = 0; k < gl3_newrefdef.num_dlights; k++, lt++) {
-	// 	GL3_MarkLights(lt, 1 << k, currentmodel->nodes + currentmodel->firstnode);
-	// }
+	/* calculate dynamic lighting for bmodel */
+	for k := range T.gl3_newrefdef.Dlights {
+		T.markLights(&T.gl3_newrefdef.Dlights[k], 1<<k, &T.currentmodel.nodes[T.currentmodel.firstnode])
+	}
 
 	if (T.currententity.Flags & shared.RF_TRANSLUCENT) != 0 {
 		gl.Enable(gl.BLEND)

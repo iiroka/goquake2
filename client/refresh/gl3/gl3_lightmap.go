@@ -70,8 +70,6 @@ func (T *qGl3) lmUploadBlock() error {
  * returns a texture number and the position inside it
  */
 func (T *qGl3) lmAllocBlock(w, h int) (bool, int, int) {
-	// int i, j;
-	// int best, best2;
 
 	best := BLOCK_HEIGHT
 	var x, y int

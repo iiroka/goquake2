@@ -142,6 +142,82 @@ type spawn_temp_t struct {
 	//    float maxpitch;
 }
 
+/* client data that stays across multiple level loads */
+type client_persistant_t struct {
+	userinfo string
+	netname  string
+	hand     int
+
+	connected bool /* a loadgame will leave valid entities that
+	   just don't have a connection yet */
+
+	/* values saved and restored
+	   from edicts when changing levels */
+	health     int
+	max_health int
+	savedFlags int
+
+	selected_item int
+	inventory     [shared.MAX_ITEMS]int
+
+	/* ammo capacities */
+	max_bullets  int
+	max_shells   int
+	max_rockets  int
+	max_grenades int
+	max_cells    int
+	max_slugs    int
+
+	// gitem_t *weapon
+	// gitem_t *lastweapon
+
+	// int power_cubes /* used for tracking the cubes in coop games */
+	// int score       /* for calculating total unit score in coop games */
+
+	// int game_helpchanged
+	// int helpchanged
+
+	spectator bool /* client is a spectator */
+}
+
+func (G *client_persistant_t) copy(other client_persistant_t) {
+	G.userinfo = other.userinfo
+	G.netname = other.netname
+	G.hand = other.hand
+	G.connected = other.connected
+	G.health = other.health
+	G.max_health = other.max_health
+	G.savedFlags = other.savedFlags
+
+	G.selected_item = other.selected_item
+	for i := range G.inventory {
+		G.inventory[i] = other.inventory[i]
+	}
+	G.max_bullets = other.max_bullets
+	G.max_shells = other.max_shells
+	G.max_rockets = other.max_rockets
+	G.max_grenades = other.max_grenades
+	G.max_cells = other.max_cells
+	G.max_slugs = other.max_slugs
+	// gitem_t *weapon
+	// gitem_t *lastweapon
+	// int power_cubes /* used for tracking the cubes in coop games */
+	// int score       /* for calculating total unit score in coop games */
+	// int game_helpchanged
+	// int helpchanged
+	G.spectator = other.spectator
+}
+
+/* client data that stays across deathmatch respawns */
+type client_respawn_t struct {
+	coop_respawn client_persistant_t /* what to set client->pers to on a respawn */
+	enterframe   int                 /* level.framenum the client entered the game */
+	score        int                 /* frags, etc */
+	cmd_angles   [3]float32          /* angles sent over in the last command */
+
+	spectator bool /* client is a spectator */
+}
+
 /* this structure is cleared on each PutClientInServer(),
    except for 'client->pers' */
 type gclient_t struct {
@@ -149,9 +225,9 @@ type gclient_t struct {
 	ps   shared.Player_state_t /* communicated by server to clients */
 	ping int
 
-	// /* private to game */
-	// client_persistant_t pers;
-	// client_respawn_t resp;
+	/* private to game */
+	pers client_persistant_t
+	resp client_respawn_t
 	// pmove_state_t old_pmove; /* for detecting out-of-pmove changes */
 
 	// qboolean showscores; /* set layout stat */
@@ -187,7 +263,7 @@ type gclient_t struct {
 	// float damage_alpha;
 	// float bonus_alpha;
 	// vec3_t damage_blend;
-	// vec3_t v_angle; /* aiming direction */
+	v_angle [3]float32 /* aiming direction */
 	// float bobtime; /* so off-ground doesn't change it */
 	// vec3_t oldviewangles;
 	// vec3_t oldvelocity;
@@ -233,6 +309,69 @@ func (G *gclient_t) Ps() *shared.Player_state_t {
 
 func (G *gclient_t) Ping() int {
 	return G.ping
+}
+
+func (G *gclient_t) copy(other gclient_t) {
+	/* known to server */
+	G.ps.Copy(other.ps)
+	G.ping = other.ping
+	G.pers.copy(other.pers)
+	// resp client_respawn_t
+	// pmove_state_t old_pmove; /* for detecting out-of-pmove changes */
+	// qboolean showscores; /* set layout stat */
+	// qboolean showinventory; /* set layout stat */
+	// qboolean showhelp;
+	// qboolean showhelpicon;
+	// int ammo_index;
+	// int buttons;
+	// int oldbuttons;
+	G.latched_buttons = other.latched_buttons
+	// qboolean weapon_thunk;
+	// gitem_t *newweapon;
+	// int damage_armor; /* damage absorbed by armor */
+	// int damage_parmor; /* damage absorbed by power armor */
+	// int damage_blood; /* damage taken out of health */
+	// int damage_knockback; /* impact damage */
+	// vec3_t damage_from; /* origin for vector calculation */
+	// float killer_yaw; /* when dead, look at killer */
+	// weaponstate_t weaponstate;
+	// vec3_t kick_angles; /* weapon kicks */
+	// vec3_t kick_origin;
+	// float v_dmg_roll, v_dmg_pitch, v_dmg_time; /* damage kicks */
+	// float fall_time, fall_value; /* for view drop on fall */
+	// float damage_alpha;
+	// float bonus_alpha;
+	// vec3_t damage_blend;
+	// float bobtime; /* so off-ground doesn't change it */
+	// vec3_t oldviewangles;
+	// vec3_t oldvelocity;
+	// float next_drown_time;
+	// int old_waterlevel;
+	// int breather_sound;
+	// int machinegun_shots; /* for weapon raising */
+	// int anim_end;
+	// int anim_priority;
+	// qboolean anim_duck;
+	// qboolean anim_run;
+	// float quad_framenum;
+	// float invincible_framenum;
+	// float breather_framenum;
+	// float enviro_framenum;
+	// qboolean grenade_blew_up;
+	// float grenade_time;
+	// int silencer_shots;
+	// int weapon_sound;
+	// float pickup_msg_time;
+	// float flood_locktill; /* locked from talking */
+	// float flood_when[10]; /* when messages were said */
+	// int flood_whenhead; /* head pointer for when said */
+	// float respawn_time; /* can respawn when time > this */
+	// edict_t *chase_target; /* player we are chasing */
+	// qboolean update_chase; /* need to update chase info? */
+
+	for i := 0; i < 3; i++ {
+		G.v_angle[i] = other.v_angle[i]
+	}
 }
 
 type edict_t struct {

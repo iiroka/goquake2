@@ -26,7 +26,163 @@
  */
 package client
 
-import "goquake2/shared"
+import (
+	"goquake2/shared"
+	"strconv"
+)
+
+func (T *qClient) keyDown(args []string, b *kbutton_t) {
+	// int k;
+	// char *c;
+
+	var k int = -1
+	if len(args[1]) > 0 {
+		if kk, err := strconv.ParseInt(args[1], 10, 32); err == nil {
+			k = int(kk)
+		}
+	}
+
+	if (k == b.down[0]) || (k == b.down[1]) {
+		return /* repeating key */
+	}
+
+	if b.down[0] == 0 {
+		b.down[0] = k
+	} else if b.down[1] == 0 {
+		b.down[1] = k
+	} else {
+		T.common.Com_Printf("Three keys down for a button!\n")
+		return
+	}
+
+	if (b.state & 1) != 0 {
+		return /* still down */
+	}
+
+	/* save timestamp */
+	dt, _ := strconv.ParseInt(args[2], 10, 32)
+	b.downtime = uint(dt)
+
+	if b.downtime == 0 {
+		b.downtime = uint(T.input.Sys_frame_time - 100)
+	}
+
+	b.state |= 1 + 2 /* down + impulse down */
+}
+
+func in_ForwardDown(args []string, a interface{}) error {
+	T := a.(*qClient)
+	T.keyDown(args, &T.in_forward)
+	return nil
+}
+
+func (T *qClient) initInput() {
+	// Cmd_AddCommand("centerview", IN_CenterView);
+	// Cmd_AddCommand("force_centerview", IN_ForceCenterView);
+
+	// Cmd_AddCommand("+moveup", IN_UpDown);
+	// Cmd_AddCommand("-moveup", IN_UpUp);
+	// Cmd_AddCommand("+movedown", IN_DownDown);
+	// Cmd_AddCommand("-movedown", IN_DownUp);
+	// Cmd_AddCommand("+left", IN_LeftDown);
+	// Cmd_AddCommand("-left", IN_LeftUp);
+	// Cmd_AddCommand("+right", IN_RightDown);
+	// Cmd_AddCommand("-right", IN_RightUp);
+	T.common.Cmd_AddCommand("+forward", in_ForwardDown, T)
+	// Cmd_AddCommand("-forward", IN_ForwardUp);
+	// Cmd_AddCommand("+back", IN_BackDown);
+	// Cmd_AddCommand("-back", IN_BackUp);
+	// Cmd_AddCommand("+lookup", IN_LookupDown);
+	// Cmd_AddCommand("-lookup", IN_LookupUp);
+	// Cmd_AddCommand("+lookdown", IN_LookdownDown);
+	// Cmd_AddCommand("-lookdown", IN_LookdownUp);
+	// Cmd_AddCommand("+strafe", IN_StrafeDown);
+	// Cmd_AddCommand("-strafe", IN_StrafeUp);
+	// Cmd_AddCommand("+moveleft", IN_MoveleftDown);
+	// Cmd_AddCommand("-moveleft", IN_MoveleftUp);
+	// Cmd_AddCommand("+moveright", IN_MoverightDown);
+	// Cmd_AddCommand("-moveright", IN_MoverightUp);
+	// Cmd_AddCommand("+speed", IN_SpeedDown);
+	// Cmd_AddCommand("-speed", IN_SpeedUp);
+	// Cmd_AddCommand("+attack", IN_AttackDown);
+	// Cmd_AddCommand("-attack", IN_AttackUp);
+	// Cmd_AddCommand("+use", IN_UseDown);
+	// Cmd_AddCommand("-use", IN_UseUp);
+	// Cmd_AddCommand("impulse", IN_Impulse);
+	// Cmd_AddCommand("+klook", IN_KLookDown);
+	// Cmd_AddCommand("-klook", IN_KLookUp);
+
+	// cl_nodelta = Cvar_Get("cl_nodelta", "0", 0);
+}
+
+/*
+ * Returns the fraction of the
+ * frame that the key was down
+ */
+func (T *qClient) keyState(key *kbutton_t) float32 {
+
+	key.state &= 1 /* clear impulses */
+
+	msec := int(key.msec)
+	key.msec = 0
+
+	if key.state != 0 {
+		/* still down */
+		msec += T.input.Sys_frame_time - int(key.downtime)
+		key.downtime = uint(T.input.Sys_frame_time)
+	}
+
+	val := float32(msec) / float32(T.frame_msec)
+
+	if val < 0 {
+		val = 0
+	}
+
+	if val > 1 {
+		val = 1
+	}
+
+	return val
+}
+
+/*
+ * Send the intended movement message to the server
+ */
+func (T *qClient) baseMove(cmd *shared.Usercmd_t) {
+	//  CL_AdjustAngles();
+
+	cmd.Copy(shared.Usercmd_t{})
+
+	for i := range cmd.Angles {
+		cmd.Angles[i] = int16(T.cl.viewangles[i])
+	}
+
+	//  if (in_strafe.state & 1)
+	//  {
+	// 	 cmd->sidemove += cl_sidespeed->value * CL_KeyState(&in_right);
+	// 	 cmd->sidemove -= cl_sidespeed->value * CL_KeyState(&in_left);
+	//  }
+
+	//  cmd->sidemove += cl_sidespeed->value * CL_KeyState(&in_moveright);
+	//  cmd->sidemove -= cl_sidespeed->value * CL_KeyState(&in_moveleft);
+
+	//  cmd->upmove += cl_upspeed->value * CL_KeyState(&in_up);
+	//  cmd->upmove -= cl_upspeed->value * CL_KeyState(&in_down);
+
+	//  if (!(in_klook.state & 1))
+	//  {
+	cmd.Forwardmove += int16(T.cl_forwardspeed.Float() * T.keyState(&T.in_forward))
+	// 	 cmd->forwardmove -= cl_forwardspeed->value * CL_KeyState(&in_back);
+	//  }
+
+	//  /* adjust for speed key / running */
+	//  if ((in_speed.state & 1) ^ (int)(cl_run->value))
+	//  {
+	// 	 cmd->forwardmove *= 2;
+	// 	 cmd->sidemove *= 2;
+	// 	 cmd->upmove *= 2;
+	//  }
+}
 
 func (T *qClient) refreshCmd() {
 	// int ms;
@@ -46,7 +202,7 @@ func (T *qClient) refreshCmd() {
 	}
 
 	// Add movement
-	// CL_BaseMove(cmd);
+	T.baseMove(cmd)
 	// IN_Move(cmd);
 
 	// Clamp angels for prediction
@@ -76,10 +232,9 @@ func (T *qClient) refreshCmd() {
 }
 
 func (T *qClient) refreshMove() {
-	// usercmd_t *cmd;
 
 	// CMD to fill
-	// cmd := &T.cl.cmds[T.cls.netchan.Outgoing_sequence&(CMD_BACKUP-1)]
+	cmd := &T.cl.cmds[T.cls.netchan.Outgoing_sequence&(CMD_BACKUP-1)]
 
 	// Calculate delta
 	T.frame_msec = T.input.Sys_frame_time - T.old_sys_frame_time
@@ -92,7 +247,7 @@ func (T *qClient) refreshMove() {
 	}
 
 	// Add movement
-	// CL_BaseMove(cmd);
+	T.baseMove(cmd)
 	// IN_Move(cmd);
 
 	T.old_sys_frame_time = T.input.Sys_frame_time
@@ -121,8 +276,8 @@ func (T *qClient) finalizeCmd() {
 	// 	cmd->buttons |= BUTTON_ANY;
 	// }
 
-	// cmd->impulse = in_impulse;
-	// in_impulse = 0;
+	cmd.Impulse = byte(T.in_impulse)
+	T.in_impulse = 0
 
 	// Set light level for muzzle flash
 	cmd.Lightlevel = byte(T.cl_lightlevel.Int())

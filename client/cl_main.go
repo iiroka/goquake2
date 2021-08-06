@@ -76,7 +76,7 @@ func (T *qClient) initLocal() {
 	T.cls.state = ca_disconnected
 	T.cls.realtime = T.common.Sys_Milliseconds()
 
-	// 	CL_InitInput();
+	T.initInput()
 
 	/* register our variables */
 	// T.cin_force43 = Cvar_Get("cin_force43", "1", 0)
@@ -92,14 +92,14 @@ func (T *qClient) initLocal() {
 	T.cl_predict = T.common.Cvar_Get("cl_predict", "1", 0)
 	T.cl_showfps = T.common.Cvar_Get("cl_showfps", "0", shared.CVAR_ARCHIVE)
 
-	// T.cl_upspeed = Cvar_Get("cl_upspeed", "200", 0)
-	// T.cl_forwardspeed = Cvar_Get("cl_forwardspeed", "200", 0)
-	// T.cl_sidespeed = Cvar_Get("cl_sidespeed", "200", 0)
-	// T.cl_yawspeed = Cvar_Get("cl_yawspeed", "140", 0)
-	// T.cl_pitchspeed = Cvar_Get("cl_pitchspeed", "150", 0)
-	// T.cl_anglespeedkey = Cvar_Get("cl_anglespeedkey", "1.5", 0)
+	T.cl_upspeed = T.common.Cvar_Get("cl_upspeed", "200", 0)
+	T.cl_forwardspeed = T.common.Cvar_Get("cl_forwardspeed", "200", 0)
+	T.cl_sidespeed = T.common.Cvar_Get("cl_sidespeed", "200", 0)
+	T.cl_yawspeed = T.common.Cvar_Get("cl_yawspeed", "140", 0)
+	T.cl_pitchspeed = T.common.Cvar_Get("cl_pitchspeed", "150", 0)
+	T.cl_anglespeedkey = T.common.Cvar_Get("cl_anglespeedkey", "1.5", 0)
 
-	// T.cl_run = Cvar_Get("cl_run", "0", CVAR_ARCHIVE)
+	T.cl_run = T.common.Cvar_Get("cl_run", "0", shared.CVAR_ARCHIVE)
 
 	T.cl_shownet = T.common.Cvar_Get("cl_shownet", "0", 0)
 	T.cl_showmiss = T.common.Cvar_Get("cl_showmiss", "0", 0)

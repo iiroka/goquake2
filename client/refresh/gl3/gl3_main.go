@@ -400,7 +400,7 @@ func (T *qGl3) Init() bool {
 
 	// generate texture handles for all possible lightmaps
 	T.gl3state.lightmap_textureIDs = make([]uint32, MAX_LIGHTMAPS*MAX_LIGHTMAPS_PER_SURFACE)
-	gl.GenTextures(MAX_LIGHTMAPS*MAX_LIGHTMAPS_PER_SURFACE, (*uint32)(gl.Ptr(T.gl3state.lightmap_textureIDs)))
+	gl.GenTextures(MAX_LIGHTMAPS*MAX_LIGHTMAPS_PER_SURFACE, &T.gl3state.lightmap_textureIDs[0])
 
 	T.setDefaultState()
 
@@ -567,7 +567,6 @@ func (T *qGl3) drawParticles() {
 }
 
 func (T *qGl3) drawEntitiesOnList() {
-	// int i;
 
 	if !T.r_drawentities.Bool() {
 		return
@@ -584,6 +583,7 @@ func (T *qGl3) drawEntitiesOnList() {
 		}
 
 		if (T.currententity.Flags & shared.RF_BEAM) != 0 {
+			println("DrawBeam")
 			// 		GL3_DrawBeam(currententity);
 		} else {
 			if T.currententity.Model == nil {
@@ -710,33 +710,31 @@ func (T *qGl3) setupFrame() error {
 		/* check above and below so crossing solid water doesn't draw wrong */
 		if leaf.contents == 0 {
 			/* look down a bit */
-			// 		vec3_t temp;
+			temp := make([]float32, 3)
+			copy(temp, T.gl3_origin[:])
+			temp[2] -= 16
+			leaf, _ = T.modPointInLeaf(temp, T.gl3_worldmodel)
 
-			// 		VectorCopy(gl3_origin, temp);
-			// 		temp[2] -= 16;
-			// 		leaf = GL3_Mod_PointInLeaf(temp, gl3_worldmodel);
-
-			// 		if (!(leaf->contents & CONTENTS_SOLID) &&
-			// 			(leaf->cluster != gl3_viewcluster2)) {
-			// 			gl3_viewcluster2 = leaf->cluster;
-			// 		}
+			if (leaf.contents&shared.CONTENTS_SOLID) == 0 &&
+				(leaf.cluster != T.gl3_viewcluster2) {
+				T.gl3_viewcluster2 = leaf.cluster
+			}
 		} else {
 			/* look up a bit */
-			// 		vec3_t temp;
+			temp := make([]float32, 3)
+			copy(temp, T.gl3_origin[:])
+			temp[2] += 16
+			leaf, _ = T.modPointInLeaf(temp, T.gl3_worldmodel)
 
-			// 		VectorCopy(gl3_origin, temp);
-			// 		temp[2] += 16;
-			// 		leaf = GL3_Mod_PointInLeaf(temp, gl3_worldmodel);
-
-			// 		if (!(leaf->contents & CONTENTS_SOLID) &&
-			// 			(leaf->cluster != gl3_viewcluster2)) {
-			// 			gl3_viewcluster2 = leaf->cluster;
-			// 		}
+			if (leaf.contents&shared.CONTENTS_SOLID) == 0 &&
+				(leaf.cluster != T.gl3_viewcluster2) {
+				T.gl3_viewcluster2 = leaf.cluster
+			}
 		}
 	}
 
-	// for (i = 0; i < 4; i++) {
-	// 	v_blend[i] = gl3_newrefdef.blend[i];
+	// for i := 0; i < 4; i++ {
+	// 	T.v_blend[i] = T.gl3_newrefdef.Blend[i]
 	// }
 
 	T.c_brush_polys = 0
@@ -744,15 +742,14 @@ func (T *qGl3) setupFrame() error {
 
 	/* clear out the portion of the screen that the NOWORLDMODEL defines */
 	if (T.gl3_newrefdef.Rdflags & shared.RDF_NOWORLDMODEL) != 0 {
-		println("RDF_NOWORLDMODEL")
-		// 	glEnable(GL_SCISSOR_TEST);
-		// 	glClearColor(0.3, 0.3, 0.3, 1);
-		// 	glScissor(gl3_newrefdef.x,
-		// 			vid.height - gl3_newrefdef.height - gl3_newrefdef.y,
-		// 			gl3_newrefdef.width, gl3_newrefdef.height);
-		// 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		// 	glClearColor(1, 0, 0.5, 0.5);
-		// 	glDisable(GL_SCISSOR_TEST);
+		gl.Enable(gl.SCISSOR_TEST)
+		gl.ClearColor(0.3, 0.3, 0.3, 1)
+		gl.Scissor(int32(T.gl3_newrefdef.X),
+			int32(T.vid.height-T.gl3_newrefdef.Height-T.gl3_newrefdef.Y),
+			int32(T.gl3_newrefdef.Width), int32(T.gl3_newrefdef.Height))
+		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+		gl.ClearColor(1, 0, 0.5, 0.5)
+		gl.Disable(gl.SCISSOR_TEST)
 	}
 	return nil
 }

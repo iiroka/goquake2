@@ -223,9 +223,9 @@ func Miptex(data []byte) Miptex_t {
 	for i := 0; i < MIPLEVELS; i++ {
 		d.Offsets[i] = ReadUint32(data[32+(2+i)*4:])
 	}
-	d.Animname = ReadString(data, 32+(2+MIPLEVELS)+4)
-	d.Flags = ReadInt32(data[2*32+(2+MIPLEVELS)+4:])
-	d.Contents = ReadInt32(data[2*32+(3+MIPLEVELS)+4:])
+	d.Animname = ReadString(data[32+(2+MIPLEVELS)*4:], 32)
+	d.Flags = ReadInt32(data[2*32+(2+MIPLEVELS)*4:])
+	d.Contents = ReadInt32(data[2*32+(3+MIPLEVELS)*4:])
 	return d
 }
 
@@ -474,7 +474,7 @@ type Texinfo_t struct {
 func Texinfo(data []byte) Texinfo_t {
 	d := Texinfo_t{}
 	for i := 0; i < 2; i++ {
-		for j := 0; j < 2; j++ {
+		for j := 0; j < 4; j++ {
 			d.Vecs[i][j] = ReadFloat32(data[(j+(i*4))*4:])
 		}
 	}
