@@ -636,6 +636,7 @@ func (T *qGl3) drawEntitiesOnList() {
 			case mod_brush:
 				T.drawBrushModel(T.currententity)
 			case mod_sprite:
+				println("GL3_DrawSpriteModel")
 			// 				GL3_DrawSpriteModel(currententity);
 			// 				break;
 			default:

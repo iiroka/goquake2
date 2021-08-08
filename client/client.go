@@ -483,6 +483,9 @@ type qClient struct {
 	in_up, in_down                                    kbutton_t
 
 	in_impulse int
+
+	gun_frame int
+	gun_model interface{}
 }
 
 func CreateClient() shared.QClient {

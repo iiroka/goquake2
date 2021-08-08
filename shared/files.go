@@ -186,20 +186,42 @@ func Dmdl(data []byte) Dmdl_t {
 const IDSPRITEHEADER = (('2' << 24) + ('S' << 16) + ('D' << 8) + 'I') /* little-endian "IDS2" */
 const SPRITE_VERSION = 2
 
-// typedef struct
-// {
-// 	int width, height;
-// 	int origin_x, origin_y;  /* raster coordinates inside pic */
-// 	char name[MAX_SKINNAME]; /* name of pcx file */
-// } dsprframe_t;
+type Dsprframe_t struct {
+	Width, Height      int32
+	Origin_x, Origin_y int32  /* raster coordinates inside pic */
+	Name               string /* name of pcx file */
+}
 
-// typedef struct
-// {
-// 	int ident;
-// 	int version;
-// 	int numframes;
-// 	dsprframe_t frames[1]; /* variable sized */
-// } dsprite_t;
+const Dsprframe_size = 4*4 + MAX_SKINNAME
+
+func Dsprframe(data []byte) Dsprframe_t {
+	d := Dsprframe_t{}
+	d.Width = ReadInt32(data[0*4:])
+	d.Height = ReadInt32(data[1*4:])
+	d.Origin_x = ReadInt32(data[2*4:])
+	d.Origin_y = ReadInt32(data[3*4:])
+	d.Name = ReadString(data[4*4:], MAX_SKINNAME)
+	return d
+}
+
+type Dsprite_t struct {
+	Ident     int32
+	Version   int32
+	Numframes int32
+	Frames    []Dsprframe_t /* variable sized */
+}
+
+func Dsprite(data []byte) Dsprite_t {
+	d := Dsprite_t{}
+	d.Ident = ReadInt32(data[0*4:])
+	d.Version = ReadInt32(data[1*4:])
+	d.Numframes = ReadInt32(data[2*4:])
+	d.Frames = make([]Dsprframe_t, d.Numframes)
+	for i := range d.Frames {
+		d.Frames[i] = Dsprframe(data[3*4+i*Dsprframe_size:])
+	}
+	return d
+}
 
 /* .WAL texture file format */
 

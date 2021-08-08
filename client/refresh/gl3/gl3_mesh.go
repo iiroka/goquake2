@@ -37,31 +37,20 @@ func lerpVerts(powerUpEffect bool, nverts int, v, ov,
 	verts []shared.Dtrivertx_t, lerp [][4]float32, move,
 	frontv, backv [3]float32) {
 
-	// if powerUpEffect {
-	// 	for i := 0; i < nverts; i++ {
-	// 		normal := r_avertexnormals[verts[i].lightnormalindex]
-	// 		lerp[i][0] = move[0] + float32(ov[i].V[0])*backv[0] + float32(v[i].V[0])*frontv[0]
-	// 		lerp[i][1] = move[1] + float32(ov[i].V[1])*backv[1] + float32(v[i].V[1])*frontv[1]
-	// 		lerp[i][2] = move[2] + float32(ov[i].V[2])*backv[2] + float32(v[i].V[2])*frontv[2]
-	// 	}
-	// for (i = 0; i < nverts; i++, v++, ov++, lerp += 4)
-	// {
-	// 	float *normal = r_avertexnormals[verts[i].lightnormalindex];
-
-	// 	lerp[0] = move[0] + ov->v[0] * backv[0] + v->v[0] * frontv[0] +
-	// 			  normal[0] * POWERSUIT_SCALE;
-	// 	lerp[1] = move[1] + ov->v[1] * backv[1] + v->v[1] * frontv[1] +
-	// 			  normal[1] * POWERSUIT_SCALE;
-	// 	lerp[2] = move[2] + ov->v[2] * backv[2] + v->v[2] * frontv[2] +
-	// 			  normal[2] * POWERSUIT_SCALE;
-	// }
-	// } else {
-	for i := 0; i < nverts; i++ {
-		lerp[i][0] = move[0] + float32(ov[i].V[0])*backv[0] + float32(v[i].V[0])*frontv[0]
-		lerp[i][1] = move[1] + float32(ov[i].V[1])*backv[1] + float32(v[i].V[1])*frontv[1]
-		lerp[i][2] = move[2] + float32(ov[i].V[2])*backv[2] + float32(v[i].V[2])*frontv[2]
+	if powerUpEffect {
+		for i := 0; i < nverts; i++ {
+			normal := shared.R_avertexnormals[verts[i].Lightnormalindex]
+			lerp[i][0] = move[0] + float32(ov[i].V[0])*backv[0] + float32(v[i].V[0])*frontv[0] + normal[0]*shared.POWERSUIT_SCALE
+			lerp[i][1] = move[1] + float32(ov[i].V[1])*backv[1] + float32(v[i].V[1])*frontv[1] + normal[1]*shared.POWERSUIT_SCALE
+			lerp[i][2] = move[2] + float32(ov[i].V[2])*backv[2] + float32(v[i].V[2])*frontv[2] + normal[2]*shared.POWERSUIT_SCALE
+		}
+	} else {
+		for i := 0; i < nverts; i++ {
+			lerp[i][0] = move[0] + float32(ov[i].V[0])*backv[0] + float32(v[i].V[0])*frontv[0]
+			lerp[i][1] = move[1] + float32(ov[i].V[1])*backv[1] + float32(v[i].V[1])*frontv[1]
+			lerp[i][2] = move[2] + float32(ov[i].V[2])*backv[2] + float32(v[i].V[2])*frontv[2]
+		}
 	}
-	// }
 }
 
 /*
@@ -200,16 +189,30 @@ func (T *qGl3) drawAliasFrameLerp(aliasextra aliasExtra, entity *shared.Entity_t
 				indxIndx += 3
 			}
 		} else { // triangle strip
-			for i := 1; i < int(count-1); i++ {
-				if (i & 1) == 1 {
-					indxBuf[indxIndx] = nextVtxIdx + uint16(i) - 1
-					indxBuf[indxIndx+1] = nextVtxIdx + uint16(i)
-					indxBuf[indxIndx+2] = nextVtxIdx + uint16(i) + 1
-				} else {
-					indxBuf[indxIndx] = nextVtxIdx + uint16(i)
-					indxBuf[indxIndx+1] = nextVtxIdx + uint16(i) + 2
-					indxBuf[indxIndx+2] = nextVtxIdx + uint16(i) + 1
-				}
+			i := 1
+			for ; i < int(count)-2; i += 2 {
+				// add two triangles at once, because the vertex order is different
+				// for odd vs even triangles
+				add := indxBuf[indxIndx:]
+
+				add[0] = nextVtxIdx + uint16(i) - 1
+				add[1] = nextVtxIdx + uint16(i)
+				add[2] = nextVtxIdx + uint16(i) + 1
+
+				add[3] = nextVtxIdx + uint16(i)
+				add[4] = nextVtxIdx + uint16(i) + 2
+				add[5] = nextVtxIdx + uint16(i) + 1
+
+				indxIndx += 6
+			}
+			// add remaining triangle, if any
+			if i < int(count)-1 {
+				add := indxBuf[indxIndx:]
+
+				add[0] = nextVtxIdx + uint16(i) - 1
+				add[1] = nextVtxIdx + uint16(i)
+				add[2] = nextVtxIdx + uint16(i) + 1
+
 				indxIndx += 3
 			}
 		}
@@ -351,16 +354,6 @@ func (T *qGl3) cullAliasModel(bbox [8][3]float32, e *shared.Entity_t) bool {
 }
 
 func (T *qGl3) drawAliasModel(entity *shared.Entity_t) {
-	// int i;
-	// dmdl_t *paliashdr;
-	// float an;
-	// vec3_t bbox[8];
-	// vec3_t shadelight;
-	// vec3_t shadevector;
-	// gl3image_t *skin;
-	// hmm_mat4 origProjMat = {0}; // use for left-handed rendering
-	// // used to restore ModelView matrix after changing it for this entities position/rotation
-	// hmm_mat4 origModelMat = {0};
 
 	var bbox [8][3]float32
 	if (entity.Flags & shared.RF_WEAPONMODEL) == 0 {
@@ -443,38 +436,36 @@ func (T *qGl3) drawAliasModel(entity *shared.Entity_t) {
 		}
 	}
 
-	// if (entity->flags & RF_MINLIGHT) != 0 {
-	// 	for (i := 0; i < 3; i++) {
-	// 		if (shadelight[i] > 0.1) {
-	// 			break;
-	// 		}
-	// 	}
+	if (entity.Flags & shared.RF_MINLIGHT) != 0 {
+		found := false
+		for i := 0; i < 3; i++ {
+			if shadelight[i] > 0.1 {
+				found = true
+				break
+			}
+		}
 
-	// 	if (i == 3) {
-	// 		shadelight[0] = 0.1;
-	// 		shadelight[1] = 0.1;
-	// 		shadelight[2] = 0.1;
-	// 	}
-	// }
+		if !found {
+			shadelight[0] = 0.1
+			shadelight[1] = 0.1
+			shadelight[2] = 0.1
+		}
+	}
 
-	// if (entity->flags & RF_GLOW) != 0 {
-	// 	/* bonus items will pulse with time */
-	// 	float scale;
-	// 	float min;
+	if (entity.Flags & shared.RF_GLOW) != 0 {
+		/* bonus items will pulse with time */
 
-	// 	scale = 0.1 * sin(gl3_newrefdef.time * 7);
+		scale := float32(0.1 * math.Sin(float64(T.gl3_newrefdef.Time*7)))
 
-	// 	for (i = 0; i < 3; i++)
-	// 	{
-	// 		min = shadelight[i] * 0.8;
-	// 		shadelight[i] += scale;
+		for i := 0; i < 3; i++ {
+			min := shadelight[i] * 0.8
+			shadelight[i] += scale
 
-	// 		if (shadelight[i] < min)
-	// 		{
-	// 			shadelight[i] = min;
-	// 		}
-	// 	}
-	// }
+			if shadelight[i] < min {
+				shadelight[i] = min
+			}
+		}
+	}
 
 	// Note: gl_overbrightbits are now applied in shader.
 
@@ -526,7 +517,6 @@ func (T *qGl3) drawAliasModel(entity *shared.Entity_t) {
 			mat := T.gl3state.uni3DData.getTransProjMat4()
 			for i := 0; i < 4; i++ {
 				mat[i] = -mat[i]
-				// 	gl3state.uni3DData.transProjMat4.Elements[0][i] = -gl3state.uni3DData.transProjMat4.Elements[0][i]
 			}
 			T.gl3state.uni3DData.setTransProjMat4(mat)
 			//GL3_UpdateUBO3D(); Note: GL3_RotateForEntity() will call this,no need to do it twice before drawing

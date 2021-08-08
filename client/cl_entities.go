@@ -518,6 +518,58 @@ func (T *qClient) addPacketEntities(frame *frame_t) {
 	}
 }
 
+func (T *qClient) addViewWeapon(ps, ops *shared.Player_state_t) {
+	gun := shared.Entity_t{} /* view model */
+
+	/* allow the gun to be completely removed */
+	if !T.cl_gun.Bool() {
+		return
+	}
+
+	/* don't draw gun if in wide angle view and drawing not forced */
+	if ps.Fov > 90 {
+		if T.cl_gun.Int() < 2 {
+			return
+		}
+	}
+
+	if T.gun_model != nil {
+		gun.Model = T.gun_model
+	} else {
+		gun.Model = T.cl.model_draw[ps.Gunindex]
+	}
+
+	if gun.Model == nil {
+		return
+	}
+
+	/* set up gun position */
+	for i := 0; i < 3; i++ {
+		gun.Origin[i] = T.cl.refdef.Vieworg[i] + ops.Gunoffset[i] +
+			T.cl.lerpfrac*(ps.Gunoffset[i]-ops.Gunoffset[i])
+		gun.Angles[i] = T.cl.refdef.Viewangles[i] + shared.LerpAngle(ops.Gunangles[i],
+			ps.Gunangles[i], T.cl.lerpfrac)
+	}
+
+	if T.gun_frame != 0 {
+		gun.Frame = T.gun_frame
+		gun.Oldframe = T.gun_frame
+	} else {
+		gun.Frame = ps.Gunframe
+
+		if gun.Frame == 0 {
+			gun.Oldframe = 0 /* just changed weapons, don't lerp from old */
+		} else {
+			gun.Oldframe = ops.Gunframe
+		}
+	}
+
+	gun.Flags = shared.RF_MINLIGHT | shared.RF_DEPTHHACK | shared.RF_WEAPONMODEL
+	gun.Backlerp = 1.0 - T.cl.lerpfrac
+	copy(gun.Oldorigin[:], gun.Origin[:]) /* don't lerp at all */
+	T.addEntity(gun)
+}
+
 /*
  * Adapts a 4:3 aspect FOV to the current aspect (Hor+)
  */
@@ -630,8 +682,8 @@ func (T *qClient) calcViewValues() {
 		T.cl.refdef.Blend[i] = ps.Blend[i]
 	}
 
-	//  /* add the weapon */
-	//  CL_AddViewWeapon(ps, ops);
+	/* add the weapon */
+	T.addViewWeapon(ps, ops)
 }
 
 /*

@@ -29,6 +29,8 @@ const MAX_DLIGHTS = 32
 const MAX_ENTITIES = 128
 const MAX_PARTICLES = 4096
 
+const POWERSUIT_SCALE = 4.0
+
 type Entity_t struct {
 	Model  interface{} /* opaque type outside refresh */
 	Angles [3]float32

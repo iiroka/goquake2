@@ -1013,10 +1013,9 @@ func (T *qGl3) modForName(name string, crash bool) (*gl3model_t, error) {
 		}
 
 	case shared.IDSPRITEHEADER:
-		T.mod_known[index].mtype = mod_sprite
-		println("SPRITE")
-	// 		 GL3_LoadSP2(mod, buf, modfilelen);
-	// 		 break;
+		if err := T.loadSP2(&T.mod_known[index], buf); err != nil {
+			return nil, err
+		}
 
 	case shared.IDBSPHEADER:
 		if err := T.modLoadBrushModel(&T.mod_known[index], buf); err != nil {
