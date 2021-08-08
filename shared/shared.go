@@ -102,6 +102,31 @@ type CvarT struct {
 	DefaultString string
 }
 
+/* a trace is returned when a box is swept through the world */
+type Trace_t struct {
+	Allsolid   bool        /* if true, plane is not valid */
+	Startsolid bool        /* if true, the initial point was in a solid area */
+	Fraction   float32     /* time completed, 1.0 = didn't hit anything */
+	Endpos     [3]float32  /* final position */
+	Plane      Cplane_t    /* surface normal at impact */
+	Surface    *Csurface_t /* surface hit */
+	Contents   int         /* contents on other side of surface hit */
+	Ent        interface{} /* not set by CM_*() functions */
+}
+
+func (T *Trace_t) Copy(other Trace_t) {
+	T.Allsolid = other.Allsolid
+	T.Startsolid = other.Startsolid
+	T.Fraction = other.Fraction
+	for i := range T.Endpos {
+		T.Endpos[i] = other.Endpos[i]
+	}
+	T.Plane = other.Plane
+	T.Surface = other.Surface
+	T.Contents = other.Contents
+	T.Ent = other.Ent
+}
+
 /* pmove_state_t is the information necessary for client side movement */
 /* prediction */
 type Pmtype_t int
@@ -126,6 +151,27 @@ const (
 	PMF_TIME_TELEPORT  = 32 /* pm_time is non-moving time */
 	PMF_NO_PREDICTION  = 64 /* temporarily disables prediction (used for grappling hook) */
 )
+
+/* content masks */
+const MASK_ALL = (-1)
+const MASK_SOLID = (CONTENTS_SOLID | CONTENTS_WINDOW)
+const MASK_PLAYERSOLID = (CONTENTS_SOLID | CONTENTS_PLAYERCLIP |
+	CONTENTS_WINDOW | CONTENTS_MONSTER)
+const MASK_DEADSOLID = (CONTENTS_SOLID | CONTENTS_PLAYERCLIP | CONTENTS_WINDOW)
+const MASK_MONSTERSOLID = (CONTENTS_SOLID | CONTENTS_MONSTERCLIP |
+	CONTENTS_WINDOW | CONTENTS_MONSTER)
+const MASK_WATER = (CONTENTS_WATER | CONTENTS_LAVA | CONTENTS_SLIME)
+const MASK_OPAQUE = (CONTENTS_SOLID | CONTENTS_SLIME | CONTENTS_LAVA)
+const MASK_SHOT = (CONTENTS_SOLID | CONTENTS_MONSTER | CONTENTS_WINDOW |
+	CONTENTS_DEADMONSTER)
+const MASK_CURRENT = (CONTENTS_CURRENT_0 | CONTENTS_CURRENT_90 |
+	CONTENTS_CURRENT_180 | CONTENTS_CURRENT_270 |
+	CONTENTS_CURRENT_UP |
+	CONTENTS_CURRENT_DOWN)
+
+/* gi.BoxEdicts() can return a list of either solid or trigger entities */
+const AREA_SOLID = 1
+const AREA_TRIGGERS = 2
 
 /* plane_t structure */
 type Cplane_t struct {
@@ -221,8 +267,8 @@ type Pmove_t struct {
 	Snapinitial bool /* if s has been changed outside pmove */
 
 	/* results (out) */
-	Numtouch int
-	// struct edict_s *touchents[MAXTOUCH];
+	Numtouch  int
+	Touchents [MAXTOUCH]Edict_s
 
 	Viewangles [3]float32 /* clamped */
 	Viewheight float32
@@ -230,11 +276,13 @@ type Pmove_t struct {
 	Mins [3]float32
 	Maxs [3]float32 /* bounding box size */
 
-	// struct edict_s *groundentity;
-	Watertype  int
-	Waterlevel int
+	Groundentity interface{}
+	Watertype    int
+	Waterlevel   int
 
 	/* callbacks to test the world */
+	TraceArg interface{}
+	Trace    func(start, mins, maxs, end []float32, a interface{}) Trace_t
 	// trace_t (*trace)(vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end);
 	// int (*pointcontents)(vec3_t point);
 }
@@ -1168,6 +1216,18 @@ func VectorScaled(in []float32, scale float32) []float32 {
 		in[2] * scale}
 }
 
+func VectorScale(in []float32, scale float32, out []float32) {
+	out[0] = in[0] * scale
+	out[1] = in[1] * scale
+	out[2] = in[2] * scale
+}
+
+func VectorNegate(a, b []float32) {
+	b[0] = -a[0]
+	b[1] = -a[1]
+	b[2] = -a[2]
+}
+
 func VectorLength(v []float32) float32 {
 
 	var length float32 = 0
@@ -1303,6 +1363,7 @@ type QCommon interface {
 	Sys_Milliseconds() int
 	QPort() int
 	Showpackets() bool
+	SetAirAccelerate(v float32)
 
 	Com_VPrintf(print_level int, format string, a ...interface{})
 	Com_Printf(format string, a ...interface{})
@@ -1347,6 +1408,10 @@ type QCommon interface {
 	CMBoxLeafnums(mins, maxs []float32, list []int, listsize int, topnode *int) int
 	CMAreasConnected(area1, area2 int) bool
 	CMHeadnodeVisible(nodenum int, visbits []byte) bool
+	CMBoxTrace(start, end, mins, maxs []float32, headnode, brushmask int) Trace_t
+	CMHeadnodeForBox(mins, maxs []float32) int
+	CMTransformedBoxTrace(start, end, mins, maxs []float32,
+		headnode, brushmask int, origin, angles []float32) Trace_t
 }
 
 type QClient interface {

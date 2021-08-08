@@ -534,9 +534,10 @@ func (T *qGl3) recursiveWorldNode(anode mnode_or_leaf) {
 	/* draw stuff */
 	for c := 0; c < int(node.numsurfaces); c++ {
 		surf := &T.gl3_worldmodel.surfaces[int(node.firstsurface)+c]
-		if surf.visframe != T.gl3_framecount {
-			continue
-		}
+		// TODO: Fixme
+		// if surf.visframe != T.gl3_framecount {
+		// 	continue
+		// }
 
 		if (surf.flags & SURF_PLANEBACK) != sidebit {
 			continue /* wrong side */
@@ -633,7 +634,7 @@ func (T *qGl3) markLeaves() {
 
 	vis := T.modClusterPVS(T.gl3_viewcluster, T.gl3_worldmodel)
 
-	var fatvis [shared.MAX_MAP_LEAFS / 8]byte
+	var fatvis [shared.MAX_MAP_LEAFS/8 + 1]byte
 	/* may have to combine two clusters because of solid water boundaries */
 	if T.gl3_viewcluster2 != T.gl3_viewcluster {
 		for i := 0; i < (T.gl3_worldmodel.numleafs+7)/8; i++ {

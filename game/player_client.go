@@ -44,11 +44,11 @@ func (G *qGame) initClientPersistant(client *gclient_t) {
 
 	client.pers.copy(client_persistant_t{})
 
-	//  item = FindItem("Blaster");
-	//  client->pers.selected_item = ITEM_INDEX(item);
-	//  client->pers.inventory[client->pers.selected_item] = 1;
+	item := G.findItem("Blaster")
+	client.pers.selected_item = G.findItemIndex("Blaster")
+	client.pers.inventory[client.pers.selected_item] = 1
 
-	//  client->pers.weapon = item;
+	client.pers.weapon = item
 
 	client.pers.health = 100
 	client.pers.max_health = 100
@@ -236,7 +236,7 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 	//  FetchClientEntData(ent);
 
 	/* clear entity values */
-	//  ent->groundentity = NULL;
+	ent.groundentity = nil
 	ent.client = &G.game.clients[index]
 	//  ent->takedamage = DAMAGE_AIM;
 	ent.movetype = MOVETYPE_WALK
@@ -245,7 +245,7 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 	ent.Classname = "player"
 	//  ent->mass = 200;
 	ent.solid = shared.SOLID_BBOX
-	//  ent->deadflag = DEAD_NO;
+	ent.deadflag = DEAD_NO
 	//  ent->air_finished = level.time + 12;
 	//  ent->clipmask = MASK_PLAYERSOLID;
 	ent.Model = "players/male/tris.md2"
@@ -336,8 +336,8 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 
 	G.gi.Linkentity(ent)
 
-	//  /* force the current weapon up */
-	//  client->newweapon = client->pers.weapon;
+	/* force the current weapon up */
+	client.newweapon = client.pers.weapon
 	//  ChangeWeapon(ent);
 	return nil
 }
@@ -372,9 +372,9 @@ func (G *qGame) initClientResp(client *gclient_t) {
 		return
 	}
 
-	// memset(&client->resp, 0, sizeof(client->resp));
-	// client->resp.enterframe = level.framenum;
-	// client->resp.coop_respawn = client->pers;
+	client.resp = client_respawn_t{}
+	client.resp.enterframe = G.level.framenum
+	client.resp.coop_respawn = client.pers
 }
 
 /*
@@ -413,7 +413,7 @@ func (G *qGame) ClientBegin(sent shared.Edict_s) error {
 		ClientConnect() time */
 		G_InitEdict(ent, ent.index)
 		ent.Classname = "player"
-		// InitClientResp(ent.client)
+		G.initClientResp(ent.client)
 		if err := G.putClientInServer(ent); err != nil {
 			return err
 		}
@@ -532,6 +532,220 @@ func (G *qGame) ClientConnect(sent shared.Edict_s, userinfo string) bool {
 	return true
 }
 
+/* ============================================================== */
+
+// edict_t *pm_passent;
+
+/*
+ * pmove doesn't need to know
+ * about passent and contentmask
+ */
+func PM_trace(start, mins, maxs, end []float32, a interface{}) shared.Trace_t {
+	G := a.(*qGame)
+	if G.pm_passent.health > 0 {
+		return G.gi.Trace(start, mins, maxs, end, G.pm_passent, shared.MASK_PLAYERSOLID)
+	} else {
+		return G.gi.Trace(start, mins, maxs, end, G.pm_passent, shared.MASK_DEADSOLID)
+	}
+}
+
+/*
+ * This will be called once for each client frame, which will
+ * usually be a couple times for each server frame.
+ */
+func (G *qGame) ClientThink(sent shared.Edict_s, ucmd *shared.Usercmd_t) {
+	//  gclient_t *client;
+	//  edict_t *other;
+	//  int i, j;
+	//  pmove_t pm;
+
+	if sent == nil || ucmd == nil {
+		return
+	}
+
+	ent := sent.(*edict_t)
+
+	G.level.current_entity = ent
+	client := ent.client
+
+	//  if (level.intermissiontime) {
+	// 	 client->ps.pmove.pm_type = PM_FREEZE;
+
+	// 	 /* can exit intermission after five seconds */
+	// 	 if ((level.time > level.intermissiontime + 5.0) &&
+	// 		 (ucmd->buttons & BUTTON_ANY))
+	// 	 {
+	// 		 level.exitintermission = true;
+	// 	 }
+
+	// 	 return;
+	//  }
+
+	G.pm_passent = ent
+
+	if ent.client.chase_target != nil {
+		// 	 client->resp.cmd_angles[0] = SHORT2ANGLE(ucmd->angles[0]);
+		// 	 client->resp.cmd_angles[1] = SHORT2ANGLE(ucmd->angles[1]);
+		// 	 client->resp.cmd_angles[2] = SHORT2ANGLE(ucmd->angles[2]);
+	} else {
+		/* set up for pmove */
+		pm := shared.Pmove_t{}
+
+		if ent.movetype == MOVETYPE_NOCLIP {
+			client.ps.Pmove.Pm_type = shared.PM_SPECTATOR
+		} else if ent.s.Modelindex != 255 {
+			client.ps.Pmove.Pm_type = shared.PM_GIB
+		} else if ent.deadflag != 0 {
+			client.ps.Pmove.Pm_type = shared.PM_DEAD
+		} else {
+			client.ps.Pmove.Pm_type = shared.PM_NORMAL
+		}
+
+		client.ps.Pmove.Gravity = int16(G.sv_gravity.Int())
+		pm.S = client.ps.Pmove
+
+		for i := 0; i < 3; i++ {
+			pm.S.Origin[i] = int16(ent.s.Origin[i] * 8)
+			/* save to an int first, in case the short overflows
+			 * so we get defined behavior (at least with -fwrapv) */
+			tmpVel := int16(ent.velocity[i] * 8)
+			pm.S.Velocity[i] = tmpVel
+		}
+
+		// 	 if (memcmp(&client->old_pmove, &pm.s, sizeof(pm.s))) {
+		// 		 pm.snapinitial = true;
+		// 	 }
+
+		pm.Cmd.Copy(*ucmd)
+
+		pm.TraceArg = G
+		pm.Trace = PM_trace /* adds default parms */
+		// 	 pm.pointcontents = gi.pointcontents;
+
+		/* perform a pmove */
+		G.gi.Pmove(&pm)
+
+		/* save results of pmove */
+		client.ps.Pmove.Copy(pm.S)
+		//  client.old_pmove = pm.s;
+
+		for i := 0; i < 3; i++ {
+			ent.s.Origin[i] = float32(pm.S.Origin[i]) * 0.125
+			ent.velocity[i] = float32(pm.S.Velocity[i]) * 0.125
+		}
+
+		copy(ent.mins[:], pm.Mins[:])
+		copy(ent.maxs[:], pm.Maxs[:])
+
+		client.resp.cmd_angles[0] = shared.SHORT2ANGLE(int(ucmd.Angles[0]))
+		client.resp.cmd_angles[1] = shared.SHORT2ANGLE(int(ucmd.Angles[1]))
+		client.resp.cmd_angles[2] = shared.SHORT2ANGLE(int(ucmd.Angles[2]))
+
+		// 	 if (ent->groundentity && !pm.groundentity && (pm.cmd.upmove >= 10) &&
+		// 		 (pm.waterlevel == 0)) {
+		// 		 gi.sound(ent, CHAN_VOICE, gi.soundindex(
+		// 						 "*jump1.wav"), 1, ATTN_NORM, 0);
+		// 		 PlayerNoise(ent, ent->s.origin, PNOISE_SELF);
+		// 	 }
+
+		ent.viewheight = int(pm.Viewheight)
+		// ent.waterlevel = pm.Waterlevel
+		// 	 ent->watertype = pm.watertype;
+		if pm.Groundentity == nil {
+			ent.groundentity = nil
+		} else {
+			ent.groundentity = pm.Groundentity.(*edict_t)
+			ent.groundentity_linkcount = pm.Groundentity.(*edict_t).linkcount
+		}
+
+		if ent.deadflag != 0 {
+			client.ps.Viewangles[shared.ROLL] = 40
+			client.ps.Viewangles[shared.PITCH] = -15
+			// client.ps.Viewangles[shared.YAW] = client.killer_yaw
+		} else {
+			copy(client.v_angle[:], pm.Viewangles[:])
+			copy(client.ps.Viewangles[:], pm.Viewangles[:])
+		}
+
+		G.gi.Linkentity(ent)
+
+		// 	 if (ent->movetype != MOVETYPE_NOCLIP) {
+		// 		 G_TouchTriggers(ent);
+		// 	 }
+
+		// 	 /* touch other objects */
+		// 	 for (i = 0; i < pm.numtouch; i++) {
+		// 		 other = pm.touchents[i];
+
+		// 		 for j := 0; j < i; j++ {
+		// 			 if (pm.touchents[j] == other) {
+		// 				 break;
+		// 			 }
+		// 		 }
+
+		// 		 if (j != i) {
+		// 			 continue; /* duplicated */
+		// 		 }
+
+		// 		 if (!other->touch) {
+		// 			 continue;
+		// 		 }
+
+		// 		 other->touch(other, ent, NULL, NULL);
+		// 	 }
+	}
+
+	client.oldbuttons = client.buttons
+	client.buttons = int(ucmd.Buttons)
+	//  client.latched_buttons |= client.buttons & ~client.oldbuttons;
+
+	/* save light level the player is standing
+	on for monster sighting AI */
+	//  ent->light_level = ucmd->lightlevel;
+
+	/* fire weapon from final position if needed */
+	//  if (client->latched_buttons & BUTTON_ATTACK) != 0 {
+	// 	 if (client->resp.spectator) {
+	// 		 client->latched_buttons = 0;
+
+	// 		 if (client->chase_target) {
+	// 			 client->chase_target = NULL;
+	// 			 client->ps.pmove.pm_flags &= ~PMF_NO_PREDICTION;
+	// 		 } else {
+	// 			 GetChaseTarget(ent);
+	// 		 }
+	// 	 } else if (!client->weapon_thunk) {
+	// 		 client->weapon_thunk = true;
+	// 		 Think_Weapon(ent);
+	// 	 }
+	//  }
+
+	//  if (client->resp.spectator) {
+	// 	 if (ucmd->upmove >= 10) {
+	// 		 if (!(client->ps.pmove.pm_flags & PMF_JUMP_HELD)) {
+	// 			 client->ps.pmove.pm_flags |= PMF_JUMP_HELD;
+
+	// 			 if (client->chase_target) {
+	// 				 ChaseNext(ent);
+	// 			 } else {
+	// 				 GetChaseTarget(ent);
+	// 			 }
+	// 		 }
+	// 	 } else {
+	// 		 client->ps.pmove.pm_flags &= ~PMF_JUMP_HELD;
+	// 	 }
+	//  }
+
+	/* update chase cam if being followed */
+	//  for i := 1; i <= maxclients->value; i++ {
+	// 	 other = g_edicts + i;
+
+	// 	 if (other->inuse && (other->client->chase_target == ent)) {
+	// 		 UpdateChaseCam(other);
+	// 	 }
+	//  }
+}
+
 /*
  * This will be called once for each server
  * frame, before running any other entities
@@ -545,9 +759,9 @@ func (G *qGame) clientBeginServerFrame(ent *edict_t) {
 		return
 	}
 
-	//  if (level.intermissiontime) {
-	// 	 return;
-	//  }
+	if G.level.intermissiontime != 0 {
+		return
+	}
 
 	client := ent.client
 
@@ -560,43 +774,40 @@ func (G *qGame) clientBeginServerFrame(ent *edict_t) {
 	//  }
 
 	//  /* run weapon animations if it hasn't been done by a ucmd_t */
-	//  if (!client->weapon_thunk && !client->resp.spectator) {
-	// 	 Think_Weapon(ent);
-	//  } else {
-	// 	 client->weapon_thunk = false;
-	//  }
+	if !client.weapon_thunk && !client.resp.spectator {
+		// 	 Think_Weapon(ent);
+	} else {
+		client.weapon_thunk = false
+	}
 
-	//  if (ent->deadflag)
-	//  {
-	// 	 /* wait for any button just going down */
-	// 	 if (level.time > client->respawn_time)
-	// 	 {
-	// 		 /* in deathmatch, only wait for attack button */
-	// 		 if (deathmatch->value)
-	// 		 {
-	// 			 buttonMask = BUTTON_ATTACK;
-	// 		 }
-	// 		 else
-	// 		 {
-	// 			 buttonMask = -1;
-	// 		 }
+	if ent.deadflag != 0 {
+		// 	 /* wait for any button just going down */
+		// 	 if (level.time > client->respawn_time)
+		// 	 {
+		// 		 /* in deathmatch, only wait for attack button */
+		// 		 if (deathmatch->value)
+		// 		 {
+		// 			 buttonMask = BUTTON_ATTACK;
+		// 		 }
+		// 		 else
+		// 		 {
+		// 			 buttonMask = -1;
+		// 		 }
 
-	// 		 if ((client->latched_buttons & buttonMask) ||
-	// 			 (deathmatch->value && ((int)dmflags->value & DF_FORCE_RESPAWN)))
-	// 		 {
-	// 			 respawn(ent);
-	// 			 client->latched_buttons = 0;
-	// 		 }
-	// 	 }
+		// 		 if ((client->latched_buttons & buttonMask) ||
+		// 			 (deathmatch->value && ((int)dmflags->value & DF_FORCE_RESPAWN)))
+		// 		 {
+		// 			 respawn(ent);
+		// 			 client->latched_buttons = 0;
+		// 		 }
+		// 	 }
 
-	// 	 return;
-	//  }
+		return
+	}
 
 	//  /* add player trail so monsters can follow */
-	//  if (!deathmatch->value)
-	//  {
-	// 	 if (!visible(ent, PlayerTrail_LastSpot()))
-	// 	 {
+	//  if (!deathmatch->value) {
+	// 	 if (!visible(ent, PlayerTrail_LastSpot())) {
 	// 		 PlayerTrail_Add(ent->s.old_origin);
 	// 	 }
 	//  }

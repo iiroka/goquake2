@@ -106,6 +106,119 @@ func (T *qGl3) pushDlights() {
 	T.updateUBOLights()
 }
 
+func (T *qGl3) recursiveLightPoint(anode mnode_or_leaf, start, end []float32) int {
+	// float front, back, frac;
+	// int side;
+	// cplane_t *plane;
+	// vec3_t mid;
+	// msurface_t *surf;
+	// int s, t, ds, dt;
+	// int i;
+	// mtexinfo_t *tex;
+	// byte *lightmap;
+	// int maps;
+	// int r;
+
+	if anode.Contents() != -1 {
+		return -1 /* didn't hit anything */
+	}
+
+	node := anode.(*mnode_t)
+
+	/* calculate mid point */
+	plane := node.plane
+	front := shared.DotProduct(start, plane.Normal[:]) - plane.Dist
+	back := shared.DotProduct(end, plane.Normal[:]) - plane.Dist
+	side := 0
+	if front < 0 {
+		side = 1
+	}
+
+	if (back < 0) == (front < 0) {
+		return T.recursiveLightPoint(node.children[side], start, end)
+	}
+
+	frac := front / (front - back)
+	mid := []float32{
+		start[0] + (end[0]-start[0])*frac,
+		start[1] + (end[1]-start[1])*frac,
+		start[2] + (end[2]-start[2])*frac}
+
+	/* go down front side */
+	r := T.recursiveLightPoint(node.children[side], start, mid)
+
+	if r >= 0 {
+		return r /* hit something */
+	}
+
+	if (back < 0) == (front < 0) {
+		return -1 /* didn't hit anuthing */
+	}
+
+	/* check for impact on this node */
+	copy(T.lightspot[:], mid)
+	T.lightplane = plane
+
+	for i := 0; i < int(node.numsurfaces); i++ {
+		surf := T.gl3_worldmodel.surfaces[int(node.firstsurface)+i]
+
+		if (surf.flags & (SURF_DRAWTURB | SURF_DRAWSKY)) != 0 {
+			continue /* no lightmaps */
+		}
+
+		tex := surf.texinfo
+
+		s := int(shared.DotProduct(mid, tex.vecs[0][:]) + tex.vecs[0][3])
+		t := int(shared.DotProduct(mid, tex.vecs[1][:]) + tex.vecs[1][3])
+
+		if (s < int(surf.texturemins[0])) ||
+			(t < int(surf.texturemins[1])) {
+			continue
+		}
+
+		ds := s - int(surf.texturemins[0])
+		dt := t - int(surf.texturemins[1])
+
+		if (ds > int(surf.extents[0])) || (dt > int(surf.extents[1])) {
+			continue
+		}
+
+		if surf.samples == nil {
+			return 0
+		}
+
+		ds >>= 4
+		dt >>= 4
+
+		lightmap_i := 0
+		T.pointcolor[0] = 0
+		T.pointcolor[1] = 0
+		T.pointcolor[2] = 0
+
+		lightmap_i += 3 * (dt*int((surf.extents[0]>>4)+1) + ds)
+
+		// 	vec3_t scale;
+		for maps := 0; maps < MAX_LIGHTMAPS_PER_SURFACE && surf.styles[maps] != 255; maps++ {
+			var scale [3]float32
+			for j := 0; j < 3; j++ {
+				scale[j] = T.r_modulate.Float() *
+					T.gl3_newrefdef.Lightstyles[surf.styles[maps]].Rgb[j]
+			}
+
+			T.pointcolor[0] += float32(surf.samples[lightmap_i]) * scale[0] * (1.0 / 255)
+			T.pointcolor[1] += float32(surf.samples[lightmap_i+1]) * scale[1] * (1.0 / 255)
+			T.pointcolor[2] += float32(surf.samples[lightmap_i+2]) * scale[2] * (1.0 / 255)
+			lightmap_i += 3 * int((surf.extents[0]>>4)+1) *
+				int((surf.extents[1]>>4)+1)
+		}
+
+		return 1
+	}
+
+	/* go down back side */
+	return T.recursiveLightPoint(node.children[side^1], mid, end)
+}
+
 func (T *qGl3) lightPoint(p, color []float32) {
 	// vec3_t end;
 	// float r;
@@ -114,49 +227,42 @@ func (T *qGl3) lightPoint(p, color []float32) {
 	// vec3_t dist;
 	// float add;
 
-	color[0] = 1.0
-	color[1] = 1.0
-	color[2] = 1.0
-	// if (!gl3_worldmodel.lightdata || !currententity) {
-	// 	color[0] = color[1] = color[2] = 1.0;
-	// 	return;
-	// }
+	if T.gl3_worldmodel.lightdata == nil || T.currententity == nil {
+		color[0] = 1.0
+		color[1] = 1.0
+		color[2] = 1.0
+		return
+	}
 
-	// end[0] = p[0];
-	// end[1] = p[1];
-	// end[2] = p[2] - 2048;
+	end := []float32{p[0], p[1], p[2] - 2048}
 
-	// // TODO: don't just aggregate the color, but also save position of brightest+nearest light
-	// //       for shadow position and maybe lighting on model?
+	// TODO: don't just aggregate the color, but also save position of brightest+nearest light
+	//       for shadow position and maybe lighting on model?
 
-	// r = RecursiveLightPoint(gl3_worldmodel->nodes, p, end);
+	r := T.recursiveLightPoint(&T.gl3_worldmodel.nodes[0], p, end)
 
-	// if (r == -1)
-	// {
-	// 	VectorCopy(vec3_origin, color);
-	// }
-	// else
-	// {
-	// 	VectorCopy(pointcolor, color);
-	// }
+	if r == -1 {
+		color[0] = 0
+		color[1] = 0
+		color[2] = 0
+	} else {
+		copy(color, T.pointcolor[:])
+	}
 
-	// /* add dynamic lights */
-	// dl = gl3_newrefdef.dlights;
+	/* add dynamic lights */
+	for _, dl := range T.gl3_newrefdef.Dlights {
+		// dl = gl3_newrefdef.dlights[lnum]
+		dist := make([]float32, 3)
+		shared.VectorSubtract(T.currententity.Origin[:], dl.Origin[:], dist)
+		add := dl.Intensity - shared.VectorLength(dist)
+		add *= (1.0 / 256.0)
 
-	// for (lnum = 0; lnum < gl3_newrefdef.num_dlights; lnum++, dl++)
-	// {
-	// 	VectorSubtract(currententity->origin,
-	// 			dl->origin, dist);
-	// 	add = dl->intensity - VectorLength(dist);
-	// 	add *= (1.0f / 256.0f);
+		if add > 0 {
+			shared.VectorMA(color, add, dl.Color[:], color)
+		}
+	}
 
-	// 	if (add > 0)
-	// 	{
-	// 		VectorMA(color, add, dl->color, color);
-	// 	}
-	// }
-
-	// VectorScale(color, r_modulate->value, color);
+	// shared.VectorScale(color, T.r_modulate.Float(), color)
 }
 
 /*
@@ -275,7 +381,7 @@ func (T *qGl3) buildLightMap(surf *msurface_t, offsetInLMbuf, stride int) error 
 
 		for i := 0; i < tmax; i++ {
 			for j := 0; j < 4*smax; j++ {
-				T.gl3_lms.lightmap_buffers[mmap][dest_i+j] = 255
+				T.gl3_lms.lightmap_buffers[mmap][dest_i+j] = 127
 			}
 			dest_i += 4*smax + stride
 		}

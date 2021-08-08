@@ -301,6 +301,17 @@ func (T *qServer) executeUserCommand(s string) error {
 	return nil
 }
 
+func (T *qServer) svClientThink(cl *client_t, cmd *shared.Usercmd_t) {
+	cl.commandMsec -= int(cmd.Msec)
+
+	if (cl.commandMsec < 0) && T.sv_enforcetime.Bool() {
+		T.common.Com_DPrintf("commandMsec underflow from %s\n", cl.name)
+		return
+	}
+
+	T.ge.ClientThink(cl.edict, cmd)
+}
+
 /*
  * The current net_message is parsed for the given client
  */
@@ -318,7 +329,7 @@ func (T *qServer) executeClientMessage(cl *client_t, msg *shared.QReadbuf) error
 	//  int lastframe;
 
 	T.sv_client = cl
-	//  sv_player = sv_client->edict;
+	T.sv_player = T.sv_client.edict
 
 	/* only allow one move command */
 	move_issued := false
@@ -393,29 +404,29 @@ func (T *qServer) executeClientMessage(cl *client_t, msg *shared.QReadbuf) error
 			// 				 return;
 			// 			 }
 
-			// 			 if (!sv_paused->value) {
-			// 				 net_drop = cl->netchan.dropped;
+			if !T.sv_paused.Bool() {
+				net_drop := cl.netchan.Dropped
 
-			// 				 if (net_drop < 20) {
-			// 					 while (net_drop > 2) {
-			// 						 SV_ClientThink(cl, &cl->lastcmd);
+				if net_drop < 20 {
+					for net_drop > 2 {
+						T.svClientThink(cl, &cl.lastcmd)
 
-			// 						 net_drop--;
-			// 					 }
+						net_drop--
+					}
 
-			// 					 if (net_drop > 1) {
-			// 						 SV_ClientThink(cl, &oldest);
-			// 					 }
+					if net_drop > 1 {
+						T.svClientThink(cl, &oldest)
+					}
 
-			// 					 if (net_drop > 0) {
-			// 						 SV_ClientThink(cl, &oldcmd);
-			// 					 }
-			// 				 }
+					if net_drop > 0 {
+						T.svClientThink(cl, &oldcmd)
+					}
+				}
 
-			// 				 SV_ClientThink(cl, &newcmd);
-			// 			 }
+				T.svClientThink(cl, &newcmd)
+			}
 
-			// cl.lastcmd = newcmd
+			cl.lastcmd.Copy(newcmd)
 
 		case shared.ClcStringcmd:
 			s := msg.ReadString()

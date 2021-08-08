@@ -92,11 +92,11 @@ type client_t struct {
 
 	userinfo string /* name, etc */
 
-	lastframe int /* for delta compression */
-	// usercmd_t lastcmd;                  /* for filling in big drops */
+	lastframe int              /* for delta compression */
+	lastcmd   shared.Usercmd_t /* for filling in big drops */
 
-	// int commandMsec;                    /* every seconds this is reset, if user */
-	// 									/* commands exhaust it, assume time cheating */
+	commandMsec int /* every seconds this is reset, if user */
+	/* commands exhaust it, assume time cheating */
 
 	// int frame_latency[LATENCY_COUNTS];
 	ping int

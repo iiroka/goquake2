@@ -29,6 +29,7 @@ package client
 import (
 	"goquake2/shared"
 	"math"
+	"strconv"
 )
 
 func (T *qClient) checkPredictionError() {
@@ -71,17 +72,93 @@ func (T *qClient) checkPredictionError() {
 	}
 }
 
+func (T *qClient) clipMoveToEntities(start, mins, maxs, end []float32, tr *shared.Trace_t) {
+
+	var headnode int
+	var angles []float32
+	var bmins [3]float32
+	var bmaxs [3]float32
+	for i := 0; i < T.cl.frame.num_entities; i++ {
+		num := (T.cl.frame.parse_entities + i) & (MAX_PARSE_ENTITIES - 1)
+		ent := &T.cl_parse_entities[num]
+
+		if ent.Solid == 0 {
+			continue
+		}
+
+		if ent.Number == T.cl.playernum+1 {
+			continue
+		}
+
+		if ent.Solid == 31 {
+			/* special value for bmodel */
+			cmodel := T.cl.model_clip[ent.Modelindex]
+
+			if cmodel == nil {
+				continue
+			}
+
+			headnode = cmodel.Headnode
+			angles = ent.Angles[:]
+		} else {
+			/* encoded bbox */
+			x := 8 * (ent.Solid & 31)
+			zd := 8 * ((ent.Solid >> 5) & 31)
+			zu := 8*((ent.Solid>>10)&63) - 32
+
+			bmins[0] = float32(-x)
+			bmins[1] = float32(-x)
+			bmaxs[0] = float32(x)
+			bmaxs[1] = float32(x)
+			bmins[2] = float32(-zd)
+			bmaxs[2] = float32(zu)
+
+			headnode = T.common.CMHeadnodeForBox(bmins[:], bmaxs[:])
+			angles = []float32{0, 0, 0} /* boxes don't rotate */
+		}
+
+		if tr.Allsolid {
+			return
+		}
+
+		trace := T.common.CMTransformedBoxTrace(start, end,
+			mins, maxs, headnode, shared.MASK_PLAYERSOLID,
+			ent.Origin[:], angles)
+
+		if trace.Allsolid || trace.Startsolid ||
+			(trace.Fraction < tr.Fraction) {
+			trace.Ent = ent
+
+			if tr.Startsolid {
+				tr.Copy(trace)
+				tr.Startsolid = true
+			} else {
+				tr.Copy(trace)
+			}
+		}
+	}
+}
+
+func clPMTrace(start, mins, maxs, end []float32, a interface{}) shared.Trace_t {
+
+	T := a.(*qClient)
+
+	/* check against world */
+	t := T.common.CMBoxTrace(start, end, mins, maxs, 0, shared.MASK_PLAYERSOLID)
+	if t.Fraction < 1.0 {
+		// t.ent = (struct edict_s *)1;
+	}
+
+	/* check all other solid models */
+	T.clipMoveToEntities(start, mins, maxs, end, &t)
+
+	return t
+}
+
 /*
  * Sets cl.predicted_origin and cl.predicted_angles
  */
 func (T *qClient) predictMovement() {
-	//  int ack, current;
-	//  int frame;
-	//  usercmd_t *cmd;
-	//  pmove_t pm;
-	//  int i;
-	//  int step;
-	//  vec3_t tmp;
 
 	if T.cls.state != ca_active {
 		return
@@ -116,9 +193,11 @@ func (T *qClient) predictMovement() {
 
 	/* copy current state to pmove */
 	pm := shared.Pmove_t{}
-	//  pm.trace = CL_PMTrace;
+	pm.TraceArg = T
+	pm.Trace = clPMTrace
 	//  pm.pointcontents = CL_PMpointcontents;
-	//  pm_airaccelerate = atof(cl.configstrings[CS_AIRACCEL]);
+	aa, _ := strconv.ParseFloat(T.cl.configstrings[shared.CS_AIRACCEL], 32)
+	T.common.SetAirAccelerate(float32(aa))
 	pm.S = T.cl.frame.playerstate.Pmove
 
 	/* run frames */
@@ -139,16 +218,14 @@ func (T *qClient) predictMovement() {
 		copy(T.cl.predicted_origins[frame][:], pm.S.Origin[:])
 	}
 
-	// step := int(pm.S.Origin[2]) - int(T.cl.predicted_origin[2]*8)
-	//  VectorCopy(pm.s.velocity, tmp);
+	step := int(pm.S.Origin[2]) - int(T.cl.predicted_origin[2]*8)
 
-	//  if (((step > 126 && step < 130))
-	// 	 && !VectorCompare(tmp, vec3_origin)
-	// 	 && (pm.s.pm_flags & PMF_ON_GROUND))
-	//  {
-	// 	 cl.predicted_step = step * 0.125f;
-	// 	 cl.predicted_step_time = cls.realtime - (int)(cls.nframetime * 500);
-	//  }
+	if (step > 126 && step < 130) &&
+		(pm.S.Velocity[0] != 0 || pm.S.Velocity[1] != 0 || pm.S.Velocity[2] != 0) &&
+		(pm.S.Pm_flags&shared.PMF_ON_GROUND) != 0 {
+		T.cl.predicted_step = float32(step) * 0.125
+		T.cl.predicted_step_time = uint(T.cls.realtime - int(T.cls.nframetime*500))
+	}
 
 	/* copy results out for rendering */
 	T.cl.predicted_origin[0] = float32(pm.S.Origin[0]) * 0.125

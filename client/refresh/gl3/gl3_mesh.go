@@ -38,6 +38,12 @@ func lerpVerts(powerUpEffect bool, nverts int, v, ov,
 	frontv, backv [3]float32) {
 
 	// if powerUpEffect {
+	// 	for i := 0; i < nverts; i++ {
+	// 		normal := r_avertexnormals[verts[i].lightnormalindex]
+	// 		lerp[i][0] = move[0] + float32(ov[i].V[0])*backv[0] + float32(v[i].V[0])*frontv[0]
+	// 		lerp[i][1] = move[1] + float32(ov[i].V[1])*backv[1] + float32(v[i].V[1])*frontv[1]
+	// 		lerp[i][2] = move[2] + float32(ov[i].V[2])*backv[2] + float32(v[i].V[2])*frontv[2]
+	// 	}
 	// for (i = 0; i < nverts; i++, v++, ov++, lerp += 4)
 	// {
 	// 	float *normal = r_avertexnormals[verts[i].lightnormalindex];
@@ -62,20 +68,8 @@ func lerpVerts(powerUpEffect bool, nverts int, v, ov,
  * Interpolates between two frames and origins
  */
 func (T *qGl3) drawAliasFrameLerp(aliasextra aliasExtra, entity *shared.Entity_t, shadelight [3]float32) {
-	//  GLenum type;
-	//  float l;
-	//  daliasframe_t *frame, *oldframe;
-	//  dtrivertx_t *v, *ov, *verts;
-	//  int *order;
-	//  int count;
-	//  float alpha;
-	//  vec3_t move, delta, vectors[3];
-	//  vec3_t frontv, backv;
-	//  int i;
-	//  int index_xyz;
 	backlerp := entity.Backlerp
 	frontlerp := 1.0 - backlerp
-	//  float *lerp;
 	// draw without texture? used for quad damage effect etc, I think
 	colorOnly := (entity.Flags &
 		(shared.RF_SHELL_RED | shared.RF_SHELL_GREEN | shared.RF_SHELL_BLUE | shared.RF_SHELL_DOUBLE |
@@ -92,11 +86,11 @@ func (T *qGl3) drawAliasFrameLerp(aliasextra aliasExtra, entity *shared.Entity_t
 	ov := oldframe.Verts
 
 	var alpha float32
-	//  if (entity->flags & RF_TRANSLUCENT) {
-	// 	 alpha = entity->alpha * 0.666f;
-	//  } else {
-	alpha = 1.0
-	//  }
+	if (entity.Flags & shared.RF_TRANSLUCENT) != 0 {
+		alpha = entity.Alpha * 0.666
+	} else {
+		alpha = 1.0
+	}
 
 	if colorOnly {
 		T.useProgram(T.gl3state.si3DaliasColor.shaderProgram)
@@ -160,8 +154,6 @@ func (T *qGl3) drawAliasFrameLerp(aliasextra aliasExtra, entity *shared.Entity_t
 			ttype = gl.TRIANGLE_FAN
 		}
 
-		// 	 gl3_alias_vtx_t* buf = da_addn_uninit(vtxBuf, count);
-
 		if colorOnly {
 			for i := 0; i < int(count); i++ {
 				cur := gl3_alias_vtx_t{vtxBuf[vtxIndx*gl3_alias_vtx_size:]}
@@ -176,7 +168,8 @@ func (T *qGl3) drawAliasFrameLerp(aliasextra aliasExtra, entity *shared.Entity_t
 			for i := 0; i < int(count); i++ {
 				cur := gl3_alias_vtx_t{vtxBuf[vtxIndx*gl3_alias_vtx_size:]}
 				/* texture coordinates come from the draw list */
-				cur.setTexCoord(math.Float32frombits(uint32(aliasextra.glcmds[index+0])),
+				cur.setTexCoord(
+					math.Float32frombits(uint32(aliasextra.glcmds[index+0])),
 					math.Float32frombits(uint32(aliasextra.glcmds[index+1])))
 
 				index_xyz := aliasextra.glcmds[index+2]
@@ -207,7 +200,7 @@ func (T *qGl3) drawAliasFrameLerp(aliasextra aliasExtra, entity *shared.Entity_t
 				indxIndx += 3
 			}
 		} else { // triangle strip
-			for i := 1; i < int(count-1); i += 1 {
+			for i := 1; i < int(count-1); i++ {
 				if (i & 1) == 1 {
 					indxBuf[indxIndx] = nextVtxIdx + uint16(i) - 1
 					indxBuf[indxIndx+1] = nextVtxIdx + uint16(i)
@@ -508,37 +501,39 @@ func (T *qGl3) drawAliasModel(entity *shared.Entity_t) {
 	// 	glDepthRange(gl3depthmin, gl3depthmin + 0.3 * (gl3depthmax - gl3depthmin));
 	// }
 
-	// if (entity->flags & RF_WEAPONMODEL) != 0 {
-	// 	extern hmm_mat4 GL3_MYgluPerspective(GLdouble fovy, GLdouble aspect, GLdouble zNear, GLdouble zFar);
+	var origProjMat []float32
+	if (entity.Flags & shared.RF_WEAPONMODEL) != 0 {
+		// 	extern hmm_mat4 GL3_MYgluPerspective(GLdouble fovy, GLdouble aspect, GLdouble zNear, GLdouble zFar);
 
-	// 	origProjMat = gl3state.uni3DData.transProjMat4;
+		origProjMat = T.gl3state.uni3DData.getTransProjMat4()
 
-	// 	// render weapon with a different FOV (r_gunfov) so it's not distorted at high view FOV
-	// 	float screenaspect = (float)gl3_newrefdef.width / gl3_newrefdef.height;
-	// 	float dist = (r_farsee->value == 0) ? 4096.0f : 8192.0f;
+		// render weapon with a different FOV (r_gunfov) so it's not distorted at high view FOV
+		screenaspect := float32(T.gl3_newrefdef.Width) / float32(T.gl3_newrefdef.Height)
+		var dist float32 = 4096.0
+		if T.r_farsee.Bool() {
+			dist = 8192.0
+		}
 
-	// 	if (r_gunfov->value < 0)
-	// 	{
-	// 		gl3state.uni3DData.transProjMat4 = GL3_MYgluPerspective(gl3_newrefdef.fov_y, screenaspect, 4, dist);
-	// 	}
-	// 	else
-	// 	{
-	// 		gl3state.uni3DData.transProjMat4 = GL3_MYgluPerspective(r_gunfov->value, screenaspect, 4, dist);
-	// 	}
+		if T.r_gunfov.Int() < 0 {
+			T.gl3state.uni3DData.setTransProjMat4(GL3_MYgluPerspective(T.gl3_newrefdef.Fov_y, screenaspect, 4, dist))
+		} else {
+			T.gl3state.uni3DData.setTransProjMat4(GL3_MYgluPerspective(T.r_gunfov.Float(), screenaspect, 4, dist))
+		}
 
-	// 	if(gl_lefthand->value == 1.0F)
-	// 	{
-	// 		// to mirror gun so it's rendered left-handed, just invert X-axis column
-	// 		// of projection matrix
-	// 		for(int i=0; i<4; ++i)
-	// 		{
-	// 			gl3state.uni3DData.transProjMat4.Elements[0][i] = -gl3state.uni3DData.transProjMat4.Elements[0][i];
-	// 		}
-	// 		//GL3_UpdateUBO3D(); Note: GL3_RotateForEntity() will call this,no need to do it twice before drawing
+		if T.gl_lefthand.Int() == 1 {
+			// to mirror gun so it's rendered left-handed, just invert X-axis column
+			// of projection matrix
+			mat := T.gl3state.uni3DData.getTransProjMat4()
+			for i := 0; i < 4; i++ {
+				mat[i] = -mat[i]
+				// 	gl3state.uni3DData.transProjMat4.Elements[0][i] = -gl3state.uni3DData.transProjMat4.Elements[0][i]
+			}
+			T.gl3state.uni3DData.setTransProjMat4(mat)
+			//GL3_UpdateUBO3D(); Note: GL3_RotateForEntity() will call this,no need to do it twice before drawing
 
-	// 		glCullFace(GL_BACK);
-	// 	}
-	// }
+			gl.CullFace(gl.BACK)
+		}
+	}
 
 	//glPushMatrix();
 	origModelMat := T.gl3state.uni3DData.getTransModelMat4()
@@ -596,12 +591,13 @@ func (T *qGl3) drawAliasModel(entity *shared.Entity_t) {
 	T.gl3state.uni3DData.setTransModelMat4(origModelMat)
 	T.updateUBO3D()
 
-	// if (entity->flags & RF_WEAPONMODEL) != 0 {
-	// 	gl3state.uni3DData.transProjMat4 = origProjMat;
-	// 	GL3_UpdateUBO3D();
-	// 	if(gl_lefthand->value == 1.0F)
-	// 		glCullFace(GL_FRONT);
-	// }
+	if (entity.Flags & shared.RF_WEAPONMODEL) != 0 {
+		T.gl3state.uni3DData.setTransProjMat4(origProjMat)
+		T.updateUBO3D()
+		if T.gl_lefthand.Int() == 1 {
+			gl.CullFace(gl.FRONT)
+		}
+	}
 
 	if (entity.Flags & shared.RF_TRANSLUCENT) != 0 {
 		gl.Disable(gl.BLEND)

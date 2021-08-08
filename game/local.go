@@ -29,6 +29,28 @@ import "goquake2/shared"
 
 const FRAMETIME = 0.1
 
+const (
+	AMMO_BULLETS  = 0
+	AMMO_SHELLS   = 1
+	AMMO_ROCKETS  = 2
+	AMMO_GRENADES = 3
+	AMMO_CELLS    = 4
+	AMMO_SLUGS    = 5
+
+	/* deadflag */
+	DEAD_NO          = 0
+	DEAD_DYING       = 1
+	DEAD_DEAD        = 2
+	DEAD_RESPAWNABLE = 3
+
+	/* armor types */
+	ARMOR_NONE   = 0
+	ARMOR_JACKET = 1
+	ARMOR_COMBAT = 2
+	ARMOR_BODY   = 3
+	ARMOR_SHARD  = 4
+)
+
 /* edict->movetype values */
 type movetype_t int
 
@@ -45,6 +67,65 @@ const (
 	MOVETYPE_FLYMISSILE movetype_t = 8 /* extra size to monsters */
 	MOVETYPE_BOUNCE     movetype_t = 9
 )
+
+type gitem_armor_t struct {
+	base_count        int
+	max_count         int
+	normal_protection float32
+	energy_protection float32
+	armor             int
+}
+
+const (
+	IT_WEAPON      = 1 /* use makes active weapon */
+	IT_AMMO        = 2
+	IT_ARMOR       = 4
+	IT_STAY_COOP   = 8
+	IT_KEY         = 16
+	IT_POWERUP     = 32
+	IT_INSTANT_USE = 64 /* item is insta-used on pickup if dmflag is set */
+
+	/* gitem_t->weapmodel for weapons indicates model index */
+	WEAP_BLASTER         = 1
+	WEAP_SHOTGUN         = 2
+	WEAP_SUPERSHOTGUN    = 3
+	WEAP_MACHINEGUN      = 4
+	WEAP_CHAINGUN        = 5
+	WEAP_GRENADES        = 6
+	WEAP_GRENADELAUNCHER = 7
+	WEAP_ROCKETLAUNCHER  = 8
+	WEAP_HYPERBLASTER    = 9
+	WEAP_RAILGUN         = 10
+	WEAP_BFG             = 11
+)
+
+type gitem_t struct {
+	classname         string /* spawning name */
+	pickup            func(ent, other *edict_t, G *qGame) bool
+	use               func(ent *edict_t, item *gitem_t, G *qGame)
+	drop              func(ent *edict_t, item *gitem_t, G *qGame)
+	weaponthink       func(ent *edict_t, G *qGame)
+	pickup_sound      string
+	world_model       string
+	world_model_flags int
+	view_model        string
+
+	/* client side info */
+	icon        string
+	pickup_name string /* for printing on pickup */
+	count_width int    /* number of digits to display by icon */
+
+	quantity int    /* for ammo how much, for weapons how much is used per shot */
+	ammo     string /* for weapons */
+	flags    int    /* IT_* flags */
+
+	weapmodel int /* weapon model index (for weapons) */
+
+	info interface{}
+	tag  int
+
+	precaches string /* string of all models, sounds, and images this item will use */
+}
 
 /* this structure is left intact through an entire game
    it should be initialized at dll load time, and read/written to
@@ -86,7 +167,7 @@ type level_locals_t struct {
 	nextmap    string /* go here when fraglimit is hit */
 
 	/* intermission state */
-	//    float intermissiontime; /* time the intermission was started */
+	intermissiontime float32 /* time the intermission was started */
 	//    char *changemap;
 	//    int exitintermission;
 	//    vec3_t intermission_origin;
@@ -112,7 +193,7 @@ type level_locals_t struct {
 	//    int total_monsters;
 	//    int killed_monsters;
 
-	//    edict_t *current_entity; /* entity running from G_RunFrame */
+	current_entity *edict_t /* entity running from G_RunFrame */
 	//    int body_que; /* dead bodies */
 
 	//    int power_cubes; /* ugly necessity for coop */
@@ -142,6 +223,52 @@ type spawn_temp_t struct {
 	//    float maxpitch;
 }
 
+type mframe_t struct {
+	aifunc    func(self *edict_t, dist float32, G *qGame)
+	dist      float32
+	thinkfunc func(self *edict_t, G *qGame)
+}
+
+type mmove_t struct {
+	firstframe int
+	lastframe  int
+	frame      []mframe_t
+	endfunc    func(self *edict_t, G *qGame)
+}
+
+type monsterinfo_t struct {
+	currentmove *mmove_t
+	// int aiflags;
+	nextframe int
+	scale     float32
+
+	stand func(self *edict_t, G *qGame)
+	// void (*idle)(edict_t *self);
+	// void (*search)(edict_t *self);
+	// void (*walk)(edict_t *self);
+	// void (*run)(edict_t *self);
+	// void (*dodge)(edict_t *self, edict_t *other, float eta);
+	// void (*attack)(edict_t *self);
+	// void (*melee)(edict_t *self);
+	// void (*sight)(edict_t *self, edict_t *other);
+	// qboolean (*checkattack)(edict_t *self);
+
+	// float pausetime;
+	// float attack_finished;
+
+	// vec3_t saved_goal;
+	// float search_time;
+	// float trail_time;
+	// vec3_t last_sighting;
+	// int attack_state;
+	// int lefty;
+	// float idle_time;
+	// int linkcount;
+
+	// int power_armor_type;
+	// int power_armor_power;
+}
+
 /* client data that stays across multiple level loads */
 type client_persistant_t struct {
 	userinfo string
@@ -168,8 +295,8 @@ type client_persistant_t struct {
 	max_cells    int
 	max_slugs    int
 
-	// gitem_t *weapon
-	// gitem_t *lastweapon
+	weapon     *gitem_t
+	lastweapon *gitem_t
 
 	// int power_cubes /* used for tracking the cubes in coop games */
 	// int score       /* for calculating total unit score in coop games */
@@ -199,8 +326,8 @@ func (G *client_persistant_t) copy(other client_persistant_t) {
 	G.max_grenades = other.max_grenades
 	G.max_cells = other.max_cells
 	G.max_slugs = other.max_slugs
-	// gitem_t *weapon
-	// gitem_t *lastweapon
+	G.weapon = other.weapon
+	G.lastweapon = other.lastweapon
 	// int power_cubes /* used for tracking the cubes in coop games */
 	// int score       /* for calculating total unit score in coop games */
 	// int game_helpchanged
@@ -237,16 +364,16 @@ type gclient_t struct {
 
 	// int ammo_index;
 
-	// int buttons;
-	// int oldbuttons;
+	buttons         int
+	oldbuttons      int
 	latched_buttons int
 
-	// qboolean weapon_thunk;
+	weapon_thunk bool
 
-	// gitem_t *newweapon;
+	newweapon *gitem_t
 
-	// /* sum up damage over an entire frame, so
-	//    shotgun blasts give a single big kick */
+	/* sum up damage over an entire frame, so
+	   shotgun blasts give a single big kick */
 	// int damage_armor; /* damage absorbed by armor */
 	// int damage_parmor; /* damage absorbed by power armor */
 	// int damage_blood; /* damage taken out of health */
@@ -299,7 +426,7 @@ type gclient_t struct {
 
 	// float respawn_time; /* can respawn when time > this */
 
-	// edict_t *chase_target; /* player we are chasing */
+	chase_target *edict_t /* player we are chasing */
 	// qboolean update_chase; /* need to update chase info? */
 }
 
@@ -323,11 +450,11 @@ func (G *gclient_t) copy(other gclient_t) {
 	// qboolean showhelp;
 	// qboolean showhelpicon;
 	// int ammo_index;
-	// int buttons;
-	// int oldbuttons;
+	G.buttons = other.buttons
+	G.oldbuttons = other.oldbuttons
 	G.latched_buttons = other.latched_buttons
-	// qboolean weapon_thunk;
-	// gitem_t *newweapon;
+	G.weapon_thunk = other.weapon_thunk
+	G.newweapon = other.newweapon
 	// int damage_armor; /* damage absorbed by armor */
 	// int damage_parmor; /* damage absorbed by power armor */
 	// int damage_blood; /* damage taken out of health */
@@ -428,11 +555,11 @@ type edict_t struct {
 	// char *combattarget;
 	// edict_t *target_ent;
 
-	// float speed, accel, decel;
+	Speed, Accel, Decel float32
 	// vec3_t movedir;
 	// vec3_t pos1, pos2;
 
-	// vec3_t velocity;
+	velocity [3]float32
 	// vec3_t avelocity;
 	// int mass;
 	// float air_finished;
@@ -461,30 +588,30 @@ type edict_t struct {
 	// float fly_sound_debounce_time;	/* now also used by insane marines to store pain sound timeout */
 	// float last_move_time;
 
-	// int health;
-	// int max_health;
-	// int gib_health;
-	// int deadflag;
+	health     int
+	max_health int
+	gib_health int
+	deadflag   int
 
 	// float show_hostile;
 	// float powerarmor_time;
 
 	// char *map; /* target_changelevel */
 
-	// int viewheight; /* height above origin where eyesight is determined */
+	viewheight int /* height above origin where eyesight is determined */
 	// int takedamage;
-	// int dmg;
+	Dmg int
 	// int radius_dmg;
 	// float dmg_radius;
-	// int sounds; /* make this a spawntemp var? */
+	Sounds int /* make this a spawntemp var? */
 	// int count;
 
 	// edict_t *chain;
 	// edict_t *enemy;
 	// edict_t *oldenemy;
 	// edict_t *activator;
-	// edict_t *groundentity;
-	// int groundentity_linkcount;
+	groundentity           *edict_t
+	groundentity_linkcount int
 	// edict_t *teamchain;
 	// edict_t *teammaster;
 
@@ -493,13 +620,13 @@ type edict_t struct {
 
 	noise_index  int
 	noise_index2 int
-	volume       float32
-	attenuation  float32
+	Volume       float32
+	Attenuation  float32
 
 	/* timing variables */
-	// float wait;
-	// float delay; /* before firing targets */
-	// float random;
+	Wait   float32
+	Delay  float32 /* before firing targets */
+	Random float32
 
 	// float last_sound_time;
 
@@ -516,9 +643,9 @@ type edict_t struct {
 
 	// gitem_t *item; /* for bonus items */
 
-	// /* common data blocks */
+	/* common data blocks */
 	// moveinfo_t moveinfo;
-	// monsterinfo_t monsterinfo;
+	monsterinfo monsterinfo_t
 }
 
 func (G *edict_t) S() *shared.Entity_state_t {
@@ -696,6 +823,8 @@ type qGame struct {
 	gib_on *shared.CvarT
 
 	aimfix *shared.CvarT
+
+	pm_passent *edict_t
 }
 
 func QGameCreate(gi shared.Game_import_t) shared.Game_export_t {

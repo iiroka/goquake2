@@ -57,6 +57,7 @@ const (
 /* link_t is only used for entity area links now */
 type Link_t struct {
 	Prev, Next *Link_t
+	Self       Edict_s
 }
 
 type Gclient_s interface {
@@ -77,7 +78,7 @@ type Edict_s interface {
 
 	Area() *Link_t /* linked to a division node or leaf */
 
-	NumClusters() int /* if -1, use headnode instead */
+	NumClusters() int /* if -1, uLink_tse headnode instead */
 	SetNumClusters(v int)
 	Clusternums() []int
 	Headnode() int /* unused if num_clusters != -1 */
@@ -126,15 +127,14 @@ type Game_import_t interface {
 
 	/* the *index functions create configstrings
 	   and some internal server state */
-	// int (*modelindex)(char *name);
+	Modelindex(name string) int
 	Soundindex(name string) int
 	// int (*imageindex)(char *name);
 
 	// void (*setmodel)(edict_t *ent, char *name);
 
 	// /* collision detection */
-	// trace_t (*trace)(vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end,
-	// 		edict_t *passent, int contentmask);
+	Trace(start, mins, maxs, end []float32, passent Edict_s, contentmask int) Trace_t
 	// int (*pointcontents)(vec3_t point);
 	// qboolean (*inPVS)(vec3_t p1, vec3_t p2);
 	// qboolean (*inPHS)(vec3_t p1, vec3_t p2);
@@ -148,7 +148,7 @@ type Game_import_t interface {
 	// void (*unlinkentity)(edict_t *ent); /* call before removing an interactive edict */
 	// int (*BoxEdicts)(vec3_t mins, vec3_t maxs, edict_t **list, int maxcount,
 	// 		int areatype);
-	// void (*Pmove)(pmove_t *pmove); /* player movement code common with client prediction */
+	Pmove(pmove *Pmove_t) /* player movement code common with client prediction */
 
 	// /* network messaging */
 	// void (*multicast)(vec3_t origin, multicast_t to);
@@ -216,7 +216,7 @@ type Game_export_t interface {
 	// void (*ClientUserinfoChanged)(edict_t *ent, char *userinfo);
 	// void (*ClientDisconnect)(edict_t *ent);
 	// void (*ClientCommand)(edict_t *ent);
-	// void (*ClientThink)(edict_t *ent, usercmd_t *cmd);
+	ClientThink(ent Edict_s, cmd *Usercmd_t)
 
 	RunFrame() error
 

@@ -31,7 +31,7 @@ type Netchan_t struct {
 
 	sock Netsrc_t
 
-	dropped int /* between last packet and previous */
+	Dropped int /* between last packet and previous */
 
 	last_received int /* for timeouts */
 	LastSent      int /* for retransmits */
@@ -67,7 +67,7 @@ func (ch *Netchan_t) Setup(common QCommon, sock Netsrc_t, adr Netadr_t, qport in
 	ch.common = common
 	ch.fatal_error = false
 	ch.sock = sock
-	ch.dropped = 0
+	ch.Dropped = 0
 	ch.last_received = common.Curtime()
 	ch.LastSent = 0
 	ch.remote_address = adr
@@ -242,15 +242,15 @@ func (ch *Netchan_t) Process(msg *QReadbuf) bool {
 	}
 
 	/* dropped packets don't keep the message from being used */
-	ch.dropped = sequence - (ch.incoming_sequence + 1)
+	ch.Dropped = sequence - (ch.incoming_sequence + 1)
 
-	if ch.dropped > 0 {
+	if ch.Dropped > 0 {
 		// 	 if (showdrop->value)
 		// 	 {
 		ch.common.Com_Printf("%s:Dropped %v packets at %v (%v)\n",
 			//  NET_AdrToString(chan->remote_address),
 			ch.remote_address,
-			ch.dropped, sequence, ch.incoming_sequence)
+			ch.Dropped, sequence, ch.incoming_sequence)
 		// 	 }
 	}
 

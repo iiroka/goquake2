@@ -50,14 +50,14 @@ func spTargetSpeaker(ent *edict_t, G *qGame) error {
 
 	ent.noise_index = G.gi.Soundindex(buffer)
 
-	if ent.volume == 0 {
-		ent.volume = 1.0
+	if ent.Volume == 0 {
+		ent.Volume = 1.0
 	}
 
-	if ent.attenuation == 0 {
-		ent.attenuation = 1.0
-	} else if ent.attenuation == -1 { /* use -1 so 0 defaults to 1 */
-		ent.attenuation = 0
+	if ent.Attenuation == 0 {
+		ent.Attenuation = 1.0
+	} else if ent.Attenuation == -1 { /* use -1 so 0 defaults to 1 */
+		ent.Attenuation = 0
 	}
 
 	/* check for prestarted looping sound */

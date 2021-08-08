@@ -38,6 +38,8 @@ var spawns = map[string]func(ent *edict_t, G *qGame) error{
 	"target_speaker":    spTargetSpeaker,
 	"worldspawn":        spWorldspawn,
 	"light":             spLight,
+	"path_corner":       spPathCorner,
+	"monster_soldier":   spMonsterSoldier,
 }
 
 /*
@@ -539,8 +541,8 @@ func spWorldspawn(ent *edict_t, G *qGame) error {
 	// 	player bodies for coop / deathmatch */
 	//  InitBodyQue();
 
-	//  /* set configstrings for items */
-	//  SetItemNames();
+	/* set configstrings for items */
+	G.setItemNames()
 
 	//  if (G.st.Nextmap) {
 	// 	 strcpy(level.nextmap, st.nextmap);

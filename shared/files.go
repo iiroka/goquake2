@@ -330,15 +330,11 @@ const Dmodel_size = 12 * 4
 
 func Dmodel(data []byte) Dmodel_t {
 	d := Dmodel_t{}
-	d.Mins[0] = ReadFloat32(data[0*4:])
-	d.Mins[1] = ReadFloat32(data[1*4:])
-	d.Mins[2] = ReadFloat32(data[2*4:])
-	d.Maxs[0] = ReadFloat32(data[3*4:])
-	d.Maxs[1] = ReadFloat32(data[4*4:])
-	d.Maxs[2] = ReadFloat32(data[5*4:])
-	d.Origin[0] = ReadFloat32(data[6*4:])
-	d.Origin[1] = ReadFloat32(data[7*4:])
-	d.Origin[2] = ReadFloat32(data[8*4:])
+	for i := 0; i < 3; i++ {
+		d.Mins[i] = ReadFloat32(data[i*4:])
+		d.Maxs[i] = ReadFloat32(data[(3+i)*4:])
+		d.Origin[i] = ReadFloat32(data[(6+i)*4:])
+	}
 	d.Headnode = ReadInt32(data[9*4:])
 	d.Firstface = ReadInt32(data[10*4:])
 	d.Numfaces = ReadInt32(data[11*4:])
@@ -353,9 +349,9 @@ const Dvertex_size = 3 * 4
 
 func Dvertex(data []byte) Dvertex_t {
 	d := Dvertex_t{}
-	d.Point[0] = ReadFloat32(data[0:])
-	d.Point[1] = ReadFloat32(data[1*4:])
-	d.Point[2] = ReadFloat32(data[2*4:])
+	for i := 0; i < 3; i++ {
+		d.Point[i] = ReadFloat32(data[i*4:])
+	}
 	return d
 }
 
@@ -381,9 +377,9 @@ const Dplane_size = 5 * 4
 
 func Dplane(data []byte) Dplane_t {
 	d := Dplane_t{}
-	d.Normal[0] = ReadFloat32(data[0:])
-	d.Normal[1] = ReadFloat32(data[1*4:])
-	d.Normal[2] = ReadFloat32(data[2*4:])
+	for i := 0; i < 3; i++ {
+		d.Normal[i] = ReadFloat32(data[i*4:])
+	}
 	d.Dist = ReadFloat32(data[3*4:])
 	d.Type = ReadInt32(data[4*4:])
 	return d
@@ -522,12 +518,12 @@ const Dface_size = 4*2 + 2*4 + MAXLIGHTMAPS
 
 func Dface(data []byte) Dface_t {
 	d := Dface_t{}
-	d.Planenum = ReadUint16(data[0:])
-	d.Side = ReadInt16(data[2:])
+	d.Planenum = ReadUint16(data[0*2:])
+	d.Side = ReadInt16(data[1*2:])
 	d.Firstedge = ReadInt32(data[2*2:])
 	d.Numedges = ReadInt16(data[2*2+4:])
 	d.Texinfo = ReadInt16(data[3*2+4:])
-	copy(d.Styles[:], data[4*2+4:4*2+4+MAXLIGHTMAPS])
+	copy(d.Styles[:], data[4*2+4:])
 	d.Lightofs = ReadInt32(data[4*2+4+MAXLIGHTMAPS:])
 	return d
 }

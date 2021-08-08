@@ -101,6 +101,16 @@ type qCommon struct {
 	loopback [](chan []byte)
 
 	collision qCollision
+
+	pm_stopspeed       float32
+	pm_maxspeed        float32
+	pm_duckspeed       float32
+	pm_accelerate      float32
+	pm_airaccelerate   float32
+	pm_wateraccelerate float32
+	pm_friction        float32
+	pm_waterfriction   float32
+	pm_waterspeed      float32
 }
 
 func CreateQCommon(client shared.QClient, server shared.QServer) shared.QCommon {
@@ -114,5 +124,19 @@ func CreateQCommon(client shared.QClient, server shared.QServer) shared.QCommon 
 	T.loopback[0] = make(chan []byte, 100)
 	T.loopback[1] = make(chan []byte, 100)
 	T.filehandles = make([]qFileHandle, MAX_HANDLES)
+	T.pm_stopspeed = 100
+	T.pm_maxspeed = 300
+	T.pm_duckspeed = 100
+	T.pm_accelerate = 10
+	T.pm_airaccelerate = 0
+	T.pm_wateraccelerate = 10
+	T.pm_friction = 6
+	T.pm_waterfriction = 1
+	T.pm_waterspeed = 400
+
 	return T
+}
+
+func (T *qCommon) SetAirAccelerate(v float32) {
+	T.pm_airaccelerate = v
 }

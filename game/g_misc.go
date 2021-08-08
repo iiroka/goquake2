@@ -27,6 +27,27 @@ package game
 
 import "goquake2/shared"
 
+func spPathCorner(self *edict_t, G *qGame) error {
+	if self == nil {
+		return nil
+	}
+
+	if len(self.Targetname) == 0 {
+		G.gi.Dprintf("path_corner with no targetname at %s\n",
+			vtos(self.s.Origin[:]))
+		// G_FreeEdict(self)
+		return nil
+	}
+
+	self.solid = shared.SOLID_TRIGGER
+	// self.touch = path_corner_touch
+	self.mins = [3]float32{-8, -8, -8}
+	self.maxs = [3]float32{8, 8, 8}
+	self.svflags |= shared.SVF_NOCLIENT
+	G.gi.Linkentity(self)
+	return nil
+}
+
 const START_OFF = 1
 
 func spLight(self *edict_t, G *qGame) error {

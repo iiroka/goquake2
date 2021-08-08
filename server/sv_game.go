@@ -70,12 +70,24 @@ func (G *qGameImp) Configstring(num int, str string) error {
 	return nil
 }
 
+func (G *qGameImp) Modelindex(name string) int {
+	return G.T.svFindIndex(name, shared.CS_MODELS, shared.MAX_MODELS, true)
+}
+
 func (G *qGameImp) Soundindex(name string) int {
 	return G.T.svFindIndex(name, shared.CS_SOUNDS, shared.MAX_SOUNDS, true)
 }
 
 func (G *qGameImp) Linkentity(ent shared.Edict_s) {
 	G.T.svLinkEdict(ent)
+}
+
+func (G *qGameImp) Pmove(pmove *shared.Pmove_t) {
+	G.T.common.Pmove(pmove)
+}
+
+func (G *qGameImp) Trace(start, mins, maxs, end []float32, passent shared.Edict_s, contentmask int) shared.Trace_t {
+	return G.T.svTrace(start, mins, maxs, end, passent, contentmask)
 }
 
 /*

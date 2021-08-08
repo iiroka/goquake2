@@ -27,6 +27,7 @@ package server
 
 import (
 	"goquake2/shared"
+	"log"
 	"math"
 )
 
@@ -123,13 +124,6 @@ func (T *qServer) svUnlinkEdict(ent shared.Edict_s) {
 }
 
 func (T *qServer) svLinkEdict(ent shared.Edict_s) {
-	// areanode_t *node;
-	// int leafs[MAX_TOTAL_ENT_LEAFS];
-	// int clusters[MAX_TOTAL_ENT_LEAFS];
-	// int num_leafs;
-	// int i, j, k;
-	// int area;
-	// int topnode;
 
 	if ent.Area().Prev != nil {
 		T.svUnlinkEdict(ent) /* unlink from old position */
@@ -326,9 +320,248 @@ func (T *qServer) svLinkEdict(ent shared.Edict_s) {
 	}
 
 	/* link it in */
+	ent.Area().Self = ent
 	if ent.Solid() == shared.SOLID_TRIGGER {
 		InsertLinkBefore(ent.Area(), &node.trigger_edicts)
 	} else {
 		InsertLinkBefore(ent.Area(), &node.solid_edicts)
 	}
+}
+
+func (T *qServer) svAreaEdicts_r(node *areanode_t) {
+	// link_t *l, *next, *start;
+	// edict_t *check;
+
+	/* touch linked edicts */
+	var start *shared.Link_t
+	if T.area_type == shared.AREA_SOLID {
+		start = &node.solid_edicts
+	} else {
+		start = &node.trigger_edicts
+	}
+
+	var next *shared.Link_t
+	for l := start.Next; l != start; l = next {
+		next = l.Next
+		check := l.Self
+
+		if check.Solid() == shared.SOLID_NOT {
+			continue /* deactivated */
+		}
+
+		if (check.Absmin()[0] > T.area_maxs[0]) ||
+			(check.Absmin()[1] > T.area_maxs[1]) ||
+			(check.Absmin()[2] > T.area_maxs[2]) ||
+			(check.Absmax()[0] < T.area_mins[0]) ||
+			(check.Absmax()[1] < T.area_mins[1]) ||
+			(check.Absmax()[2] < T.area_mins[2]) {
+			continue /* not touching */
+		}
+
+		if T.area_count == T.area_maxcount {
+			T.common.Com_Printf("SV_AreaEdicts: MAXCOUNT\n")
+			return
+		}
+
+		T.area_list[T.area_count] = check
+		T.area_count++
+	}
+
+	if node.axis == -1 {
+		return /* terminal node */
+	}
+
+	/* recurse down both sides */
+	if T.area_maxs[node.axis] > node.dist {
+		T.svAreaEdicts_r(node.children[0])
+	}
+
+	if T.area_mins[node.axis] < node.dist {
+		T.svAreaEdicts_r(node.children[1])
+	}
+}
+
+func (T *qServer) svAreaEdicts(mins, maxs []float32, list []shared.Edict_s, maxcount, areatype int) int {
+	T.area_mins = mins
+	T.area_maxs = maxs
+	T.area_list = list
+	T.area_maxcount = maxcount
+	T.area_type = areatype
+	T.area_count = 0
+
+	T.svAreaEdicts_r(&T.sv_areanodes[0])
+
+	T.area_mins = nil
+	T.area_maxs = nil
+	T.area_list = nil
+	T.area_maxcount = 0
+	T.area_type = 0
+
+	return T.area_count
+}
+
+type moveclip_t struct {
+	boxmins, boxmaxs [3]float32 /* enclose the test object along entire move */
+	mins, maxs       []float32  /* size of the moving object */
+	mins2, maxs2     [3]float32 /* size when clipping against mosnters */
+	start, end       []float32
+	trace            shared.Trace_t
+	passedict        shared.Edict_s
+	contentmask      int
+}
+
+/*
+ * Returns a headnode that can be used for testing or clipping an
+ * object of mins/maxs size. Offset is filled in to contain the
+ * adjustment that must be added to the testing object's origin
+ * to get a point to use with the returned hull.
+ */
+func (T *qServer) svHullForEntity(ent shared.Edict_s) int {
+	/* decide which clipping hull to use, based on the size */
+	if ent.Solid() == shared.SOLID_BSP {
+
+		/* explicit hulls in the BSP model */
+		model := T.sv.models[ent.S().Modelindex]
+
+		if model == nil {
+			log.Fatal("MOVETYPE_PUSH with a non bsp model")
+		}
+
+		return model.Headnode
+	}
+
+	/* create a temp hull from bounding box sizes */
+	return T.common.CMHeadnodeForBox(ent.Mins(), ent.Maxs())
+}
+
+func (T *qServer) svClipMoveToEntities(clip *moveclip_t) {
+	// int i, num;
+	// edict_t *touchlist[MAX_EDICTS], *touch;
+	// trace_t trace;
+	// int headnode;
+	// float *angles;
+
+	var touchlist [shared.MAX_EDICTS]shared.Edict_s
+	num := T.svAreaEdicts(clip.boxmins[:], clip.boxmaxs[:], touchlist[:], shared.MAX_EDICTS, shared.AREA_SOLID)
+
+	/* be careful, it is possible to have an entity in this
+	   list removed before we get to it (killtriggered) */
+	for i := 0; i < num; i++ {
+		touch := touchlist[i]
+
+		if touch.Solid() == shared.SOLID_NOT {
+			continue
+		}
+
+		if touch == clip.passedict {
+			continue
+		}
+
+		if clip.trace.Allsolid {
+			return
+		}
+
+		if clip.passedict != nil {
+			if touch.Owner() == clip.passedict {
+				continue /* don't clip against own missiles */
+			}
+
+			if clip.passedict.Owner() == touch {
+				continue /* don't clip against owner */
+			}
+		}
+
+		if (clip.contentmask&shared.CONTENTS_DEADMONSTER) == 0 &&
+			(touch.Svflags()&shared.SVF_DEADMONSTER) != 0 {
+			continue
+		}
+
+		/* might intersect, so do an exact clip */
+		headnode := T.svHullForEntity(touch)
+		angles := touch.S().Angles[:]
+
+		if touch.Solid() != shared.SOLID_BSP {
+			angles = []float32{0, 0, 0} /* boxes don't rotate */
+		}
+
+		var trace shared.Trace_t
+		if (touch.Svflags() & shared.SVF_MONSTER) != 0 {
+			trace = T.common.CMTransformedBoxTrace(clip.start, clip.end,
+				clip.mins2[:], clip.maxs2[:], headnode, clip.contentmask,
+				touch.S().Origin[:], angles)
+		} else {
+			trace = T.common.CMTransformedBoxTrace(clip.start, clip.end,
+				clip.mins, clip.maxs, headnode, clip.contentmask,
+				touch.S().Origin[:], angles)
+		}
+
+		if trace.Allsolid || trace.Startsolid ||
+			(trace.Fraction < clip.trace.Fraction) {
+			trace.Ent = touch
+
+			if clip.trace.Startsolid {
+				clip.trace = trace
+				clip.trace.Startsolid = true
+			} else {
+				clip.trace = trace
+			}
+		}
+	}
+}
+
+func SV_TraceBounds(start, mins, maxs, end, boxmins, boxmaxs []float32) {
+
+	for i := 0; i < 3; i++ {
+		if end[i] > start[i] {
+			boxmins[i] = start[i] + mins[i] - 1
+			boxmaxs[i] = end[i] + maxs[i] + 1
+		} else {
+			boxmins[i] = end[i] + mins[i] - 1
+			boxmaxs[i] = start[i] + maxs[i] + 1
+		}
+	}
+}
+
+/*
+ * Moves the given mins/maxs volume through the world from start to end.
+ * Passedict and edicts owned by passedict are explicitly not checked.
+ */
+func (T *qServer) svTrace(start, mins, maxs, end []float32, passedict shared.Edict_s, contentmask int) shared.Trace_t {
+	//  moveclip_t clip;
+
+	if mins == nil {
+		mins = []float32{0, 0, 0}
+	}
+
+	if maxs == nil {
+		maxs = []float32{0, 0, 0}
+	}
+
+	clip := moveclip_t{}
+
+	/* clip to world */
+	clip.trace = T.common.CMBoxTrace(start, end, mins, maxs, 0, contentmask)
+	clip.trace.Ent = T.ge.Edict(0)
+
+	if clip.trace.Fraction == 0 {
+		return clip.trace /* blocked by the world */
+	}
+
+	clip.contentmask = contentmask
+	clip.start = start
+	clip.end = end
+	clip.mins = mins
+	clip.maxs = maxs
+	clip.passedict = passedict
+
+	copy(clip.mins2[:], mins)
+	copy(clip.maxs2[:], maxs)
+
+	/* create the bounding box of the entire move */
+	SV_TraceBounds(start, clip.mins2[:], clip.maxs2[:], end, clip.boxmins[:], clip.boxmaxs[:])
+
+	/* clip to other solid entities */
+	T.svClipMoveToEntities(&clip)
+
+	return clip.trace
 }

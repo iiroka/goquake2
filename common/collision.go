@@ -28,6 +28,8 @@ package common
 
 import (
 	"goquake2/shared"
+	"log"
+	"math"
 )
 
 type cnode_t struct {
@@ -108,12 +110,15 @@ type qCollision struct {
 	nullsurface               shared.Mapsurface_t
 	portalopen                [shared.MAX_MAP_AREAPORTALS]bool
 	trace_ispoint             bool /* optimized case */
-	// trace_t trace_trace;
-	map_leafbrushes [shared.MAX_MAP_LEAFBRUSHES]uint16
-	// vec3_t trace_start, trace_end;
-	// vec3_t trace_mins, trace_maxs;
-	// vec3_t trace_extents;
+	trace_trace               shared.Trace_t
+	map_leafbrushes           [shared.MAX_MAP_LEAFBRUSHES]uint16
+	trace_start, trace_end    [3]float32
+	trace_mins, trace_maxs    [3]float32
+	trace_extents             [3]float32
 }
+
+/* 1/32 epsilon to keep floating point happy */
+const DIST_EPSILON = 0.03125
 
 func (T *qCommon) floodArea_r(area *carea_t, floodnum int) {
 
@@ -180,9 +185,6 @@ func (T *qCommon) CMAreasConnected(area1, area2 int) bool {
  * This is used by the client refreshes to cull visibility
  */
 func (T *qCommon) CMWriteAreaBits(buffer []byte, area int) int {
-	//  int i;
-	//  int floodnum;
-	//  int bytes;
 
 	bytes := (T.collision.numareas + 7) >> 3
 
@@ -306,6 +308,27 @@ func (T *qCommon) initBoxHull() error {
 	return nil
 }
 
+/*
+ * To keep everything totally uniform, bounding boxes are turned into
+ * small BSP trees instead of being compared directly.
+ */
+func (T *qCommon) CMHeadnodeForBox(mins, maxs []float32) int {
+	T.collision.box_planes[0].Dist = maxs[0]
+	T.collision.box_planes[1].Dist = -maxs[0]
+	T.collision.box_planes[2].Dist = mins[0]
+	T.collision.box_planes[3].Dist = -mins[0]
+	T.collision.box_planes[4].Dist = maxs[1]
+	T.collision.box_planes[5].Dist = -maxs[1]
+	T.collision.box_planes[6].Dist = mins[1]
+	T.collision.box_planes[7].Dist = -mins[1]
+	T.collision.box_planes[8].Dist = maxs[2]
+	T.collision.box_planes[9].Dist = -maxs[2]
+	T.collision.box_planes[10].Dist = mins[2]
+	T.collision.box_planes[11].Dist = -mins[2]
+
+	return T.collision.box_headnode
+}
+
 func (T *qCommon) cmPointLeafnum_r(p []float32, num int) int {
 
 	for num >= 0 {
@@ -346,9 +369,6 @@ func (T *qCommon) CMPointLeafnum(p []float32) int {
  */
 
 func (T *qCommon) cmBoxLeafnums_r(nodenum int) {
-	//  cplane_t *plane;
-	//  cnode_t *node;
-	//  int s;
 
 	for {
 		if nodenum < 0 {
@@ -402,6 +422,480 @@ func (T *qCommon) cmBoxLeafnums_headnode(mins, maxs []float32, list []int,
 
 func (T *qCommon) CMBoxLeafnums(mins, maxs []float32, list []int, listsize int, topnode *int) int {
 	return T.cmBoxLeafnums_headnode(mins, maxs, list, listsize, T.collision.map_cmodels[0].Headnode, topnode)
+}
+
+func (T *qCommon) clipBoxToBrush(mins, maxs, p1, p2 []float32, trace *shared.Trace_t, brush *cbrush_t) {
+	// int i, j;
+	// cplane_t *plane, *clipplane;
+	// float dist;
+	// float enterfrac, leavefrac;
+	// vec3_t ofs;
+	// float d1, d2;
+	// qboolean getout, startout;
+	// float f;
+	// cbrushside_t *side, *leadside;
+
+	var enterfrac float32 = -1
+	var leavefrac float32 = 1
+	var clipplane *shared.Cplane_t = nil
+
+	if brush.numsides == 0 {
+		return
+	}
+
+	// #ifndef DEDICATED_ONLY
+	// 	c_brush_traces++;
+	// #endif
+
+	getout := false
+	startout := false
+	var leadside *cbrushside_t = nil
+
+	for i := 0; i < brush.numsides; i++ {
+		side := &T.collision.map_brushsides[brush.firstbrushside+i]
+		plane := side.plane
+
+		var dist float32
+		if !T.collision.trace_ispoint {
+			/* general box case
+			   push the plane out
+			   apropriately for mins/maxs */
+			var ofs [3]float32
+			for j := 0; j < 3; j++ {
+				if plane.Normal[j] < 0 {
+					ofs[j] = maxs[j]
+				} else {
+					ofs[j] = mins[j]
+				}
+			}
+
+			dist = shared.DotProduct(ofs[:], plane.Normal[:])
+			dist = plane.Dist - dist
+		} else {
+			/* special point case */
+			dist = plane.Dist
+		}
+
+		d1 := shared.DotProduct(p1, plane.Normal[:]) - dist
+		d2 := shared.DotProduct(p2, plane.Normal[:]) - dist
+
+		if d2 > 0 {
+			getout = true /* endpoint is not in solid */
+		}
+
+		if d1 > 0 {
+			startout = true
+		}
+
+		/* if completely in front of face, no intersection */
+		if (d1 > 0) && (d2 >= d1) {
+			return
+		}
+
+		if (d1 <= 0) && (d2 <= 0) {
+			continue
+		}
+
+		/* crosses face */
+		if d1 > d2 {
+			/* enter */
+			f := (d1 - DIST_EPSILON) / (d1 - d2)
+
+			if f > enterfrac {
+				enterfrac = f
+				clipplane = plane
+				leadside = side
+			}
+		} else {
+			/* leave */
+			f := (d1 + DIST_EPSILON) / (d1 - d2)
+
+			if f < leavefrac {
+				leavefrac = f
+			}
+		}
+	}
+
+	if !startout {
+		/* original point was inside brush */
+		trace.Startsolid = true
+
+		if !getout {
+			trace.Allsolid = true
+		}
+
+		return
+	}
+
+	if enterfrac < leavefrac {
+		if (enterfrac > -1) && (enterfrac < trace.Fraction) {
+			if enterfrac < 0 {
+				enterfrac = 0
+			}
+
+			if clipplane == nil {
+				log.Fatal("clipplane was NULL!\n")
+			}
+
+			trace.Fraction = enterfrac
+			trace.Plane = *clipplane
+			trace.Surface = &(leadside.surface.C)
+			trace.Contents = brush.contents
+		}
+	}
+}
+
+func (T *qCommon) testBoxInBrush(mins, maxs, p1 []float32, trace *shared.Trace_t, brush *cbrush_t) {
+
+	if brush.numsides == 0 {
+		return
+	}
+
+	for i := 0; i < brush.numsides; i++ {
+		side := &T.collision.map_brushsides[brush.firstbrushside+i]
+		plane := side.plane
+
+		/* general box case
+		   push the plane out
+		   apropriately for mins/maxs */
+		var ofs [3]float32
+		for j := 0; j < 3; j++ {
+			if plane.Normal[j] < 0 {
+				ofs[j] = maxs[j]
+			} else {
+				ofs[j] = mins[j]
+			}
+		}
+
+		dist := shared.DotProduct(ofs[:], plane.Normal[:])
+		dist = plane.Dist - dist
+
+		d1 := shared.DotProduct(p1, plane.Normal[:]) - dist
+
+		/* if completely in front of face, no intersection */
+		if d1 > 0 {
+			return
+		}
+	}
+
+	/* inside this brush */
+	trace.Startsolid = true
+	trace.Allsolid = true
+	trace.Fraction = 0
+	trace.Contents = brush.contents
+}
+
+func (T *qCommon) traceToLeaf(leafnum int) {
+
+	leaf := &T.collision.map_leafs[leafnum]
+
+	if (leaf.contents & T.collision.trace_contents) == 0 {
+		return
+	}
+
+	/* trace line against all brushes in the leaf */
+	for k := 0; k < int(leaf.numleafbrushes); k++ {
+		brushnum := T.collision.map_leafbrushes[int(leaf.firstleafbrush)+k]
+		b := &T.collision.map_brushes[brushnum]
+
+		if b.checkcount == T.collision.checkcount {
+			continue /* already checked this brush in another leaf */
+		}
+
+		b.checkcount = T.collision.checkcount
+
+		if (b.contents & T.collision.trace_contents) == 0 {
+			continue
+		}
+
+		T.clipBoxToBrush(T.collision.trace_mins[:], T.collision.trace_maxs[:], T.collision.trace_start[:],
+			T.collision.trace_end[:], &T.collision.trace_trace, b)
+
+		if T.collision.trace_trace.Fraction == 0 {
+			return
+		}
+	}
+}
+
+func (T *qCommon) testInLeaf(leafnum int) {
+
+	leaf := &T.collision.map_leafs[leafnum]
+	if (leaf.contents & T.collision.trace_contents) == 0 {
+		return
+	}
+
+	/* trace line against all brushes in the leaf */
+	for k := 0; k < int(leaf.numleafbrushes); k++ {
+		brushnum := T.collision.map_leafbrushes[int(leaf.firstleafbrush)+k]
+		b := &T.collision.map_brushes[brushnum]
+
+		if b.checkcount == T.collision.checkcount {
+			continue /* already checked this brush in another leaf */
+		}
+
+		b.checkcount = T.collision.checkcount
+
+		if (b.contents & T.collision.trace_contents) == 0 {
+			continue
+		}
+
+		T.testBoxInBrush(T.collision.trace_mins[:], T.collision.trace_maxs[:], T.collision.trace_start[:], &T.collision.trace_trace, b)
+
+		if T.collision.trace_trace.Fraction == 0 {
+			return
+		}
+	}
+}
+
+func (T *qCommon) recursiveHullCheck(num int, p1f, p2f float32, p1, p2 []float32) {
+
+	if T.collision.trace_trace.Fraction <= p1f {
+		return /* already hit something nearer */
+	}
+
+	/* if < 0, we are in a leaf node */
+	if num < 0 {
+		T.traceToLeaf(-1 - num)
+		return
+	}
+
+	/* find the point distances to the seperating plane
+	   and the offset for the size of the box */
+	node := T.collision.map_nodes[num]
+	plane := node.plane
+
+	var offset, t1, t2 float32
+	if plane.Type < 3 {
+		t1 = p1[plane.Type] - plane.Dist
+		t2 = p2[plane.Type] - plane.Dist
+		offset = T.collision.trace_extents[plane.Type]
+	} else {
+		t1 = shared.DotProduct(plane.Normal[:], p1) - plane.Dist
+		t2 = shared.DotProduct(plane.Normal[:], p2) - plane.Dist
+
+		if T.collision.trace_ispoint {
+			offset = 0
+		} else {
+			offset = float32(math.Abs(float64(T.collision.trace_extents[0]*plane.Normal[0])) +
+				math.Abs(float64(T.collision.trace_extents[1]*plane.Normal[1])) +
+				math.Abs(float64(T.collision.trace_extents[2]*plane.Normal[2])))
+		}
+	}
+
+	/* see which sides we need to consider */
+	if (t1 >= offset) && (t2 >= offset) {
+		T.recursiveHullCheck(node.children[0], p1f, p2f, p1, p2)
+		return
+	}
+
+	if (t1 < -offset) && (t2 < -offset) {
+		T.recursiveHullCheck(node.children[1], p1f, p2f, p1, p2)
+		return
+	}
+
+	/* put the crosspoint DIST_EPSILON pixels on the near side */
+	var frac, frac2 float32
+	var side int
+	if t1 < t2 {
+		idist := 1.0 / (t1 - t2)
+		side = 1
+		frac2 = (t1 + offset + DIST_EPSILON) * idist
+		frac = (t1 - offset + DIST_EPSILON) * idist
+	} else if t1 > t2 {
+		idist := 1.0 / (t1 - t2)
+		side = 0
+		frac2 = (t1 - offset - DIST_EPSILON) * idist
+		frac = (t1 + offset + DIST_EPSILON) * idist
+	} else {
+		side = 0
+		frac = 1
+		frac2 = 0
+	}
+
+	/* move up to the node */
+	if frac < 0 {
+		frac = 0
+	}
+
+	if frac > 1 {
+		frac = 1
+	}
+
+	midf := p1f + (p2f-p1f)*frac
+
+	var mid [3]float32
+	for i := 0; i < 3; i++ {
+		mid[i] = p1[i] + frac*(p2[i]-p1[i])
+	}
+
+	T.recursiveHullCheck(node.children[side], p1f, midf, p1, mid[:])
+
+	/* go past the node */
+	if frac2 < 0 {
+		frac2 = 0
+	}
+
+	if frac2 > 1 {
+		frac2 = 1
+	}
+
+	midf = p1f + (p2f-p1f)*frac2
+
+	for i := 0; i < 3; i++ {
+		mid[i] = p1[i] + frac2*(p2[i]-p1[i])
+	}
+
+	T.recursiveHullCheck(node.children[side^1], midf, p2f, mid[:], p2)
+}
+
+func (T *qCommon) CMBoxTrace(start, end, mins, maxs []float32,
+	headnode, brushmask int) shared.Trace_t {
+	// int i;
+
+	T.collision.checkcount++ /* for multi-check avoidance */
+
+	// #ifndef DEDICATED_ONLY
+	// 	c_traces++; /* for statistics, may be zeroed */
+	// #endif
+
+	/* fill in a default trace */
+	T.collision.trace_trace = shared.Trace_t{}
+	T.collision.trace_trace.Fraction = 1
+	T.collision.trace_trace.Surface = &shared.Csurface_t{}
+
+	if T.collision.numnodes == 0 { /* map not loaded */
+		return T.collision.trace_trace
+	}
+
+	T.collision.trace_contents = brushmask
+	copy(T.collision.trace_start[:], start)
+	copy(T.collision.trace_end[:], end)
+	copy(T.collision.trace_mins[:], mins)
+	copy(T.collision.trace_maxs[:], maxs)
+
+	/* check for position test special case */
+	if (start[0] == end[0]) && (start[1] == end[1]) && (start[2] == end[2]) {
+
+		c1 := make([]float32, 3)
+		c2 := make([]float32, 3)
+		shared.VectorAdd(start, mins, c1)
+		shared.VectorAdd(start, maxs, c2)
+
+		for i := 0; i < 3; i++ {
+			c1[i] -= 1
+			c2[i] += 1
+		}
+
+		var leafs [1024]int
+		var topnode int
+		numleafs := T.cmBoxLeafnums_headnode(c1, c2, leafs[:], 1024, headnode, &topnode)
+
+		for i := 0; i < numleafs; i++ {
+			T.testInLeaf(leafs[i])
+
+			if T.collision.trace_trace.Allsolid {
+				break
+			}
+		}
+
+		copy(T.collision.trace_trace.Endpos[:], start)
+		return T.collision.trace_trace
+	}
+
+	/* check for point special case */
+	if (mins[0] == 0) && (mins[1] == 0) && (mins[2] == 0) &&
+		(maxs[0] == 0) && (maxs[1] == 0) && (maxs[2] == 0) {
+		T.collision.trace_ispoint = true
+		T.collision.trace_extents[0] = 0
+		T.collision.trace_extents[1] = 0
+		T.collision.trace_extents[2] = 0
+	} else {
+		T.collision.trace_ispoint = false
+		for i := 0; i < 3; i++ {
+			if -mins[i] > maxs[i] {
+				T.collision.trace_extents[i] = -mins[i]
+			} else {
+				T.collision.trace_extents[i] = maxs[i]
+			}
+		}
+	}
+
+	/* general sweeping through world */
+	T.recursiveHullCheck(headnode, 0, 1, start, end)
+
+	if T.collision.trace_trace.Fraction == 1 {
+		copy(T.collision.trace_trace.Endpos[:], end)
+	} else {
+		for i := 0; i < 3; i++ {
+			T.collision.trace_trace.Endpos[i] = start[i] + T.collision.trace_trace.Fraction*
+				(end[i]-start[i])
+		}
+	}
+
+	return T.collision.trace_trace
+}
+
+/*
+ * Handles offseting and rotation of the end points for moving and
+ * rotating entities
+ */
+func (T *qCommon) CMTransformedBoxTrace(start, end, mins, maxs []float32,
+	headnode, brushmask int, origin, angles []float32) shared.Trace_t {
+
+	/* subtract origin offset */
+	start_l := make([]float32, 3)
+	shared.VectorSubtract(start, origin, start_l)
+	end_l := make([]float32, 3)
+	shared.VectorSubtract(end, origin, end_l)
+
+	/* rotate start and end into the models frame of reference */
+	rotated := false
+	if (headnode != T.collision.box_headnode) &&
+		(angles[0] != 0 || angles[1] != 0 || angles[2] != 0) {
+		rotated = true
+	}
+
+	if rotated {
+		forward := make([]float32, 3)
+		right := make([]float32, 3)
+		up := make([]float32, 3)
+		shared.AngleVectors(angles, forward, right, up)
+
+		temp := make([]float32, 3)
+		copy(temp, start_l)
+		start_l[0] = shared.DotProduct(temp, forward)
+		start_l[1] = -shared.DotProduct(temp, right)
+		start_l[2] = shared.DotProduct(temp, up)
+
+		copy(temp, end_l)
+		end_l[0] = shared.DotProduct(temp, forward)
+		end_l[1] = -shared.DotProduct(temp, right)
+		end_l[2] = shared.DotProduct(temp, up)
+	}
+
+	/* sweep the box through the model */
+	trace := T.CMBoxTrace(start_l, end_l, mins, maxs, headnode, brushmask)
+
+	if rotated && (trace.Fraction != 1.0) {
+		a := make([]float32, 3)
+		shared.VectorNegate(angles, a)
+		forward := make([]float32, 3)
+		right := make([]float32, 3)
+		up := make([]float32, 3)
+		shared.AngleVectors(a, forward, right, up)
+
+		temp := make([]float32, 3)
+		copy(temp, trace.Plane.Normal[:])
+		trace.Plane.Normal[0] = shared.DotProduct(temp, forward)
+		trace.Plane.Normal[1] = -shared.DotProduct(temp, right)
+		trace.Plane.Normal[2] = shared.DotProduct(temp, up)
+	}
+
+	trace.Endpos[0] = start[0] + trace.Fraction*(end[0]-start[0])
+	trace.Endpos[1] = start[1] + trace.Fraction*(end[1]-start[1])
+	trace.Endpos[2] = start[2] + trace.Fraction*(end[2]-start[2])
+
+	return trace
 }
 
 func (T *qCommon) cmodLoadSubmodels(l shared.Lump_t, name string, buf []byte) error {

@@ -70,9 +70,88 @@ func (T *qClient) keyDown(args []string, b *kbutton_t) {
 	b.state |= 1 + 2 /* down + impulse down */
 }
 
+func (T *qClient) keyUp(args []string, b *kbutton_t) {
+	// int k;
+	// char *c;
+	// unsigned uptime;
+
+	// c = Cmd_Argv(1);
+
+	var k int
+	if len(args[1]) > 0 {
+		if kk, err := strconv.ParseInt(args[1], 10, 32); err == nil {
+			k = int(kk)
+		}
+	} else {
+		/* typed manually at the console, assume for unsticking, so clear all */
+		b.down[0] = 0
+		b.down[1] = 0
+		b.state = 4 /* impulse up */
+		return
+	}
+
+	if b.down[0] == k {
+		b.down[0] = 0
+	} else if b.down[1] == k {
+		b.down[1] = 0
+	} else {
+		return /* key up without coresponding down (menu pass through) */
+	}
+
+	if b.down[0] != 0 || b.down[1] != 0 {
+		return /* some other key is still holding it down */
+	}
+
+	if (b.state & 1) == 0 {
+		return /* still up (this should not happen) */
+	}
+
+	/* save timestamp */
+	uptime, _ := strconv.ParseInt(args[2], 10, 32)
+
+	if uptime != 0 {
+		b.msec += uint(uptime) - b.downtime
+	} else {
+		b.msec += 10
+	}
+
+	b.state &^= 1 /* now up */
+	b.state |= 4  /* impulse up */
+}
+
+func in_LeftDown(args []string, a interface{}) error {
+	T := a.(*qClient)
+	T.keyDown(args, &T.in_left)
+	return nil
+}
+
+func in_LeftUp(args []string, a interface{}) error {
+	T := a.(*qClient)
+	T.keyUp(args, &T.in_left)
+	return nil
+}
+
+func in_RightDown(args []string, a interface{}) error {
+	T := a.(*qClient)
+	T.keyDown(args, &T.in_right)
+	return nil
+}
+
+func in_RightUp(args []string, a interface{}) error {
+	T := a.(*qClient)
+	T.keyUp(args, &T.in_right)
+	return nil
+}
+
 func in_ForwardDown(args []string, a interface{}) error {
 	T := a.(*qClient)
 	T.keyDown(args, &T.in_forward)
+	return nil
+}
+
+func in_ForwardUp(args []string, a interface{}) error {
+	T := a.(*qClient)
+	T.keyUp(args, &T.in_forward)
 	return nil
 }
 
@@ -84,12 +163,12 @@ func (T *qClient) initInput() {
 	// Cmd_AddCommand("-moveup", IN_UpUp);
 	// Cmd_AddCommand("+movedown", IN_DownDown);
 	// Cmd_AddCommand("-movedown", IN_DownUp);
-	// Cmd_AddCommand("+left", IN_LeftDown);
-	// Cmd_AddCommand("-left", IN_LeftUp);
-	// Cmd_AddCommand("+right", IN_RightDown);
-	// Cmd_AddCommand("-right", IN_RightUp);
+	T.common.Cmd_AddCommand("+left", in_LeftDown, T)
+	T.common.Cmd_AddCommand("-left", in_LeftUp, T)
+	T.common.Cmd_AddCommand("+right", in_RightDown, T)
+	T.common.Cmd_AddCommand("-right", in_RightUp, T)
 	T.common.Cmd_AddCommand("+forward", in_ForwardDown, T)
-	// Cmd_AddCommand("-forward", IN_ForwardUp);
+	T.common.Cmd_AddCommand("-forward", in_ForwardUp, T)
 	// Cmd_AddCommand("+back", IN_BackDown);
 	// Cmd_AddCommand("-back", IN_BackUp);
 	// Cmd_AddCommand("+lookup", IN_LookupDown);
@@ -146,10 +225,39 @@ func (T *qClient) keyState(key *kbutton_t) float32 {
 }
 
 /*
+ * Moves the local angle positions
+ */
+func (T *qClient) adjustAngles() {
+
+	var speed float32
+	if (T.in_speed.state & 1) != 0 {
+		speed = T.cls.nframetime * T.cl_anglespeedkey.Float()
+	} else {
+		speed = T.cls.nframetime
+	}
+
+	if (T.in_strafe.state & 1) == 0 {
+		T.cl.viewangles[shared.YAW] -= speed * T.cl_yawspeed.Float() * T.keyState(&T.in_right)
+		T.cl.viewangles[shared.YAW] += speed * T.cl_yawspeed.Float() * T.keyState(&T.in_left)
+	}
+
+	if (T.in_klook.state & 1) != 0 {
+		T.cl.viewangles[shared.PITCH] -= speed * T.cl_pitchspeed.Float() * T.keyState(&T.in_forward)
+		T.cl.viewangles[shared.PITCH] += speed * T.cl_pitchspeed.Float() * T.keyState(&T.in_back)
+	}
+
+	up := T.keyState(&T.in_lookup)
+	down := T.keyState(&T.in_lookdown)
+
+	T.cl.viewangles[shared.PITCH] -= speed * T.cl_pitchspeed.Float() * up
+	T.cl.viewangles[shared.PITCH] += speed * T.cl_pitchspeed.Float() * down
+}
+
+/*
  * Send the intended movement message to the server
  */
 func (T *qClient) baseMove(cmd *shared.Usercmd_t) {
-	//  CL_AdjustAngles();
+	T.adjustAngles()
 
 	cmd.Copy(shared.Usercmd_t{})
 
@@ -157,23 +265,21 @@ func (T *qClient) baseMove(cmd *shared.Usercmd_t) {
 		cmd.Angles[i] = int16(T.cl.viewangles[i])
 	}
 
-	//  if (in_strafe.state & 1)
-	//  {
-	// 	 cmd->sidemove += cl_sidespeed->value * CL_KeyState(&in_right);
-	// 	 cmd->sidemove -= cl_sidespeed->value * CL_KeyState(&in_left);
-	//  }
+	if (T.in_strafe.state & 1) != 0 {
+		cmd.Sidemove += int16(T.cl_sidespeed.Float() * T.keyState(&T.in_right))
+		cmd.Sidemove -= int16(T.cl_sidespeed.Float() * T.keyState(&T.in_left))
+	}
 
-	//  cmd->sidemove += cl_sidespeed->value * CL_KeyState(&in_moveright);
-	//  cmd->sidemove -= cl_sidespeed->value * CL_KeyState(&in_moveleft);
+	cmd.Sidemove += int16(T.cl_sidespeed.Float() * T.keyState(&T.in_moveright))
+	cmd.Sidemove -= int16(T.cl_sidespeed.Float() * T.keyState(&T.in_moveleft))
 
 	//  cmd->upmove += cl_upspeed->value * CL_KeyState(&in_up);
 	//  cmd->upmove -= cl_upspeed->value * CL_KeyState(&in_down);
 
-	//  if (!(in_klook.state & 1))
-	//  {
-	cmd.Forwardmove += int16(T.cl_forwardspeed.Float() * T.keyState(&T.in_forward))
-	// 	 cmd->forwardmove -= cl_forwardspeed->value * CL_KeyState(&in_back);
-	//  }
+	if (T.in_klook.state & 1) == 0 {
+		cmd.Forwardmove += int16(T.cl_forwardspeed.Float() * T.keyState(&T.in_forward))
+		cmd.Forwardmove -= int16(T.cl_forwardspeed.Float() * T.keyState(&T.in_back))
+	}
 
 	//  /* adjust for speed key / running */
 	//  if ((in_speed.state & 1) ^ (int)(cl_run->value))
@@ -185,8 +291,6 @@ func (T *qClient) baseMove(cmd *shared.Usercmd_t) {
 }
 
 func (T *qClient) refreshCmd() {
-	// int ms;
-	// usercmd_t *cmd;
 
 	// CMD to fill
 	cmd := &T.cl.cmds[T.cls.netchan.Outgoing_sequence&(CMD_BACKUP-1)]
@@ -225,8 +329,7 @@ func (T *qClient) refreshCmd() {
 	T.old_sys_frame_time = T.input.Sys_frame_time
 
 	// Important events are send immediately
-	// if (((in_attack.state & 2)) || (in_use.state & 2))
-	// {
+	// if (((in_attack.state & 2) != 0) || (in_use.state & 2) != 0) {
 	// 	cls.forcePacket = true;
 	// }
 }
@@ -259,22 +362,22 @@ func (T *qClient) finalizeCmd() {
 	cmd := &T.cl.cmds[T.cls.netchan.Outgoing_sequence&(CMD_BACKUP-1)]
 
 	// Mouse button events
-	// if (in_attack.state & 3) != 0 {
-	// 	cmd->buttons |= BUTTON_ATTACK;
-	// }
+	if (T.in_attack.state & 3) != 0 {
+		cmd.Buttons |= shared.BUTTON_ATTACK
+	}
 
-	// in_attack.state &= ~2;
+	T.in_attack.state &^= 2
 
-	// if (in_use.state & 3) != 0 {
-	// 	cmd->buttons |= BUTTON_USE;
-	// }
+	if (T.in_use.state & 3) != 0 {
+		cmd.Buttons |= shared.BUTTON_USE
+	}
 
-	// in_use.state &= ~2;
+	T.in_use.state &^= 2
 
-	// // Keyboard events
-	// if (anykeydown && cls.key_dest == key_game) {
-	// 	cmd->buttons |= BUTTON_ANY;
-	// }
+	// Keyboard events
+	if T.anykeydown != 0 && T.cls.key_dest == key_game {
+		cmd.Buttons |= shared.BUTTON_ANY
+	}
 
 	cmd.Impulse = byte(T.in_impulse)
 	T.in_impulse = 0

@@ -163,7 +163,7 @@ type client_state_t struct {
 	model_draw []interface{}
 	//    struct model_s	*model_draw[MAX_MODELS];
 
-	//    struct cmodel_s	*model_clip[MAX_MODELS];
+	model_clip [shared.MAX_MODELS]*shared.Cmodel_t
 
 	//    struct sfx_s	*sound_precache[MAX_SOUNDS];
 

@@ -128,6 +128,12 @@ func (T *gl3Uni3D_t) setTransProjMat4(v []float32) {
 	copy(T.data[:16], v)
 }
 
+func (T *gl3Uni3D_t) getTransProjMat4() []float32 {
+	r := make([]float32, 16)
+	copy(r, T.data[:])
+	return r
+}
+
 func (T *gl3Uni3D_t) setTransViewMat4(v []float32) {
 	copy(T.data[16:2*16], v)
 }
@@ -138,7 +144,7 @@ func (T *gl3Uni3D_t) setTransModelMat4(v []float32) {
 
 func (T *gl3Uni3D_t) getTransModelMat4() []float32 {
 	r := make([]float32, 16)
-	copy(r, T.data[2*16:3*16])
+	copy(r, T.data[2*16:])
 	return r
 }
 
@@ -492,6 +498,9 @@ type qGl3 struct {
 	index_tex        int
 
 	r_dlightframecount int
+	pointcolor         [3]float32
+	lightplane         *shared.Cplane_t /* used as shadow plane */
+	lightspot          [3]float32
 }
 
 // gl3_lightmap.c
