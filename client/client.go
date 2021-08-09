@@ -155,19 +155,17 @@ type client_state_t struct {
 	gamedir     string
 	playernum   int
 
-	configstrings []string
-	//    char		configstrings[MAX_CONFIGSTRINGS][MAX_QPATH];
+	configstrings [shared.MAX_CONFIGSTRINGS]string
 
-	//    /* locally derived information from server state */
+	/* locally derived information from server state */
 
-	model_draw []interface{}
-	//    struct model_s	*model_draw[MAX_MODELS];
+	model_draw [shared.MAX_MODELS]interface{}
 
 	model_clip [shared.MAX_MODELS]*shared.Cmodel_t
 
 	//    struct sfx_s	*sound_precache[MAX_SOUNDS];
 
-	//    struct image_s	*image_precache[MAX_IMAGES];
+	image_precache [shared.MAX_IMAGES]interface{}
 
 	clientinfo     [shared.MAX_CLIENTS]clientinfo_t
 	baseclientinfo clientinfo_t
@@ -490,9 +488,7 @@ type qClient struct {
 
 func CreateClient() shared.QClient {
 	q := &qClient{}
-	q.cl.configstrings = make([]string, shared.MAX_CONFIGSTRINGS)
 	q.cl_entities = make([]centity_t, shared.MAX_EDICTS)
-	q.cl.model_draw = make([]interface{}, shared.MAX_MODELS)
 	q.cl_parse_entities = make([]shared.Entity_state_t, MAX_PARSE_ENTITIES)
 	return q
 }

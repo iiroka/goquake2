@@ -822,7 +822,7 @@ func (T *qClient) parseConfigString(msg *shared.QReadbuf) error {
 
 	s := msg.ReadString()
 
-	// 	Q_strlcpy(olds, cl.configstrings[i], sizeof(olds));
+	olds := string(T.cl.configstrings[i])
 
 	// 	length = strlen(s);
 	// 	if (length > sizeof(cl.configstrings) - sizeof(cl.configstrings[0])*i - 1)
@@ -836,25 +836,27 @@ func (T *qClient) parseConfigString(msg *shared.QReadbuf) error {
 	if (i >= shared.CS_LIGHTS) && (i < shared.CS_LIGHTS+shared.MAX_LIGHTSTYLES) {
 		T.setLightstyle(i - shared.CS_LIGHTS)
 	} else if i == shared.CS_CDTRACK {
-		// 		if (cl.refresh_prepped)
-		// 		{
+		// 		if (cl.refresh_prepped) {
 		// 			OGG_PlayTrack((int)strtol(cl.configstrings[CS_CDTRACK], (char **)NULL, 10));
 		// 		}
 	} else if (i >= shared.CS_MODELS) && (i < shared.CS_MODELS+shared.MAX_MODELS) {
-		// 		if (cl.refresh_prepped)
-		// 		{
-		// 			cl.model_draw[i - CS_MODELS] = R_RegisterModel(cl.configstrings[i]);
+		if T.cl.refresh_prepped {
+			ma, err := T.R_RegisterModel(T.cl.configstrings[i])
+			if err != nil {
+				return err
+			}
 
-		// 			if (cl.configstrings[i][0] == '*')
-		// 			{
-		// 				cl.model_clip[i - CS_MODELS] = CM_InlineModel(cl.configstrings[i]);
-		// 			}
-
-		// 			else
-		// 			{
-		// 				cl.model_clip[i - CS_MODELS] = NULL;
-		// 			}
-		// 		}
+			T.cl.model_draw[i-shared.CS_MODELS] = ma
+			if T.cl.configstrings[i][0] == '*' {
+				m, err := T.common.CMInlineModel(T.cl.configstrings[i])
+				if err != nil {
+					return err
+				}
+				T.cl.model_clip[i-shared.CS_MODELS] = m
+			} else {
+				T.cl.model_clip[i-shared.CS_MODELS] = nil
+			}
+		}
 	} else if (i >= shared.CS_SOUNDS) && (i < shared.CS_SOUNDS+shared.MAX_MODELS) {
 		// 		if (cl.refresh_prepped)
 		// 		{
@@ -866,10 +868,9 @@ func (T *qClient) parseConfigString(msg *shared.QReadbuf) error {
 		// 		{
 		// 			cl.image_precache[i - CS_IMAGES] = Draw_FindPic(cl.configstrings[i]);
 	} else if (i >= shared.CS_PLAYERSKINS) && (i < shared.CS_PLAYERSKINS+shared.MAX_CLIENTS) {
-		// 		if (cl.refresh_prepped && strcmp(olds, s))
-		// 		{
-		// 			CL_ParseClientinfo(i - CS_PLAYERSKINS);
-		// 		}
+		if T.cl.refresh_prepped && olds != s {
+			T.parseClientinfo(i - shared.CS_PLAYERSKINS)
+		}
 	}
 	return nil
 }

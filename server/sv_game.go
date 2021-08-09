@@ -82,12 +82,20 @@ func (G *qGameImp) Linkentity(ent shared.Edict_s) {
 	G.T.svLinkEdict(ent)
 }
 
+func (G *qGameImp) Unlinkentity(ent shared.Edict_s) {
+	G.T.svUnlinkEdict(ent)
+}
+
 func (G *qGameImp) Pmove(pmove *shared.Pmove_t) {
 	G.T.common.Pmove(pmove)
 }
 
 func (G *qGameImp) Trace(start, mins, maxs, end []float32, passent shared.Edict_s, contentmask int) shared.Trace_t {
 	return G.T.svTrace(start, mins, maxs, end, passent, contentmask)
+}
+
+func (G *qGameImp) Pointcontents(point []float32) int {
+	return G.T.svPointContents(point)
 }
 
 /*

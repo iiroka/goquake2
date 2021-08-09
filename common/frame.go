@@ -481,13 +481,13 @@ func (T *qCommon) qcommon_Frame(usec int) error {
 	// 	Com_Printf("all:%3i sv:%3i gm:%3i cl:%3i rf:%3i\n", all, sv, gm, cl, rf);
 	// }
 
-	// // Reset deltas and mark frame.
-	// if (packetframe) {
-	// 	packetdelta = 0;
-	// }
+	// Reset deltas and mark frame.
+	if packetframe {
+		T.packetdelta = 0
+	}
 
-	// if (renderframe) {
-	// 	renderdelta = 0;
-	// }
+	if renderframe {
+		T.renderdelta = 0
+	}
 	return nil
 }

@@ -240,10 +240,10 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 	ent.client = &G.game.clients[index]
 	//  ent->takedamage = DAMAGE_AIM;
 	ent.movetype = MOVETYPE_WALK
-	//  ent->viewheight = 22;
+	ent.viewheight = 22
 	ent.inuse = true
 	ent.Classname = "player"
-	//  ent->mass = 200;
+	ent.Mass = 200
 	ent.solid = shared.SOLID_BBOX
 	ent.deadflag = DEAD_NO
 	//  ent->air_finished = level.time + 12;
@@ -251,14 +251,14 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 	ent.Model = "players/male/tris.md2"
 	//  ent->pain = player_pain;
 	//  ent->die = player_die;
-	//  ent->waterlevel = 0;
-	//  ent->watertype = 0;
+	// ent.waterlevel = 0
+	// ent.watertype = 0
 	//  ent->flags &= ~FL_NO_KNOCKBACK;
 	ent.svflags = 0
 
 	copy(ent.mins[:], mins)
 	copy(ent.maxs[:], maxs)
-	//  VectorClear(ent->velocity);
+	copy(ent.velocity[:], []float32{0, 0, 0})
 
 	/* clear playerstate values */
 	client.ps.Copy(shared.Player_state_t{})
@@ -282,7 +282,7 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 	}
 	//  }
 
-	//  client->ps.gunindex = gi.modelindex(client->pers.weapon->view_model);
+	client.ps.Gunindex = G.gi.Modelindex(client.pers.weapon.view_model)
 
 	/* clear entity state values */
 	ent.s.Effects = 0
@@ -338,8 +338,153 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 
 	/* force the current weapon up */
 	client.newweapon = client.pers.weapon
-	//  ChangeWeapon(ent);
+	G.changeWeapon(ent)
 	return nil
+}
+
+/*
+ * Some maps have no unnamed (e.g. generic)
+ * info_player_start. This is no problem in
+ * normal gameplay, but if the map is loaded
+ * via console there is a huge chance that
+ * the player will spawn in the wrong point.
+ * Therefore create an unnamed info_player_start
+ * at the correct point.
+ */
+func spCreateUnnamedSpawn(self *edict_t, G *qGame) {
+
+	if self == nil || G == nil {
+		return
+	}
+
+	spot, _ := G.gSpawn()
+
+	println("spCreateUnnamedSpawn", G.level.mapname, self.Targetname)
+	/* mine1 */
+	if G.level.mapname == "mine1" {
+		if self.Targetname == "mintro" {
+			spot.Classname = self.Classname
+			spot.s.Origin[0] = self.s.Origin[0]
+			spot.s.Origin[1] = self.s.Origin[1]
+			spot.s.Origin[2] = self.s.Origin[2]
+			spot.s.Angles[1] = self.s.Angles[1]
+			spot.Targetname = ""
+
+			return
+		}
+	}
+
+	/* mine2 */
+	//  if (Q_stricmp(level.mapname, "mine2") == 0) {
+	// 	 if (Q_stricmp(self->targetname, "mine1") == 0) {
+	// 		 spot->classname = self->classname;
+	// 		 spot->s.origin[0] = self->s.origin[0];
+	// 		 spot->s.origin[1] = self->s.origin[1];
+	// 		 spot->s.origin[2] = self->s.origin[2];
+	// 		 spot->s.angles[1] = self->s.angles[1];
+	// 		 spot->targetname = NULL;
+
+	// 		 return;
+	// 	 }
+	//  }
+
+	//  /* mine3 */
+	//  if (Q_stricmp(level.mapname, "mine3") == 0) {
+	// 	 if (Q_stricmp(self->targetname, "mine2a") == 0) {
+	// 		 spot->classname = self->classname;
+	// 		 spot->s.origin[0] = self->s.origin[0];
+	// 		 spot->s.origin[1] = self->s.origin[1];
+	// 		 spot->s.origin[2] = self->s.origin[2];
+	// 		 spot->s.angles[1] = self->s.angles[1];
+	// 		 spot->targetname = NULL;
+
+	// 		 return;
+	// 	 }
+	//  }
+
+	//  /* mine4 */
+	//  if (Q_stricmp(level.mapname, "mine4") == 0) {
+	// 	 if (Q_stricmp(self->targetname, "mine3") == 0) {
+	// 		 spot->classname = self->classname;
+	// 		 spot->s.origin[0] = self->s.origin[0];
+	// 		 spot->s.origin[1] = self->s.origin[1];
+	// 		 spot->s.origin[2] = self->s.origin[2];
+	// 		 spot->s.angles[1] = self->s.angles[1];
+	// 		 spot->targetname = NULL;
+
+	// 		 return;
+	// 	 }
+	//  }
+
+	//   /* power2 */
+	//  if (Q_stricmp(level.mapname, "power2") == 0) {
+	// 	 if (Q_stricmp(self->targetname, "power1") == 0) {
+	// 		 spot->classname = self->classname;
+	// 		 spot->s.origin[0] = self->s.origin[0];
+	// 		 spot->s.origin[1] = self->s.origin[1];
+	// 		 spot->s.origin[2] = self->s.origin[2];
+	// 		 spot->s.angles[1] = self->s.angles[1];
+	// 		 spot->targetname = NULL;
+
+	// 		 return;
+	// 	 }
+	//  }
+
+	//  /* waste1 */
+	//  if (Q_stricmp(level.mapname, "waste1") == 0) {
+	// 	 if (Q_stricmp(self->targetname, "power2") == 0) {
+	// 		 spot->classname = self->classname;
+	// 		 spot->s.origin[0] = self->s.origin[0];
+	// 		 spot->s.origin[1] = self->s.origin[1];
+	// 		 spot->s.origin[2] = self->s.origin[2];
+	// 		 spot->s.angles[1] = self->s.angles[1];
+	// 		 spot->targetname = NULL;
+
+	// 		 return;
+	// 	 }
+	//  }
+
+	//  /* waste2 */
+	//  if (Q_stricmp(level.mapname, "waste2") == 0) {
+	// 	 if (Q_stricmp(self->targetname, "waste1") == 0) {
+	// 		 spot->classname = self->classname;
+	// 		 spot->s.origin[0] = self->s.origin[0];
+	// 		 spot->s.origin[1] = self->s.origin[1];
+	// 		 spot->s.origin[2] = self->s.origin[2];
+	// 		 spot->s.angles[1] = self->s.angles[1];
+	// 		 spot->targetname = NULL;
+
+	// 		 return;
+	// 	 }
+	//  }
+
+	//  /* waste3 */
+	//  if (Q_stricmp(level.mapname, "waste3") == 0) {
+	// 	 if (Q_stricmp(self->targetname, "waste2") == 0) {
+	// 		 spot->classname = self->classname;
+	// 		 spot->s.origin[0] = self->s.origin[0];
+	// 		 spot->s.origin[1] = self->s.origin[1];
+	// 		 spot->s.origin[2] = self->s.origin[2];
+	// 		 spot->s.angles[1] = self->s.angles[1];
+	// 		 spot->targetname = NULL;
+
+	// 		 return;
+	// 	 }
+	//  }
+
+	//  /* city3 */
+	//  if (Q_stricmp(level.mapname, "city2") == 0) {
+	// 	 if (Q_stricmp(self->targetname, "city2NL") == 0) {
+	// 		 spot->classname = self->classname;
+	// 		 spot->s.origin[0] = self->s.origin[0];
+	// 		 spot->s.origin[1] = self->s.origin[1];
+	// 		 spot->s.origin[2] = self->s.origin[2];
+	// 		 spot->s.angles[1] = self->s.angles[1];
+	// 		 spot->targetname = NULL;
+
+	// 		 return;
+	// 	 }
+	//  }
 }
 
 /*
@@ -352,7 +497,7 @@ func spInfoPlayerStart(self *edict_t, G *qGame) error {
 	}
 
 	/* Call function to hack unnamed spawn points */
-	// self->think = SP_CreateUnnamedSpawn;
+	self.think = spCreateUnnamedSpawn
 	self.nextthink = G.level.time + FRAMETIME
 
 	// if (!coop->value) {
@@ -434,8 +579,8 @@ func (G *qGame) ClientBegin(sent shared.Edict_s) error {
 	// 	 }
 	//  }
 
-	//  /* make sure all view stuff is valid */
-	//  ClientEndServerFrame(ent);
+	/* make sure all view stuff is valid */
+	G.clientEndServerFrame(ent)
 	return nil
 }
 
@@ -528,7 +673,7 @@ func (G *qGame) ClientConnect(sent shared.Edict_s, userinfo string) bool {
 	//  }
 
 	ent.svflags = 0 /* make sure we start with known default */
-	//  ent->client->pers.connected = true;
+	ent.client.pers.connected = true
 	return true
 }
 
@@ -542,7 +687,7 @@ func (G *qGame) ClientConnect(sent shared.Edict_s, userinfo string) bool {
  */
 func PM_trace(start, mins, maxs, end []float32, a interface{}) shared.Trace_t {
 	G := a.(*qGame)
-	if G.pm_passent.health > 0 {
+	if G.pm_passent.Health > 0 {
 		return G.gi.Trace(start, mins, maxs, end, G.pm_passent, shared.MASK_PLAYERSOLID)
 	} else {
 		return G.gi.Trace(start, mins, maxs, end, G.pm_passent, shared.MASK_DEADSOLID)
@@ -568,25 +713,24 @@ func (G *qGame) ClientThink(sent shared.Edict_s, ucmd *shared.Usercmd_t) {
 	G.level.current_entity = ent
 	client := ent.client
 
-	//  if (level.intermissiontime) {
-	// 	 client->ps.pmove.pm_type = PM_FREEZE;
+	if G.level.intermissiontime != 0 {
+		client.ps.Pmove.Pm_type = shared.PM_FREEZE
 
-	// 	 /* can exit intermission after five seconds */
-	// 	 if ((level.time > level.intermissiontime + 5.0) &&
-	// 		 (ucmd->buttons & BUTTON_ANY))
-	// 	 {
-	// 		 level.exitintermission = true;
-	// 	 }
+		// 	 /* can exit intermission after five seconds */
+		// 	 if ((level.time > level.intermissiontime + 5.0) &&
+		// 		 (ucmd->buttons & BUTTON_ANY)) {
+		// 		 level.exitintermission = true;
+		// 	 }
 
-	// 	 return;
-	//  }
+		return
+	}
 
 	G.pm_passent = ent
 
 	if ent.client.chase_target != nil {
-		// 	 client->resp.cmd_angles[0] = SHORT2ANGLE(ucmd->angles[0]);
-		// 	 client->resp.cmd_angles[1] = SHORT2ANGLE(ucmd->angles[1]);
-		// 	 client->resp.cmd_angles[2] = SHORT2ANGLE(ucmd->angles[2]);
+		client.resp.cmd_angles[0] = shared.SHORT2ANGLE(int(ucmd.Angles[0]))
+		client.resp.cmd_angles[1] = shared.SHORT2ANGLE(int(ucmd.Angles[1]))
+		client.resp.cmd_angles[2] = shared.SHORT2ANGLE(int(ucmd.Angles[2]))
 	} else {
 		/* set up for pmove */
 		pm := shared.Pmove_t{}
@@ -627,7 +771,7 @@ func (G *qGame) ClientThink(sent shared.Edict_s, ucmd *shared.Usercmd_t) {
 
 		/* save results of pmove */
 		client.ps.Pmove.Copy(pm.S)
-		//  client.old_pmove = pm.s;
+		client.old_pmove.Copy(pm.S)
 
 		for i := 0; i < 3; i++ {
 			ent.s.Origin[i] = float32(pm.S.Origin[i]) * 0.125
@@ -752,8 +896,6 @@ func (G *qGame) ClientThink(sent shared.Edict_s, ucmd *shared.Usercmd_t) {
  * in the world.
  */
 func (G *qGame) clientBeginServerFrame(ent *edict_t) {
-	//  gclient_t *client;
-	//  int buttonMask;
 
 	if ent == nil {
 		return

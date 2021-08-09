@@ -146,7 +146,7 @@ func clPMTrace(start, mins, maxs, end []float32, a interface{}) shared.Trace_t {
 	/* check against world */
 	t := T.common.CMBoxTrace(start, end, mins, maxs, 0, shared.MASK_PLAYERSOLID)
 	if t.Fraction < 1.0 {
-		// t.ent = (struct edict_s *)1;
+		t.Ent = 1
 	}
 
 	/* check all other solid models */

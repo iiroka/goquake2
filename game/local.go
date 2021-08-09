@@ -27,9 +27,45 @@ package game
 
 import "goquake2/shared"
 
-const FRAMETIME = 0.1
-
 const (
+	/* ================================================================== */
+
+	/* view pitching times */
+	DAMAGE_TIME = 0.5
+	FALL_TIME   = 0.3
+
+	/* these are set with checkboxes on each entity in the map editor */
+	SPAWNFLAG_NOT_EASY       = 0x00000100
+	SPAWNFLAG_NOT_MEDIUM     = 0x00000200
+	SPAWNFLAG_NOT_HARD       = 0x00000400
+	SPAWNFLAG_NOT_DEATHMATCH = 0x00000800
+	SPAWNFLAG_NOT_COOP       = 0x00001000
+
+	FL_FLY           = 0x00000001
+	FL_SWIM          = 0x00000002 /* implied immunity to drowining */
+	FL_IMMUNE_LASER  = 0x00000004
+	FL_INWATER       = 0x00000008
+	FL_GODMODE       = 0x00000010
+	FL_NOTARGET      = 0x00000020
+	FL_IMMUNE_SLIME  = 0x00000040
+	FL_IMMUNE_LAVA   = 0x00000080
+	FL_PARTIALGROUND = 0x00000100 /* not all corners are valid */
+	FL_WATERJUMP     = 0x00000200 /* player jumping out of water */
+	FL_TEAMSLAVE     = 0x00000400 /* not the first on the team */
+	FL_NO_KNOCKBACK  = 0x00000800
+	FL_POWER_ARMOR   = 0x00001000 /* power armor (if any) is active */
+	FL_COOP_TAKEN    = 0x00002000 /* Another client has already taken it */
+	FL_RESPAWN       = 0x80000000 /* used for item respawning */
+
+	FRAMETIME = 0.1
+
+	/* memory tags to allow dynamic memory to be cleaned up */
+	TAG_GAME  = 765 /* clear when unloading the dll */
+	TAG_LEVEL = 766 /* clear when loading a new level */
+
+	MELEE_DISTANCE  = 80
+	BODY_QUEUE_SIZE = 8
+
 	AMMO_BULLETS  = 0
 	AMMO_SHELLS   = 1
 	AMMO_ROCKETS  = 2
@@ -42,6 +78,23 @@ const (
 	DEAD_DYING       = 1
 	DEAD_DEAD        = 2
 	DEAD_RESPAWNABLE = 3
+
+	/* monster ai flags */
+	AI_STAND_GROUND      = 0x00000001
+	AI_TEMP_STAND_GROUND = 0x00000002
+	AI_SOUND_TARGET      = 0x00000004
+	AI_LOST_SIGHT        = 0x00000008
+	AI_PURSUIT_LAST_SEEN = 0x00000010
+	AI_PURSUE_NEXT       = 0x00000020
+	AI_PURSUE_TEMP       = 0x00000040
+	AI_HOLD_FRAME        = 0x00000080
+	AI_GOOD_GUY          = 0x00000100
+	AI_BRUTAL            = 0x00000200
+	AI_NOSTEP            = 0x00000400
+	AI_DUCKED            = 0x00000800
+	AI_COMBAT_POINT      = 0x00001000
+	AI_MEDIC             = 0x00002000
+	AI_RESURRECTING      = 0x00004000
 
 	/* armor types */
 	ARMOR_NONE   = 0
@@ -173,12 +226,12 @@ type level_locals_t struct {
 	//    vec3_t intermission_origin;
 	//    vec3_t intermission_angle;
 
-	//    edict_t *sight_client; /* changed once each frame for coop games */
+	sight_client *edict_t /* changed once each frame for coop games */
 
-	//    edict_t *sight_entity;
-	//    int sight_entity_framenum;
-	//    edict_t *sound_entity;
-	//    int sound_entity_framenum;
+	sight_entity          *edict_t
+	sight_entity_framenum int
+	sound_entity          *edict_t
+	sound_entity_framenum int
 	//    edict_t *sound2_entity;
 	//    int sound2_entity_framenum;
 
@@ -190,8 +243,8 @@ type level_locals_t struct {
 	//    int total_goals;
 	//    int found_goals;
 
-	//    int total_monsters;
-	//    int killed_monsters;
+	total_monsters  int
+	killed_monsters int
 
 	current_entity *edict_t /* entity running from G_RunFrame */
 	//    int body_que; /* dead bodies */
@@ -209,13 +262,13 @@ type spawn_temp_t struct {
 	Skyaxis   [3]float32
 	Nextmap   string
 
-	//    int lip;
+	Lip int
 	//    int distance;
 	//    int height;
 	Noise string
 	//    float pausetime;
 	//    char *item;
-	//    char *gravity;
+	Ggravity string
 
 	//    float minyaw;
 	//    float maxyaw;
@@ -238,14 +291,14 @@ type mmove_t struct {
 
 type monsterinfo_t struct {
 	currentmove *mmove_t
-	// int aiflags;
-	nextframe int
-	scale     float32
+	aiflags     int
+	nextframe   int
+	scale       float32
 
 	stand func(self *edict_t, G *qGame)
-	// void (*idle)(edict_t *self);
+	idle  func(self *edict_t, G *qGame)
 	// void (*search)(edict_t *self);
-	// void (*walk)(edict_t *self);
+	walk func(self *edict_t, G *qGame)
 	// void (*run)(edict_t *self);
 	// void (*dodge)(edict_t *self, edict_t *other, float eta);
 	// void (*attack)(edict_t *self);
@@ -253,7 +306,7 @@ type monsterinfo_t struct {
 	// void (*sight)(edict_t *self, edict_t *other);
 	// qboolean (*checkattack)(edict_t *self);
 
-	// float pausetime;
+	pausetime float32
 	// float attack_finished;
 
 	// vec3_t saved_goal;
@@ -262,12 +315,33 @@ type monsterinfo_t struct {
 	// vec3_t last_sighting;
 	// int attack_state;
 	// int lefty;
-	// float idle_time;
-	// int linkcount;
+	idle_time float32
+	linkcount int
 
 	// int power_armor_type;
 	// int power_armor_power;
 }
+
+const (
+	/* Easier handling of AI skill levels */
+	SKILL_EASY     = 0
+	SKILL_MEDIUM   = 1
+	SKILL_HARD     = 2
+	SKILL_HARDPLUS = 3
+)
+
+/* ============================================================================ */
+
+const (
+	/* client_t->anim_priority */
+	ANIM_BASIC   = 0 /* stand / run */
+	ANIM_WAVE    = 1
+	ANIM_JUMP    = 2
+	ANIM_PAIN    = 3
+	ANIM_ATTACK  = 4
+	ANIM_DEATH   = 5
+	ANIM_REVERSE = 6
+)
 
 /* client data that stays across multiple level loads */
 type client_persistant_t struct {
@@ -353,16 +427,16 @@ type gclient_t struct {
 	ping int
 
 	/* private to game */
-	pers client_persistant_t
-	resp client_respawn_t
-	// pmove_state_t old_pmove; /* for detecting out-of-pmove changes */
+	pers      client_persistant_t
+	resp      client_respawn_t
+	old_pmove shared.Pmove_state_t /* for detecting out-of-pmove changes */
 
 	// qboolean showscores; /* set layout stat */
 	// qboolean showinventory; /* set layout stat */
 	// qboolean showhelp;
 	// qboolean showhelpicon;
 
-	// int ammo_index;
+	ammo_index int
 
 	buttons         int
 	oldbuttons      int
@@ -383,27 +457,27 @@ type gclient_t struct {
 	// float killer_yaw; /* when dead, look at killer */
 
 	// weaponstate_t weaponstate;
-	// vec3_t kick_angles; /* weapon kicks */
-	// vec3_t kick_origin;
+	kick_angles [3]float32 /* weapon kicks */
+	kick_origin [3]float32
 	// float v_dmg_roll, v_dmg_pitch, v_dmg_time; /* damage kicks */
 	// float fall_time, fall_value; /* for view drop on fall */
 	// float damage_alpha;
 	// float bonus_alpha;
 	// vec3_t damage_blend;
-	v_angle [3]float32 /* aiming direction */
-	// float bobtime; /* so off-ground doesn't change it */
-	// vec3_t oldviewangles;
-	// vec3_t oldvelocity;
+	v_angle       [3]float32 /* aiming direction */
+	bobtime       float32    /* so off-ground doesn't change it */
+	oldviewangles [3]float32
+	oldvelocity   [3]float32
 
 	// float next_drown_time;
 	// int old_waterlevel;
 	// int breather_sound;
 
-	// int machinegun_shots; /* for weapon raising */
+	machinegun_shots int /* for weapon raising */
 
-	// /* animation vars */
-	// int anim_end;
-	// int anim_priority;
+	/* animation vars */
+	anim_end      int
+	anim_priority int
 	// qboolean anim_duck;
 	// qboolean anim_run;
 
@@ -444,12 +518,12 @@ func (G *gclient_t) copy(other gclient_t) {
 	G.ping = other.ping
 	G.pers.copy(other.pers)
 	// resp client_respawn_t
-	// pmove_state_t old_pmove; /* for detecting out-of-pmove changes */
+	G.old_pmove.Copy(other.old_pmove) /* for detecting out-of-pmove changes */
 	// qboolean showscores; /* set layout stat */
 	// qboolean showinventory; /* set layout stat */
 	// qboolean showhelp;
 	// qboolean showhelpicon;
-	// int ammo_index;
+	G.ammo_index = other.ammo_index
 	G.buttons = other.buttons
 	G.oldbuttons = other.oldbuttons
 	G.latched_buttons = other.latched_buttons
@@ -462,22 +536,18 @@ func (G *gclient_t) copy(other gclient_t) {
 	// vec3_t damage_from; /* origin for vector calculation */
 	// float killer_yaw; /* when dead, look at killer */
 	// weaponstate_t weaponstate;
-	// vec3_t kick_angles; /* weapon kicks */
-	// vec3_t kick_origin;
 	// float v_dmg_roll, v_dmg_pitch, v_dmg_time; /* damage kicks */
 	// float fall_time, fall_value; /* for view drop on fall */
 	// float damage_alpha;
 	// float bonus_alpha;
 	// vec3_t damage_blend;
-	// float bobtime; /* so off-ground doesn't change it */
-	// vec3_t oldviewangles;
-	// vec3_t oldvelocity;
+	G.bobtime = other.bobtime
 	// float next_drown_time;
 	// int old_waterlevel;
 	// int breather_sound;
-	// int machinegun_shots; /* for weapon raising */
-	// int anim_end;
-	// int anim_priority;
+	G.machinegun_shots = other.machinegun_shots
+	G.anim_end = other.anim_end
+	G.anim_priority = other.anim_priority
 	// qboolean anim_duck;
 	// qboolean anim_run;
 	// float quad_framenum;
@@ -497,7 +567,11 @@ func (G *gclient_t) copy(other gclient_t) {
 	// qboolean update_chase; /* need to update chase info? */
 
 	for i := 0; i < 3; i++ {
+		G.kick_angles[i] = other.kick_angles[i]
+		G.kick_origin[i] = other.kick_origin[i]
 		G.v_angle[i] = other.v_angle[i]
+		G.oldviewangles[i] = other.oldviewangles[i]
+		G.oldvelocity[i] = other.oldviewangles[i]
 	}
 }
 
@@ -546,34 +620,34 @@ type edict_t struct {
 	ftimestamp float32
 
 	// float angle; /* set in qe3, -1 = up, -2 = down */
-	Target     string
-	Targetname string
-	// char *killtarget;
-	// char *team;
-	// char *pathtarget;
-	// char *deathtarget;
-	// char *combattarget;
+	Target       string
+	Targetname   string
+	Killtarget   string
+	Team         string
+	Pathtarget   string
+	Deathtarget  string
+	Combattarget string
 	// edict_t *target_ent;
 
 	Speed, Accel, Decel float32
 	// vec3_t movedir;
 	// vec3_t pos1, pos2;
 
-	velocity [3]float32
-	// vec3_t avelocity;
-	// int mass;
+	velocity  [3]float32
+	avelocity [3]float32
+	Mass      int
 	// float air_finished;
 	gravity float32 /* per entity gravity multiplier (1.0 is normal)
 	   use for lowgrav artifact, flares */
 
-	// edict_t *goalentity;
-	// edict_t *movetarget;
-	// float yaw_speed;
-	// float ideal_yaw;
+	goalentity *edict_t
+	movetarget *edict_t
+	yaw_speed  float32
+	ideal_yaw  float32
 
 	nextthink float32
-	// void (*prethink)(edict_t *ent);
-	// void (*think)(edict_t *self);
+	prethink  func(self *edict_t, G *qGame)
+	think     func(self *edict_t, G *qGame)
 	// void (*blocked)(edict_t *self, edict_t *other);
 	// void (*touch)(edict_t *self, edict_t *other, cplane_t *plane,
 	// 		csurface_t *surf);
@@ -588,7 +662,7 @@ type edict_t struct {
 	// float fly_sound_debounce_time;	/* now also used by insane marines to store pain sound timeout */
 	// float last_move_time;
 
-	health     int
+	Health     int
 	max_health int
 	gib_health int
 	deadflag   int
@@ -607,7 +681,7 @@ type edict_t struct {
 	// int count;
 
 	// edict_t *chain;
-	// edict_t *enemy;
+	enemy *edict_t
 	// edict_t *oldenemy;
 	// edict_t *activator;
 	groundentity           *edict_t
@@ -630,8 +704,8 @@ type edict_t struct {
 
 	// float last_sound_time;
 
-	// int watertype;
-	// int waterlevel;
+	watertype  int
+	waterlevel int
 
 	// vec3_t move_origin;
 	// vec3_t move_angles;
@@ -825,6 +899,12 @@ type qGame struct {
 	aimfix *shared.CvarT
 
 	pm_passent *edict_t
+
+	current_player      *edict_t
+	current_client      *gclient_t
+	player_view_forward [3]float32
+	player_view_right   [3]float32
+	player_view_up      [3]float32
 }
 
 func QGameCreate(gi shared.Game_import_t) shared.Game_export_t {

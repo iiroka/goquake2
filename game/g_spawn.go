@@ -35,9 +35,11 @@ import (
 
 var spawns = map[string]func(ent *edict_t, G *qGame) error{
 	"info_player_start": spInfoPlayerStart,
+	"trigger_relay":     spTriggerRelay,
 	"target_speaker":    spTargetSpeaker,
 	"worldspawn":        spWorldspawn,
 	"light":             spLight,
+	"point_combat":      spPointCombat,
 	"path_corner":       spPathCorner,
 	"monster_soldier":   spMonsterSoldier,
 }
@@ -193,7 +195,9 @@ func (G *qGame) edParseEdict(data string, index int, ent *edict_t) (int, error) 
 	}
 
 	if !init {
-		// 	 memset(ent, 0, sizeof(*ent));
+		index := ent.index
+		G.g_edicts[index] = edict_t{}
+		G.g_edicts[index].index = index
 	}
 
 	return index, nil
@@ -339,33 +343,32 @@ func (G *qGame) SpawnEntities(mapname, entities, spawnpoint string) error {
 
 		/* remove things (except the world) from
 		different skill levels or deathmatch */
-		// 	 if (ent != g_edicts) {
-		// 		 if (deathmatch->value) {
-		// 			 if (ent->spawnflags & SPAWNFLAG_NOT_DEATHMATCH) != 0 {
-		// 				 G_FreeEdict(ent);
-		// 				 inhibit++;
-		// 				 continue;
-		// 			 }
-		// 		 } else {
-		// 			 if (((skill->value == SKILL_EASY) &&
-		// 				  (ent->spawnflags & SPAWNFLAG_NOT_EASY)) ||
-		// 				 ((skill->value == SKILL_MEDIUM) &&
-		// 				  (ent->spawnflags & SPAWNFLAG_NOT_MEDIUM)) ||
-		// 				 (((skill->value == SKILL_HARD) ||
-		// 				   (skill->value == SKILL_HARDPLUS)) &&
-		// 				  (ent->spawnflags & SPAWNFLAG_NOT_HARD))
-		// 				 ) {
-		// 				 G_FreeEdict(ent);
-		// 				 inhibit++;
-		// 				 continue;
-		// 			 }
-		// 		 }
+		if ent != &G.g_edicts[0] {
+			if G.deathmatch.Bool() {
+				if (ent.Spawnflags & SPAWNFLAG_NOT_DEATHMATCH) != 0 {
+					G.gFreeEdict(ent)
+					inhibit++
+					continue
+				}
+			} else {
+				if ((G.skill.Int() == SKILL_EASY) &&
+					(ent.Spawnflags&SPAWNFLAG_NOT_EASY) != 0) ||
+					((G.skill.Int() == SKILL_MEDIUM) &&
+						(ent.Spawnflags&SPAWNFLAG_NOT_MEDIUM) != 0) ||
+					(((G.skill.Int() == SKILL_HARD) ||
+						(G.skill.Int() == SKILL_HARDPLUS)) &&
+						(ent.Spawnflags&SPAWNFLAG_NOT_HARD) != 0) {
+					G.gFreeEdict(ent)
+					inhibit++
+					continue
+				}
+			}
 
-		// 		 ent->spawnflags &=
-		// 			 ~(SPAWNFLAG_NOT_EASY | SPAWNFLAG_NOT_MEDIUM |
-		// 			   SPAWNFLAG_NOT_HARD |
-		// 			   SPAWNFLAG_NOT_COOP | SPAWNFLAG_NOT_DEATHMATCH);
-		// 	 }
+			ent.Spawnflags &^=
+				(SPAWNFLAG_NOT_EASY | SPAWNFLAG_NOT_MEDIUM |
+					SPAWNFLAG_NOT_HARD |
+					SPAWNFLAG_NOT_COOP | SPAWNFLAG_NOT_DEATHMATCH)
+		}
 
 		if err := G.edCallSpawn(ent); err != nil {
 			return err
@@ -668,12 +671,12 @@ func spWorldspawn(ent *edict_t, G *qGame) error {
 	G.gi.Soundindex("infantry/inflies1.wav")
 
 	//  sm_meat_index = gi.modelindex("models/objects/gibs/sm_meat/tris.md2");
-	//  gi.modelindex("models/objects/gibs/arm/tris.md2");
-	//  gi.modelindex("models/objects/gibs/bone/tris.md2");
-	//  gi.modelindex("models/objects/gibs/bone2/tris.md2");
-	//  gi.modelindex("models/objects/gibs/chest/tris.md2");
-	//  gi.modelindex("models/objects/gibs/skull/tris.md2");
-	//  gi.modelindex("models/objects/gibs/head2/tris.md2");
+	G.gi.Modelindex("models/objects/gibs/arm/tris.md2")
+	G.gi.Modelindex("models/objects/gibs/bone/tris.md2")
+	G.gi.Modelindex("models/objects/gibs/bone2/tris.md2")
+	G.gi.Modelindex("models/objects/gibs/chest/tris.md2")
+	G.gi.Modelindex("models/objects/gibs/skull/tris.md2")
+	G.gi.Modelindex("models/objects/gibs/head2/tris.md2")
 
 	/* Setup light animation tables. 'a'
 	is total darkness, 'z' is doublebright. */

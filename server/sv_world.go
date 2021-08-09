@@ -400,6 +400,28 @@ func (T *qServer) svAreaEdicts(mins, maxs []float32, list []shared.Edict_s, maxc
 	return T.area_count
 }
 
+func (T *qServer) svPointContents(p []float32) int {
+
+	/* get base contents from world */
+	contents := T.common.CMPointContents(p, T.sv.models[1].Headnode)
+
+	/* or in contents from all the other entities */
+	var touch [shared.MAX_EDICTS]shared.Edict_s
+	num := T.svAreaEdicts(p, p, touch[:], shared.MAX_EDICTS, shared.AREA_SOLID)
+
+	for i := 0; i < num; i++ {
+		hit := touch[i]
+
+		/* might intersect, so do an exact clip */
+		headnode := T.svHullForEntity(hit)
+		c2 := T.common.CMTransformedPointContents(p, headnode, hit.S().Origin[:], hit.S().Angles[:])
+
+		contents |= c2
+	}
+
+	return contents
+}
+
 type moveclip_t struct {
 	boxmins, boxmaxs [3]float32 /* enclose the test object along entire move */
 	mins, maxs       []float32  /* size of the moving object */

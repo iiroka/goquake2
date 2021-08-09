@@ -132,8 +132,6 @@ func (T *qServer) spawnServer(server, spawnpoint string, serverstate server_stat
 	if T.common.Cvar_VariableBool("deathmatch") {
 		T.sv.configstrings[shared.CS_AIRACCEL] = fmt.Sprintf("%f", T.sv_airaccelerate.Float())
 		T.common.SetAirAccelerate(T.sv_airaccelerate.Float())
-		// 	 sprintf(sv.configstrings[CS_AIRACCEL], "%g", sv_airaccelerate->value);
-		// 	 pm_airaccelerate = sv_airaccelerate->value;
 	} else {
 		T.sv.configstrings[shared.CS_AIRACCEL] = "0"
 		T.common.SetAirAccelerate(0)

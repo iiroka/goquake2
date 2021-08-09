@@ -36,7 +36,7 @@ func Mod_DecompressVis(in []byte, offset, row int) []byte {
 	//  YQ2_ALIGNAS_TYPE(int) static byte decompressed[MAX_MAP_LEAFS / 8];
 	//  int c;
 	//  byte *out;
-	decompressed := make([]byte, row)
+	decompressed := make([]byte, MAX_MAP_LEAFS/8)
 	index := 0
 
 	if in == nil {

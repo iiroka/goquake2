@@ -27,6 +27,23 @@ package game
 
 import "goquake2/shared"
 
+/* ====================================================================== */
+
+func (G *qGame) clientEndServerFrames() {
+
+	/* calc the player views now that all
+	   pushing  and damage has been added */
+	for i := 0; i < G.maxclients.Int(); i++ {
+		ent := &G.g_edicts[1+i]
+
+		if !ent.inuse || ent.client == nil {
+			continue
+		}
+
+		G.clientEndServerFrame(ent)
+	}
+}
+
 /*
  * Advances the world by 0.1 seconds
  */
@@ -61,7 +78,7 @@ func (G *qGame) RunFrame() error {
 
 		// 	 level.current_entity = ent;
 
-		// 	 VectorCopy(ent->s.origin, ent->s.old_origin);
+		copy(ent.s.Old_origin[:], ent.s.Origin[:])
 
 		// 	 /* if the ground entity moved, make sure we are still on it */
 		// 	 if ((ent->groundentity) &&
@@ -93,7 +110,7 @@ func (G *qGame) RunFrame() error {
 	//  CheckNeedPass();
 
 	/* build the playerstate_t structures for all players */
-	//  ClientEndServerFrames();
+	G.clientEndServerFrames()
 	return nil
 }
 

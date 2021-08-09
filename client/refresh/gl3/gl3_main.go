@@ -537,12 +537,9 @@ func (T *qGl3) drawParticles() {
 	T.useProgram(T.gl3state.siParticle.shaderProgram)
 
 	for i, p := range T.gl3_newrefdef.Particles {
-		// for ( i = 0, p = gl3_newrefdef.particles; i < numParticles; i++, p++ )
-		// {
 		color := T.d_8to24table[p.Color&0xFF]
 		cur := buf[i*9:]
-		// 	vec3_t offset; // between viewOrg and particle position
-		offset := make([]float32, 3)
+		offset := make([]float32, 3) // between viewOrg and particle position
 		shared.VectorSubtract(viewOrg, p.Origin[:], offset)
 
 		copy(cur[0:3], p.Origin[:])

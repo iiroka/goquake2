@@ -162,6 +162,91 @@ func soldier_stand(self *edict_t, G *qGame) {
 	}
 }
 
+func soldier_walk1_random(self *edict_t, G *qGame) {
+	if self == nil || G == nil {
+		return
+	}
+
+	if shared.Frandk() > 0.1 {
+		self.monsterinfo.nextframe = soldier.FRAME_walk101
+	}
+}
+
+var soldier_frames_walk1 = []mframe_t{
+	{ai_walk, 3, nil},
+	{ai_walk, 6, nil},
+	{ai_walk, 2, nil},
+	{ai_walk, 2, nil},
+	{ai_walk, 2, nil},
+	{ai_walk, 1, nil},
+	{ai_walk, 6, nil},
+	{ai_walk, 5, nil},
+	{ai_walk, 3, nil},
+	{ai_walk, -1, soldier_walk1_random},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+	{ai_walk, 0, nil},
+}
+
+var soldier_move_walk1 = mmove_t{
+	soldier.FRAME_walk101,
+	soldier.FRAME_walk133,
+	soldier_frames_walk1,
+	nil,
+}
+
+var soldier_frames_walk2 = []mframe_t{
+	{ai_walk, 4, nil},
+	{ai_walk, 4, nil},
+	{ai_walk, 9, nil},
+	{ai_walk, 8, nil},
+	{ai_walk, 5, nil},
+	{ai_walk, 1, nil},
+	{ai_walk, 3, nil},
+	{ai_walk, 7, nil},
+	{ai_walk, 6, nil},
+	{ai_walk, 7, nil},
+}
+
+var soldier_move_walk2 = mmove_t{
+	soldier.FRAME_walk209,
+	soldier.FRAME_walk218,
+	soldier_frames_walk2,
+	nil,
+}
+
+func soldier_walk(self *edict_t, G *qGame) {
+	if self == nil || G == nil {
+		return
+	}
+
+	if shared.Frandk() < 0.5 {
+		self.monsterinfo.currentmove = &soldier_move_walk1
+	} else {
+		self.monsterinfo.currentmove = &soldier_move_walk2
+	}
+}
+
 func (G *qGame) spMonsterSoldierX(self *edict_t) {
 	if self == nil {
 		return
@@ -182,13 +267,13 @@ func (G *qGame) spMonsterSoldierX(self *edict_t) {
 	// sound_sight2 = gi.soundindex("soldier/solsrch1.wav");
 	// sound_cock = gi.soundindex("infantry/infatck3.wav");
 
-	// self.mass = 100
+	self.Mass = 100
 
 	// self->pain = soldier_pain;
 	// self->die = soldier_die;
 
 	self.monsterinfo.stand = soldier_stand
-	// self->monsterinfo.walk = soldier_walk;
+	self.monsterinfo.walk = soldier_walk
 	// self->monsterinfo.run = soldier_run;
 	// self->monsterinfo.dodge = soldier_dodge;
 	// self->monsterinfo.attack = soldier_attack;
@@ -210,11 +295,10 @@ func spMonsterSoldier(self *edict_t, G *qGame) error {
 		return nil
 	}
 
-	// if (deathmatch->value)
-	// {
-	// 	G_FreeEdict(self);
-	// 	return;
-	// }
+	if G.deathmatch.Bool() {
+		G.gFreeEdict(self)
+		return nil
+	}
 
 	G.spMonsterSoldierX(self)
 
@@ -223,7 +307,7 @@ func spMonsterSoldier(self *edict_t, G *qGame) error {
 	G.gi.Soundindex("soldier/solatck1.wav")
 
 	self.s.Skinnum = 2
-	self.health = 30
+	self.Health = 30
 	self.gib_health = -30
 	return nil
 }

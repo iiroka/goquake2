@@ -155,11 +155,14 @@ func (T *qClient) prepRefresh() error {
 				return err
 			}
 
-			// 		 if (name[0] == '*') {
-			// 			 cl.model_clip[i] = CM_InlineModel(cl.configstrings[CS_MODELS + i]);
-			// 		 } else {
-			// 			 cl.model_clip[i] = NULL;
-			// 		 }
+			if name[0] == '*' {
+				T.cl.model_clip[i], err = T.common.CMInlineModel(T.cl.configstrings[shared.CS_MODELS+i])
+				if err != nil {
+					return err
+				}
+			} else {
+				T.cl.model_clip[i] = nil
+			}
 		}
 
 		if name[0] != '*' {
@@ -170,10 +173,10 @@ func (T *qClient) prepRefresh() error {
 	T.common.Com_Printf("images\r")
 	T.scrUpdateScreen()
 
-	//  for (i = 1; i < MAX_IMAGES && cl.configstrings[CS_IMAGES + i][0]; i++) {
-	// 	 cl.image_precache[i] = Draw_FindPic(cl.configstrings[CS_IMAGES + i]);
-	// 	 IN_Update();
-	//  }
+	for i := 1; i < shared.MAX_IMAGES && len(T.cl.configstrings[shared.CS_IMAGES+i]) > 0; i++ {
+		T.cl.image_precache[i] = T.Draw_FindPic(T.cl.configstrings[shared.CS_IMAGES+i])
+		T.input.Update()
+	}
 
 	T.common.Com_Printf("                                     \r")
 

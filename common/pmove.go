@@ -28,6 +28,7 @@ package common
 
 import (
 	"goquake2/shared"
+	"math"
 )
 
 const STEPSIZE = 18
@@ -127,7 +128,7 @@ func PM_StepSlideMove_(pm *shared.Pmove_t, pml *pml_t) {
 
 		/* save entity for contact */
 		if (pm.Numtouch < shared.MAXTOUCH) && trace.Ent != nil {
-			pm.Touchents[pm.Numtouch] = trace.Ent.(shared.Edict_s)
+			pm.Touchents[pm.Numtouch] = trace.Ent
 			pm.Numtouch++
 		}
 
@@ -250,6 +251,55 @@ func PM_StepSlideMove(pm *shared.Pmove_t, pml *pml_t) {
 	}
 
 	pml.velocity[2] = down_v[2]
+}
+
+/*
+ * Handles both ground friction and water friction
+ */
+func (T *qCommon) pmFriction(pm *shared.Pmove_t, pml *pml_t) {
+
+	vel := pml.velocity
+
+	speed := float32(math.Sqrt(float64(vel[0]*vel[0]) + float64(vel[1]*vel[1]) + float64(vel[2]*vel[2])))
+
+	if speed < 1 {
+		vel[0] = 0
+		vel[1] = 0
+		return
+	}
+
+	var drop float32 = 0
+
+	/* apply ground friction */
+	if (pm.Groundentity != nil && pml.groundsurface != nil &&
+		(pml.groundsurface.Flags&shared.SURF_SLICK) == 0) || (pml.ladder) {
+		friction := T.pm_friction
+		var control float32
+		if speed < T.pm_stopspeed {
+			control = T.pm_stopspeed
+		} else {
+			control = speed
+		}
+		drop += control * friction * pml.frametime
+	}
+
+	/* apply water friction */
+	if pm.Waterlevel != 0 && !pml.ladder {
+		drop += speed * T.pm_waterfriction * float32(pm.Waterlevel) * pml.frametime
+	}
+
+	/* scale the velocity */
+	newspeed := speed - drop
+
+	if newspeed < 0 {
+		newspeed = 0
+	}
+
+	newspeed /= speed
+
+	vel[0] = vel[0] * newspeed
+	vel[1] = vel[1] * newspeed
+	vel[2] = vel[2] * newspeed
 }
 
 /*
@@ -379,12 +429,6 @@ func PM_AddCurrents(pm *shared.Pmove_t, pml *pml_t, wishvel []float32) {
 }
 
 func (T *qCommon) pmAirMove(pm *shared.Pmove_t, pml *pml_t) {
-	// int i;
-	// vec3_t wishvel;
-	// float fmove, smove;
-	// vec3_t wishdir;
-	// float wishspeed;
-	// float maxspeed;
 
 	fmove := float32(pm.Cmd.Forwardmove)
 	smove := float32(pm.Cmd.Sidemove)
@@ -403,69 +447,69 @@ func (T *qCommon) pmAirMove(pm *shared.Pmove_t, pml *pml_t) {
 	wishspeed := shared.VectorNormalize(wishdir[:])
 
 	/* clamp to server defined max speed */
-	// maxspeed = (pm->s.pm_flags & PMF_DUCKED) ? pm_duckspeed : pm_maxspeed;
-
-	// if (wishspeed > maxspeed) {
-	// 	VectorScale(wishvel, maxspeed / wishspeed, wishvel);
-	// 	wishspeed = maxspeed;
-	// }
-
-	// if (pml.ladder) {
-	// 	PM_Accelerate(wishdir, wishspeed, pm_accelerate);
-
-	// 	if (!wishvel[2]) {
-	// 		if (pml.velocity[2] > 0) {
-	// 			pml.velocity[2] -= pm->s.gravity * pml.frametime;
-
-	// 			if (pml.velocity[2] < 0)
-	// 			{
-	// 				pml.velocity[2] = 0;
-	// 			}
-	// 		} else {
-	// 			pml.velocity[2] += pm->s.gravity * pml.frametime;
-
-	// 			if (pml.velocity[2] > 0) {
-	// 				pml.velocity[2] = 0;
-	// 			}
-	// 		}
-	// 	}
-
-	// 	PM_StepSlideMove();
-	// }
-	// else if (pm->groundentity)
-	// {
-	/* walking on ground */
-	pml.velocity[2] = 0
-	PM_Accelerate(wishdir[:], wishspeed, T.pm_accelerate, pml)
-
-	if pm.S.Gravity > 0 {
-		pml.velocity[2] = 0
+	var maxspeed float32
+	if (pm.S.Pm_flags & shared.PMF_DUCKED) != 0 {
+		maxspeed = T.pm_duckspeed
 	} else {
+		maxspeed = T.pm_maxspeed
+	}
+
+	if wishspeed > maxspeed {
+		shared.VectorScale(wishvel[:], maxspeed/wishspeed, wishvel[:])
+		wishspeed = maxspeed
+	}
+
+	if pml.ladder {
+		PM_Accelerate(wishdir[:], wishspeed, T.pm_accelerate, pml)
+
+		if wishvel[2] == 0 {
+			if pml.velocity[2] > 0 {
+				pml.velocity[2] -= float32(pm.S.Gravity) * pml.frametime
+
+				if pml.velocity[2] < 0 {
+					pml.velocity[2] = 0
+				}
+			} else {
+				pml.velocity[2] += float32(pm.S.Gravity) * pml.frametime
+
+				if pml.velocity[2] > 0 {
+					pml.velocity[2] = 0
+				}
+			}
+		}
+
+		PM_StepSlideMove(pm, pml)
+	} else if pm.Groundentity != nil {
+		/* walking on ground */
+		pml.velocity[2] = 0
+		PM_Accelerate(wishdir[:], wishspeed, T.pm_accelerate, pml)
+
+		if pm.S.Gravity > 0 {
+			pml.velocity[2] = 0
+		} else {
+			pml.velocity[2] -= float32(pm.S.Gravity) * pml.frametime
+		}
+
+		if pml.velocity[0] == 0 && pml.velocity[1] == 0 {
+			return
+		}
+
+		PM_StepSlideMove(pm, pml)
+	} else {
+		// 	/* not on ground, so little effect on velocity */
+		// 	if (pm_airaccelerate)
+		// 	{
+		// 		PM_AirAccelerate(wishdir, wishspeed, pm_accelerate);
+		// 	}
+		// 	else
+		// 	{
+		// 		PM_Accelerate(wishdir, wishspeed, 1);
+		// 	}
+
+		/* add gravity */
 		pml.velocity[2] -= float32(pm.S.Gravity) * pml.frametime
+		PM_StepSlideMove(pm, pml)
 	}
-
-	if pml.velocity[0] == 0 && pml.velocity[1] == 0 {
-		return
-	}
-
-	PM_StepSlideMove(pm, pml)
-	// }
-	// else
-	// {
-	// 	/* not on ground, so little effect on velocity */
-	// 	if (pm_airaccelerate)
-	// 	{
-	// 		PM_AirAccelerate(wishdir, wishspeed, pm_accelerate);
-	// 	}
-	// 	else
-	// 	{
-	// 		PM_Accelerate(wishdir, wishspeed, 1);
-	// 	}
-
-	// 	/* add gravity */
-	// 	pml.velocity[2] -= pm->s.gravity * pml.frametime;
-	// 	PM_StepSlideMove();
-	// }
 }
 
 func PM_CatagorizePosition(pm *shared.Pmove_t, pml *pml_t) {
@@ -554,6 +598,54 @@ func PM_CatagorizePosition(pm *shared.Pmove_t, pml *pml_t) {
 	// 		}
 	// 	}
 	// }
+}
+
+/*
+ * Sets mins, maxs, and pm->viewheight
+ */
+func PM_CheckDuck(pm *shared.Pmove_t, pml *pml_t) {
+	//  trace_t trace;
+
+	pm.Mins[0] = -16
+	pm.Mins[1] = -16
+
+	pm.Maxs[0] = 16
+	pm.Maxs[1] = 16
+
+	if pm.S.Pm_type == shared.PM_GIB {
+		pm.Mins[2] = 0
+		pm.Maxs[2] = 16
+		pm.Viewheight = 8
+		return
+	}
+
+	pm.Mins[2] = -24
+
+	if pm.S.Pm_type == shared.PM_DEAD {
+		pm.S.Pm_flags |= shared.PMF_DUCKED
+	} else if (pm.Cmd.Upmove < 0) && (pm.S.Pm_flags&shared.PMF_ON_GROUND) != 0 {
+		/* duck */
+		pm.S.Pm_flags |= shared.PMF_DUCKED
+	} else {
+		/* stand up if possible */
+		if (pm.S.Pm_flags & shared.PMF_DUCKED) != 0 {
+			/* try to stand up */
+			pm.Maxs[2] = 32
+			trace := pm.Trace(pml.origin[:], pm.Mins[:], pm.Maxs[:], pml.origin[:], pm.TraceArg)
+
+			if !trace.Allsolid {
+				pm.S.Pm_flags &^= shared.PMF_DUCKED
+			}
+		}
+	}
+
+	if (pm.S.Pm_flags & shared.PMF_DUCKED) != 0 {
+		pm.Maxs[2] = 4
+		pm.Viewheight = -2
+	} else {
+		pm.Maxs[2] = 32
+		pm.Viewheight = 22
+	}
 }
 
 func PM_GoodPosition(pm *shared.Pmove_t) bool {
@@ -721,7 +813,7 @@ func (T *qCommon) Pmove(pm *shared.Pmove_t) {
 	}
 
 	/* set mins, maxs, and viewheight */
-	// 	PM_CheckDuck();
+	PM_CheckDuck(pm, &pml)
 
 	// 	if (pm->snapinitial) {
 	// 		PM_InitialSnapPosition();
@@ -768,7 +860,7 @@ func (T *qCommon) Pmove(pm *shared.Pmove_t) {
 	} else {
 		// 		PM_CheckJump();
 
-		// 		PM_Friction();
+		T.pmFriction(pm, &pml)
 
 		if pm.Waterlevel >= 2 {
 			// 			PM_WaterMove();

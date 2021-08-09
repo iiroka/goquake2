@@ -34,13 +34,17 @@ import (
 func (T *qClient) clearState() {
 	// S_StopAllSounds();
 	T.clearEffects()
-	// CL_ClearTEnts();
+	// T.clearTEnts()
 
 	/* wipe the entire cl structure */
 	T.cl = client_state_t{}
-	T.cl.configstrings = make([]string, shared.MAX_CONFIGSTRINGS)
+	for i := range T.cl.configstrings {
+		T.cl.configstrings[i] = ""
+	}
 	T.cl_entities = make([]centity_t, shared.MAX_EDICTS)
-	T.cl.model_draw = make([]interface{}, shared.MAX_MODELS)
+	for i := range T.cl.model_draw {
+		T.cl.model_draw[i] = nil
+	}
 
 	T.cls.netchan.Message.Clear()
 }

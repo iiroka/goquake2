@@ -135,7 +135,7 @@ type Game_import_t interface {
 
 	// /* collision detection */
 	Trace(start, mins, maxs, end []float32, passent Edict_s, contentmask int) Trace_t
-	// int (*pointcontents)(vec3_t point);
+	Pointcontents(point []float32) int
 	// qboolean (*inPVS)(vec3_t p1, vec3_t p2);
 	// qboolean (*inPHS)(vec3_t p1, vec3_t p2);
 	// void (*SetAreaPortalState)(int portalnum, qboolean open);
@@ -145,7 +145,7 @@ type Game_import_t interface {
 	   if it is not passed to linkentity. If the size, position, or
 	   solidity changes, it must be relinked. */
 	Linkentity(ent Edict_s)
-	// void (*unlinkentity)(edict_t *ent); /* call before removing an interactive edict */
+	Unlinkentity(ent Edict_s) /* call before removing an interactive edict */
 	// int (*BoxEdicts)(vec3_t mins, vec3_t maxs, edict_t **list, int maxcount,
 	// 		int areatype);
 	Pmove(pmove *Pmove_t) /* player movement code common with client prediction */

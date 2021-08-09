@@ -25,6 +25,19 @@
  */
 package game
 
+import "goquake2/shared"
+
+func (G *qGame) svCheckVelocity(ent *edict_t) {
+	if ent == nil {
+		return
+	}
+
+	if shared.VectorLength(ent.velocity[:]) > G.sv_maxvelocity.Float() {
+		shared.VectorNormalize(ent.velocity[:])
+		shared.VectorScale(ent.velocity[:], G.sv_maxvelocity.Float(), ent.velocity[:])
+	}
+}
+
 /*
  * Runs thinking code for
  * this frame if necessary
@@ -47,12 +60,11 @@ func (G *qGame) svRunThink(ent *edict_t) bool {
 
 	ent.nextthink = 0
 
-	//  if (!ent->think)
-	//  {
-	// 	 gi.error("NULL ent->think");
-	//  }
+	if ent.think == nil {
+		G.gi.Error("NULL ent->think %v", ent.Classname)
+	}
 
-	//  ent->think(ent);
+	ent.think(ent, G)
 
 	return false
 }
@@ -94,7 +106,7 @@ func (G *qGame) svPhysics_Step(ent *edict_t) {
 
 	// 	groundentity = ent->groundentity;
 
-	// 	SV_CheckVelocity(ent);
+	G.svCheckVelocity(ent)
 
 	// 	if (groundentity) {
 	// 		wasonground = true;
@@ -161,83 +173,82 @@ func (G *qGame) svPhysics_Step(ent *edict_t) {
 	// 		ent->velocity[2] *= newspeed;
 	// 	}
 
-	// 	if (ent->velocity[2] || ent->velocity[1] || ent->velocity[0])
-	// 	{
-	// 		/* apply friction: let dead monsters who
-	// 		   aren't completely onground slide */
-	// 		if ((wasonground) || (ent->flags & (FL_SWIM | FL_FLY)))
-	// 		{
-	// 			if (!((ent->health <= 0.0) && !M_CheckBottom(ent)))
-	// 			{
-	// 				vel = ent->velocity;
-	// 				speed = sqrt(vel[0] * vel[0] + vel[1] * vel[1]);
+	if ent.velocity[2] != 0 || ent.velocity[1] != 0 || ent.velocity[0] != 0 {
+		/* apply friction: let dead monsters who
+		   aren't completely onground slide */
+		// 		if ((wasonground) || (ent->flags & (FL_SWIM | FL_FLY)))
+		// 		{
+		// 			if (!((ent->health <= 0.0) && !M_CheckBottom(ent)))
+		// 			{
+		// 				vel = ent->velocity;
+		// 				speed = sqrt(vel[0] * vel[0] + vel[1] * vel[1]);
 
-	// 				if (speed)
-	// 				{
-	// 					friction = FRICTION;
+		// 				if (speed)
+		// 				{
+		// 					friction = FRICTION;
 
-	// 					control = speed < STOPSPEED ? STOPSPEED : speed;
-	// 					newspeed = speed - FRAMETIME * control * friction;
+		// 					control = speed < STOPSPEED ? STOPSPEED : speed;
+		// 					newspeed = speed - FRAMETIME * control * friction;
 
-	// 					if (newspeed < 0)
-	// 					{
-	// 						newspeed = 0;
-	// 					}
+		// 					if (newspeed < 0)
+		// 					{
+		// 						newspeed = 0;
+		// 					}
 
-	// 					newspeed /= speed;
+		// 					newspeed /= speed;
 
-	// 					vel[0] *= newspeed;
-	// 					vel[1] *= newspeed;
-	// 				}
-	// 			}
-	// 		}
+		// 					vel[0] *= newspeed;
+		// 					vel[1] *= newspeed;
+		// 				}
+		// 			}
+		// 		}
 
-	// 		if (ent->svflags & SVF_MONSTER)
-	// 		{
-	// 			mask = MASK_MONSTERSOLID;
-	// 		}
-	// 		else
-	// 		{
-	// 			mask = MASK_SOLID;
-	// 		}
+		// 		if (ent->svflags & SVF_MONSTER)
+		// 		{
+		// 			mask = MASK_MONSTERSOLID;
+		// 		}
+		// 		else
+		// 		{
+		// 			mask = MASK_SOLID;
+		// 		}
 
-	// 		VectorCopy(ent->s.origin, oldorig);
-	// 		SV_FlyMove(ent, FRAMETIME, mask);
+		// 		VectorCopy(ent->s.origin, oldorig);
+		// 		SV_FlyMove(ent, FRAMETIME, mask);
 
-	// 		/* Evil hack to work around dead parasites (and maybe other monster)
-	// 		   falling through the worldmodel into the void. We copy the current
-	// 		   origin (see above) and after the SV_FlyMove() was performend we
-	// 		   checl if we're stuck in the world model. If yes we're undoing the
-	// 		   move. */
-	// 		if (!VectorCompare(ent->s.origin, oldorig))
-	// 		{
-	// 			tr = gi.trace(ent->s.origin, ent->mins, ent->maxs, ent->s.origin, ent, mask);
+		// 		/* Evil hack to work around dead parasites (and maybe other monster)
+		// 		   falling through the worldmodel into the void. We copy the current
+		// 		   origin (see above) and after the SV_FlyMove() was performend we
+		// 		   checl if we're stuck in the world model. If yes we're undoing the
+		// 		   move. */
+		// 		if (!VectorCompare(ent->s.origin, oldorig))
+		// 		{
+		// 			tr = gi.trace(ent->s.origin, ent->mins, ent->maxs, ent->s.origin, ent, mask);
 
-	// 			if (tr.startsolid)
-	// 			{
-	// 				VectorCopy(oldorig, ent->s.origin);
-	// 			}
-	// 		}
+		// 			if (tr.startsolid)
+		// 			{
+		// 				VectorCopy(oldorig, ent->s.origin);
+		// 			}
+		// 		}
 
-	// 		gi.linkentity(ent);
-	// 		G_TouchTriggers(ent);
+		// 		gi.linkentity(ent);
+		// 		G_TouchTriggers(ent);
 
-	// 		if (!ent->inuse)
-	// 		{
-	// 			return;
-	// 		}
+		// 		if (!ent->inuse)
+		// 		{
+		// 			return;
+		// 		}
 
-	// 		if (ent->groundentity)
-	// 		{
-	// 			if (!wasonground)
-	// 			{
-	// 				if (hitsound)
-	// 				{
-	// 					gi.sound(ent, 0, gi.soundindex("world/land.wav"), 1, 1, 0);
-	// 				}
-	// 			}
-	// 		}
-	// 	}
+		// 		if (ent->groundentity)
+		// 		{
+		// 			if (!wasonground)
+		// 			{
+		// 				if (hitsound)
+		// 				{
+		// 					gi.sound(ent, 0, gi.soundindex("world/land.wav"), 1, 1, 0);
+		// 				}
+		// 			}
+		// 		}
+	}
 
 	/* regular thinking */
 	G.svRunThink(ent)

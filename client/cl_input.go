@@ -32,8 +32,6 @@ import (
 )
 
 func (T *qClient) keyDown(args []string, b *kbutton_t) {
-	// int k;
-	// char *c;
 
 	var k int = -1
 	if len(args[1]) > 0 {
@@ -71,11 +69,6 @@ func (T *qClient) keyDown(args []string, b *kbutton_t) {
 }
 
 func (T *qClient) keyUp(args []string, b *kbutton_t) {
-	// int k;
-	// char *c;
-	// unsigned uptime;
-
-	// c = Cmd_Argv(1);
 
 	var k int
 	if len(args[1]) > 0 {
@@ -155,6 +148,43 @@ func in_ForwardUp(args []string, a interface{}) error {
 	return nil
 }
 
+func in_BackDown(args []string, a interface{}) error {
+	T := a.(*qClient)
+	T.keyDown(args, &T.in_back)
+	return nil
+}
+
+func in_BackUp(args []string, a interface{}) error {
+	T := a.(*qClient)
+	T.keyUp(args, &T.in_back)
+	return nil
+}
+
+func (T *qClient) clampPitch() {
+
+	pitch := shared.SHORT2ANGLE(int(T.cl.frame.playerstate.Pmove.Delta_angles[shared.PITCH]))
+
+	if pitch > 180 {
+		pitch -= 360
+	}
+
+	if T.cl.viewangles[shared.PITCH]+pitch < -360 {
+		T.cl.viewangles[shared.PITCH] += 360 /* wrapped */
+	}
+
+	if T.cl.viewangles[shared.PITCH]+pitch > 360 {
+		T.cl.viewangles[shared.PITCH] -= 360 /* wrapped */
+	}
+
+	if T.cl.viewangles[shared.PITCH]+pitch > 89 {
+		T.cl.viewangles[shared.PITCH] = 89 - pitch
+	}
+
+	if T.cl.viewangles[shared.PITCH]+pitch < -89 {
+		T.cl.viewangles[shared.PITCH] = -89 - pitch
+	}
+}
+
 func (T *qClient) initInput() {
 	// Cmd_AddCommand("centerview", IN_CenterView);
 	// Cmd_AddCommand("force_centerview", IN_ForceCenterView);
@@ -169,8 +199,8 @@ func (T *qClient) initInput() {
 	T.common.Cmd_AddCommand("-right", in_RightUp, T)
 	T.common.Cmd_AddCommand("+forward", in_ForwardDown, T)
 	T.common.Cmd_AddCommand("-forward", in_ForwardUp, T)
-	// Cmd_AddCommand("+back", IN_BackDown);
-	// Cmd_AddCommand("-back", IN_BackUp);
+	T.common.Cmd_AddCommand("+back", in_BackDown, T)
+	T.common.Cmd_AddCommand("-back", in_BackUp, T)
 	// Cmd_AddCommand("+lookup", IN_LookupDown);
 	// Cmd_AddCommand("-lookup", IN_LookupUp);
 	// Cmd_AddCommand("+lookdown", IN_LookdownDown);
@@ -273,8 +303,8 @@ func (T *qClient) baseMove(cmd *shared.Usercmd_t) {
 	cmd.Sidemove += int16(T.cl_sidespeed.Float() * T.keyState(&T.in_moveright))
 	cmd.Sidemove -= int16(T.cl_sidespeed.Float() * T.keyState(&T.in_moveleft))
 
-	//  cmd->upmove += cl_upspeed->value * CL_KeyState(&in_up);
-	//  cmd->upmove -= cl_upspeed->value * CL_KeyState(&in_down);
+	cmd.Upmove += int16(T.cl_upspeed.Float() * T.keyState(&T.in_up))
+	cmd.Upmove -= int16(T.cl_upspeed.Float() * T.keyState(&T.in_down))
 
 	if (T.in_klook.state & 1) == 0 {
 		cmd.Forwardmove += int16(T.cl_forwardspeed.Float() * T.keyState(&T.in_forward))
@@ -310,7 +340,7 @@ func (T *qClient) refreshCmd() {
 	// IN_Move(cmd);
 
 	// Clamp angels for prediction
-	// CL_ClampPitch();
+	T.clampPitch()
 
 	cmd.Angles[0] = shared.ANGLE2SHORT(T.cl.viewangles[0])
 	cmd.Angles[1] = shared.ANGLE2SHORT(T.cl.viewangles[1])

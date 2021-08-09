@@ -86,6 +86,18 @@ func (T *qClient) registerTEntModels() {
 	T.cl_mod_monster_heatbeam, _ = T.R_RegisterModel("models/proj/widowbeam/tris.md2")
 }
 
+func (T *qClient) clearTEnts() {
+	// memset(cl_beams, 0, sizeof(cl_beams));
+	for i := range T.cl_explosions {
+		T.cl_explosions[i].etype = ex_free
+		T.cl_explosions[i].start = 0
+	}
+	// memset(cl_lasers, 0, sizeof(cl_lasers));
+
+	// memset(cl_playerbeams, 0, sizeof(cl_playerbeams));
+	// memset(cl_sustains, 0, sizeof(cl_sustains));
+}
+
 func (T *qClient) allocExplosion() *explosion_t {
 	// int i;
 	// float time;
@@ -111,6 +123,25 @@ func (T *qClient) allocExplosion() *explosion_t {
 
 	T.cl_explosions[index] = explosion_t{}
 	return &T.cl_explosions[index]
+}
+
+func (T *qClient) smokeAndFlash(origin []float32) {
+
+	ex := T.allocExplosion()
+	copy(ex.ent.Origin[:], origin)
+	ex.etype = ex_misc
+	ex.frames = 4
+	ex.ent.Flags = shared.RF_TRANSLUCENT
+	ex.start = float32(T.cl.frame.servertime) - 100.0
+	ex.ent.Model = T.cl_mod_smoke
+
+	ex = T.allocExplosion()
+	copy(ex.ent.Origin[:], origin)
+	ex.etype = ex_flash
+	ex.ent.Flags = shared.RF_FULLBRIGHT
+	ex.frames = 2
+	ex.start = float32(T.cl.frame.servertime) - 100.0
+	ex.ent.Model = T.cl_mod_flash
 }
 
 func (T *qClient) parseTEnt(msg *shared.QReadbuf) error {
@@ -269,28 +300,28 @@ func (T *qClient) parseTEnt(msg *shared.QReadbuf) error {
 		dir := msg.ReadDir()
 		T.blasterParticles(pos, dir)
 
-	// 	ex = CL_AllocExplosion();
-	// 	VectorCopy(pos, ex->ent.origin);
-	// 	ex->ent.angles[0] = (float)acos(dir[2]) / M_PI * 180;
+		ex := T.allocExplosion()
+		copy(ex.ent.Origin[:], pos)
+		ex.ent.Angles[0] = float32(math.Acos(float64(dir[2])) / math.Pi * 180)
 
-	// 	if (dir[0]) {
-	// 		ex->ent.angles[1] = (float)atan2(dir[1], dir[0]) / M_PI * 180;
-	// 	} else if (dir[1] > 0) {
-	// 		ex->ent.angles[1] = 90;
-	// 	} else if (dir[1] < 0) {
-	// 		ex->ent.angles[1] = 270;
-	// 	} else {
-	// 		ex->ent.angles[1] = 0;
-	// 	}
+		if dir[0] != 0 {
+			ex.ent.Angles[1] = float32(math.Atan2(float64(dir[1]), float64(dir[0])) / math.Pi * 180)
+		} else if dir[1] > 0 {
+			ex.ent.Angles[1] = 90
+		} else if dir[1] < 0 {
+			ex.ent.Angles[1] = 270
+		} else {
+			ex.ent.Angles[1] = 0
+		}
 
-	// 	ex->type = ex_misc;
-	// 	ex->ent.flags = 0;
-	// 	ex->start = cl.frame.servertime - 100.0f;
-	// 	ex->light = 150;
-	// 	ex->lightcolor[0] = 1;
-	// 	ex->lightcolor[1] = 1;
-	// 	ex->ent.model = cl_mod_explode;
-	// 	ex->frames = 4;
+		ex.etype = ex_misc
+		ex.ent.Flags = 0
+		ex.start = float32(T.cl.frame.servertime) - 100.0
+		ex.light = 150
+		ex.lightcolor[0] = 1
+		ex.lightcolor[1] = 1
+		ex.ent.Model = T.cl_mod_explode
+		ex.frames = 4
 	// 	S_StartSound(pos, 0, 0, cl_sfx_lashit, 1, ATTN_NORM, 0);
 	// 	break;
 
@@ -318,7 +349,7 @@ func (T *qClient) parseTEnt(msg *shared.QReadbuf) error {
 		ex.frames = 19
 		ex.baseframe = 30
 		ex.ent.Angles[1] = float32(shared.Randk() % 360)
-	// 	EXPLOSION_PARTICLES(pos);
+		T.explosionParticles(pos)
 
 	// 	if (type == TE_GRENADE_EXPLOSION_WATER) {
 	// 		S_StartSound(pos, 0, 0, cl_sfx_watrexp, 1, ATTN_NORM, 0);
@@ -381,9 +412,9 @@ func (T *qClient) parseTEnt(msg *shared.QReadbuf) error {
 
 		ex.frames = 15
 
-	// 	if ((type != TE_EXPLOSION1_BIG) && (type != TE_EXPLOSION1_NP)) {
-	// 		EXPLOSION_PARTICLES(pos);
-	// 	}
+		if (mtype != shared.TE_EXPLOSION1_BIG) && (mtype != shared.TE_EXPLOSION1_NP) {
+			T.explosionParticles(pos)
+		}
 
 	// 	if (type == TE_ROCKET_EXPLOSION_WATER)
 	// 	{

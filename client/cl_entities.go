@@ -206,21 +206,15 @@ func (T *qClient) addPacketEntities(frame *frame_t) {
 		if s1.Number == T.cl.playernum+1 {
 			ent.Flags |= shared.RF_VIEWERMODEL
 
-			// 			if (effects & EF_FLAG1) != 0 {
-			// 				V_AddLight(ent.origin, 225, 1.0f, 0.1f, 0.1f);
-			// 			}
-
-			// 			else if (effects & EF_FLAG2) != 0 {
-			// 				V_AddLight(ent.origin, 225, 0.1f, 0.1f, 1.0f);
-			// 			}
-
-			// 			else if (effects & EF_TAGTRAIL) != 0 {
-			// 				V_AddLight(ent.origin, 225, 1.0f, 1.0f, 0.0f);
-			// 			}
-
-			// 			else if (effects & EF_TRACKERTRAIL) != 0 {
-			// 				V_AddLight(ent.origin, 225, -1.0f, -1.0f, -1.0f);
-			// 			}
+			if (effects & shared.EF_FLAG1) != 0 {
+				T.addLight(ent.Origin[:], 225, 1.0, 0.1, 0.1)
+			} else if (effects & shared.EF_FLAG2) != 0 {
+				T.addLight(ent.Origin[:], 225, 0.1, 0.1, 1.0)
+			} else if (effects & shared.EF_TAGTRAIL) != 0 {
+				T.addLight(ent.Origin[:], 225, 1.0, 1.0, 0.0)
+			} else if (effects & shared.EF_TRACKERTRAIL) != 0 {
+				T.addLight(ent.Origin[:], 225, -1.0, -1.0, -1.0)
+			}
 
 			continue
 		}
@@ -240,18 +234,15 @@ func (T *qClient) addPacketEntities(frame *frame_t) {
 			ent.Alpha = 0.6
 		}
 
-		// 		if (effects & EF_SPHERETRANS) != 0 {
-		// 			ent.flags |= RF_TRANSLUCENT;
+		if (effects & shared.EF_SPHERETRANS) != 0 {
+			ent.Flags |= shared.RF_TRANSLUCENT
 
-		// 			if (effects & EF_TRACKERTRAIL) != 0 {
-		// 				ent.alpha = 0.6f;
-		// 			}
-
-		// 			else
-		// 			{
-		// 				ent.alpha = 0.3f;
-		// 			}
-		// 		}
+			if (effects & shared.EF_TRACKERTRAIL) != 0 {
+				ent.Alpha = 0.6
+			} else {
+				ent.Alpha = 0.3
+			}
+		}
 
 		/* add to refresh list */
 		T.addEntity(ent)

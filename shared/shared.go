@@ -268,7 +268,7 @@ type Pmove_t struct {
 
 	/* results (out) */
 	Numtouch  int
-	Touchents [MAXTOUCH]Edict_s
+	Touchents [MAXTOUCH]interface{}
 
 	Viewangles [3]float32 /* clamped */
 	Viewheight float32
@@ -1412,6 +1412,9 @@ type QCommon interface {
 	CMHeadnodeForBox(mins, maxs []float32) int
 	CMTransformedBoxTrace(start, end, mins, maxs []float32,
 		headnode, brushmask int, origin, angles []float32) Trace_t
+	CMInlineModel(name string) (*Cmodel_t, error)
+	CMTransformedPointContents(p []float32, headnode int, origin, angles []float32) int
+	CMPointContents(p []float32, headnode int) int
 }
 
 type QClient interface {

@@ -30,6 +30,7 @@ import (
 	"goquake2/shared"
 	"log"
 	"math"
+	"strconv"
 )
 
 type cnode_t struct {
@@ -422,6 +423,47 @@ func (T *qCommon) cmBoxLeafnums_headnode(mins, maxs []float32, list []int,
 
 func (T *qCommon) CMBoxLeafnums(mins, maxs []float32, list []int, listsize int, topnode *int) int {
 	return T.cmBoxLeafnums_headnode(mins, maxs, list, listsize, T.collision.map_cmodels[0].Headnode, topnode)
+}
+
+func (T *qCommon) CMPointContents(p []float32, headnode int) int {
+
+	if T.collision.numnodes == 0 { /* map not loaded */
+		return 0
+	}
+
+	l := T.cmPointLeafnum_r(p, headnode)
+
+	return T.collision.map_leafs[l].contents
+}
+
+/*
+ * Handles offseting and rotation of the end points for moving and
+ * rotating entities
+ */
+func (T *qCommon) CMTransformedPointContents(p []float32, headnode int, origin, angles []float32) int {
+
+	/* subtract origin offset */
+	p_l := make([]float32, 3)
+	shared.VectorSubtract(p, origin, p_l)
+
+	/* rotate start and end into the models frame of reference */
+	if (headnode != T.collision.box_headnode) &&
+		(angles[0] != 0 || angles[1] != 0 || angles[2] != 0) {
+		forward := make([]float32, 3)
+		right := make([]float32, 3)
+		up := make([]float32, 3)
+		shared.AngleVectors(angles, forward, right, up)
+
+		temp := make([]float32, 3)
+		copy(temp, p_l)
+		p_l[0] = shared.DotProduct(temp, forward)
+		p_l[1] = -shared.DotProduct(temp, right)
+		p_l[2] = shared.DotProduct(temp, up)
+	}
+
+	l := T.cmPointLeafnum_r(p_l, headnode)
+
+	return T.collision.map_leafs[l].contents
 }
 
 func (T *qCommon) clipBoxToBrush(mins, maxs, p1, p2 []float32, trace *shared.Trace_t, brush *cbrush_t) {
@@ -1382,6 +1424,20 @@ func (T *qCommon) CMLoadMap(name string, clientload bool, checksum *uint32) (*sh
 
 	T.collision.map_name = name
 	return &T.collision.map_cmodels[0], nil
+}
+
+func (T *qCommon) CMInlineModel(name string) (*shared.Cmodel_t, error) {
+
+	if len(name) == 0 || (name[0] != '*') {
+		return nil, T.Com_Error(shared.ERR_DROP, "CM_InlineModel: bad name")
+	}
+
+	num, err := strconv.ParseInt(name[1:], 10, 32)
+	if err != nil || (num < 1) || (int(num) >= T.collision.numcmodels) {
+		return nil, T.Com_Error(shared.ERR_DROP, "CM_InlineModel: bad number")
+	}
+
+	return &T.collision.map_cmodels[num], nil
 }
 
 func (T *qCommon) CMLeafCluster(leafnum int) int {

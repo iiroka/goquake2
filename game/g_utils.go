@@ -27,8 +27,12 @@ package game
 
 import (
 	"fmt"
+	"goquake2/shared"
+	"math"
 	"reflect"
 )
+
+const MAXCHOICES = 8
 
 /*
  * Searches all active entities for the next
@@ -72,11 +76,74 @@ func (G *qGame) gFind(from *edict_t, fname, match string) *edict_t {
 }
 
 /*
+ * Searches all active entities for
+ * the next one that holds the matching
+ * string at fieldofs (use the FOFS() macro)
+ * in the structure.
+ *
+ * Searches beginning at the edict after from,
+ * or the beginning. If NULL, NULL will be
+ * returned if the end of the list is reached.
+ */
+func (G *qGame) gPickTarget(targetname string) *edict_t {
+
+	if len(targetname) == 0 {
+		G.gi.Dprintf("G_PickTarget called with NULL targetname\n")
+		return nil
+	}
+
+	var ent *edict_t = nil
+	num_choices := 0
+	var choice [MAXCHOICES]*edict_t
+	for {
+		ent := G.gFind(ent, "Targetname", targetname)
+		if ent == nil {
+			break
+		}
+
+		choice[num_choices] = ent
+		num_choices++
+
+		if num_choices == MAXCHOICES {
+			break
+		}
+	}
+
+	if num_choices == 0 {
+		G.gi.Dprintf("G_PickTarget: target %s not found\n", targetname)
+		return nil
+	}
+
+	return choice[shared.Randk()%num_choices]
+}
+
+/*
  * This is just a convenience function
  * for printing vectors
  */
 func vtos(v []float32) string {
 	return fmt.Sprintf("(%v %v %v)", int(v[0]), int(v[1]), int(v[2]))
+}
+
+func vectoyaw(vec []float32) float32 {
+
+	var yaw float32 = 0
+	if vec[shared.PITCH] == 0 {
+		yaw = 0
+
+		if vec[shared.YAW] > 0 {
+			yaw = 90
+		} else if vec[shared.YAW] < 0 {
+			yaw = -90
+		}
+	} else {
+		yaw = float32(int(math.Atan2(float64(vec[shared.YAW]), float64(vec[shared.PITCH])) * 180 / math.Pi))
+		if yaw < 0 {
+			yaw += 360
+		}
+	}
+
+	return yaw
 }
 
 func G_InitEdict(e *edict_t, index int) {
@@ -121,4 +188,29 @@ func (G *qGame) gSpawn() (*edict_t, error) {
 	G_InitEdict(e, G.num_edicts)
 	G.num_edicts++
 	return e, nil
+}
+
+/*
+ * Marks the edict as free
+ */
+func (G *qGame) gFreeEdict(ed *edict_t) {
+	G.gi.Unlinkentity(ed) /* unlink from world */
+
+	//  if (deathmatch.value || coop.value) {
+	// 	 if ((ed - g_edicts) <= (maxclients->value + BODY_QUEUE_SIZE))
+	// 	 {
+	// 		 return;
+	// 	 }
+	//  }
+	//  else
+	//  {
+	if ed.index <= G.maxclients.Int() {
+		return
+	}
+	//  }
+
+	//  memset(ed, 0, sizeof(*ed));
+	ed.Classname = "freed"
+	ed.freetime = G.level.time
+	ed.inuse = false
 }

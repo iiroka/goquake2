@@ -361,7 +361,7 @@ func (T *qClient) addMuzzleFlash2(msg *shared.QReadbuf) error {
 		dl.color[1] = 1
 		dl.color[2] = 0
 		T.particleEffect(origin, make([]float32, 3), 0, 40)
-		// 		CL_SmokeAndFlash(origin);
+		T.smokeAndFlash(origin)
 		// 		S_StartSound(NULL, ent, CHAN_WEAPON,
 		// 			S_RegisterSound("infantry/infatck1.wav"), 1, ATTN_NORM, 0);
 		// 		break;
@@ -378,7 +378,7 @@ func (T *qClient) addMuzzleFlash2(msg *shared.QReadbuf) error {
 		dl.color[1] = 1
 		dl.color[2] = 0
 		T.particleEffect(origin, make([]float32, 3), 0, 40)
-		// 		CL_SmokeAndFlash(origin);
+		T.smokeAndFlash(origin)
 		// 		S_StartSound(NULL, ent, CHAN_WEAPON,
 		// 			S_RegisterSound("soldier/solatck3.wav"), 1, ATTN_NORM, 0);
 		// 		break;
@@ -752,6 +752,40 @@ func (T *qClient) addMuzzleFlash2(msg *shared.QReadbuf) error {
 		// 		break;
 	}
 	return nil
+}
+
+func (T *qClient) explosionParticles(org []float32) {
+	// int i, j;
+	// cparticle_t *p;
+	// float time;
+
+	time := float32(T.cl.time)
+
+	for i := 0; i < 256; i++ {
+		if T.free_particles == nil {
+			return
+		}
+
+		p := T.free_particles
+		T.free_particles = p.next
+		p.next = T.active_particles
+		T.active_particles = p
+
+		p.time = time
+		p.color = float32(0xe0 + (shared.Randk() & 7))
+
+		for j := 0; j < 3; j++ {
+			p.org[j] = org[j] + float32((shared.Randk()%32)-16)
+			p.vel[j] = float32(shared.Randk()%384) - 192
+		}
+
+		p.accel[0] = 0
+		p.accel[1] = 0
+		p.accel[2] = -PARTICLE_GRAVITY
+		p.alpha = 1.0
+
+		p.alphavel = -0.8 / (0.5 + shared.Frandk()*0.3)
+	}
 }
 
 /*
