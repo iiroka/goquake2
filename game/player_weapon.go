@@ -90,3 +90,33 @@ func (G *qGame) changeWeapon(ent *edict_t) {
 		ent.client.anim_end = misc.FRAME_pain304
 	}
 }
+
+/*
+ * Called by ClientBeginServerFrame and ClientThink
+ */
+func (G *qGame) thinkWeapon(ent *edict_t) {
+	if ent == nil {
+		return
+	}
+
+	/* if just died, put the weapon away */
+	if ent.Health < 1 {
+		ent.client.newweapon = nil
+		G.changeWeapon(ent)
+	}
+
+	/* call active weapon think routine */
+	//  if (ent.client.pers.weapon && ent.client.pers.weapon.weaponthink) {
+	// 	 is_quad = (ent->client->quad_framenum > level.framenum);
+
+	// 	 if (ent->client->silencer_shots) {
+	// 		 is_silenced = MZ_SILENCED;
+	// 	 }
+	// 	 else
+	// 	 {
+	// 		 is_silenced = 0;
+	// 	 }
+
+	// 	 ent->client->pers.weapon->weaponthink(ent);
+	//  }
+}

@@ -81,16 +81,6 @@ func PM_ClipVelocity(in, normal, out []float32, overbounce float32) {
  * Does not modify any world state?
  */
 func PM_StepSlideMove_(pm *shared.Pmove_t, pml *pml_t) {
-	//  int bumpcount, numbumps;
-	//  vec3_t dir;
-	//  float d;
-	//  int numplanes;
-	//  vec3_t planes[MAX_CLIP_PLANES];
-	//  vec3_t primal_velocity;
-	//  int i, j;
-	//  trace_t trace;
-	//  vec3_t end;
-	//  float time_left;
 
 	numbumps := 4
 
@@ -192,11 +182,6 @@ func PM_StepSlideMove_(pm *shared.Pmove_t, pml *pml_t) {
 }
 
 func PM_StepSlideMove(pm *shared.Pmove_t, pml *pml_t) {
-	// // vec3_t start_o, start_v;
-	// // vec3_t down_o, down_v;
-	// // trace_t trace;
-	// // float down_dist, up_dist;
-	// // vec3_t up, down;
 
 	start_o := make([]float32, 3)
 	copy(start_o, pml.origin[:])
@@ -306,8 +291,6 @@ func (T *qCommon) pmFriction(pm *shared.Pmove_t, pml *pml_t) {
  * Handles user intended acceleration
  */
 func PM_Accelerate(wishdir []float32, wishspeed, accel float32, pml *pml_t) {
-	//  int i;
-	//  float addspeed, accelspeed, currentspeed;
 
 	currentspeed := shared.DotProduct(pml.velocity[:], wishdir)
 	addspeed := wishspeed - currentspeed
@@ -513,11 +496,6 @@ func (T *qCommon) pmAirMove(pm *shared.Pmove_t, pml *pml_t) {
 }
 
 func PM_CatagorizePosition(pm *shared.Pmove_t, pml *pml_t) {
-	// vec3_t point;
-	// int cont;
-	// trace_t trace;
-	// float sample1;
-	// float sample2;
 
 	/* if the player hull point one unit down
 	   is solid, the player is on ground */
@@ -541,10 +519,10 @@ func PM_CatagorizePosition(pm *shared.Pmove_t, pml *pml_t) {
 			pm.Groundentity = trace.Ent
 
 			// 		/* hitting solid ground will end a waterjump */
-			// 		if (pm->s.pm_flags & PMF_TIME_WATERJUMP) != 0 {
-			// 			pm->s.pm_flags &=
+			// 		if (pm.S.pm_flags & PMF_TIME_WATERJUMP) != 0 {
+			// 			pm.S.pm_flags &=
 			// 				~(PMF_TIME_WATERJUMP | PMF_TIME_LAND | PMF_TIME_TELEPORT);
-			// 			pm->s.pm_time = 0;
+			// 			pm.S.pm_time = 0;
 			// 		}
 
 			if (pm.S.Pm_flags & shared.PMF_ON_GROUND) == 0 {
@@ -565,39 +543,38 @@ func PM_CatagorizePosition(pm *shared.Pmove_t, pml *pml_t) {
 			}
 		}
 
-		// 	if ((pm->numtouch < MAXTOUCH) && trace.ent) {
-		// 		pm->touchents[pm->numtouch] = trace.ent;
-		// 		pm->numtouch++;
-		// 	}
+		if (pm.Numtouch < shared.MAXTOUCH) && trace.Ent != nil {
+			pm.Touchents[pm.Numtouch] = trace.Ent
+			pm.Numtouch++
+		}
 	}
 
 	/* get waterlevel, accounting for ducking */
 	pm.Waterlevel = 0
 	pm.Watertype = 0
 
-	// sample2 = pm->viewheight - pm->mins[2];
-	// sample1 = sample2 / 2;
+	sample2 := pm.Viewheight - pm.Mins[2]
+	sample1 := sample2 / 2
 
-	// point[2] = pml.origin[2] + pm->mins[2] + 1;
-	// cont = pm->pointcontents(point);
+	point[2] = pml.origin[2] + pm.Mins[2] + 1
+	cont := pm.Pointcontents(point, pm.PCArg)
 
-	// if (cont & MASK_WATER) != 0 {
-	// 	pm->watertype = cont;
-	// 	pm->waterlevel = 1;
-	// 	point[2] = pml.origin[2] + pm->mins[2] + sample1;
-	// 	cont = pm->pointcontents(point);
+	if (cont & shared.MASK_WATER) != 0 {
+		pm.Watertype = cont
+		pm.Waterlevel = 1
+		point[2] = pml.origin[2] + pm.Mins[2] + sample1
+		cont = pm.Pointcontents(point, pm.PCArg)
 
-	// 	if (cont & MASK_WATER) != 0 {
-	// 		pm->waterlevel = 2;
-	// 		point[2] = pml.origin[2] + pm->mins[2] + sample2;
-	// 		cont = pm->pointcontents(point);
+		if (cont & shared.MASK_WATER) != 0 {
+			pm.Waterlevel = 2
+			point[2] = pml.origin[2] + pm.Mins[2] + sample2
+			cont = pm.Pointcontents(point, pm.PCArg)
 
-	// 		if (cont & MASK_WATER)
-	// 		{
-	// 			pm->waterlevel = 3;
-	// 		}
-	// 	}
-	// }
+			if (cont & shared.MASK_WATER) != 0 {
+				pm.Waterlevel = 3
+			}
+		}
+	}
 }
 
 /*
@@ -719,6 +696,41 @@ func PM_SnapPosition(pm *shared.Pmove_t, pml *pml_t) {
 	}
 }
 
+func pmInitialSnapPosition(pm *shared.Pmove_t, pml *pml_t) {
+	// int x, y, z;
+	// short base[3];
+	offset := []int16{0, -1, 1}
+
+	base := make([]int16, 3)
+	copy(base, pm.S.Origin[:])
+	// VectorCopy(pm->s.origin, base);
+
+	for z := 0; z < 3; z++ {
+		pm.S.Origin[2] = base[2] + offset[z]
+
+		for y := 0; y < 3; y++ {
+			pm.S.Origin[1] = base[1] + offset[y]
+
+			for x := 0; x < 3; x++ {
+				pm.S.Origin[0] = base[0] + offset[x]
+
+				if PM_GoodPosition(pm) {
+					pml.origin[0] = float32(pm.S.Origin[0]) * 0.125
+					pml.origin[1] = float32(pm.S.Origin[1]) * 0.125
+					pml.origin[2] = float32(pm.S.Origin[2]) * 0.125
+					for i := 0; i < 3; i++ {
+						pml.previous_origin[i] = float32(pm.S.Origin[i])
+					}
+					// VectorCopy(pm->s.origin, pml.previous_origin);
+					return
+				}
+			}
+		}
+	}
+
+	// Com_DPrintf("Bad InitialSnapPosition\n")
+}
+
 func PM_ClampAngles(pm *shared.Pmove_t, pml *pml_t) {
 
 	if (pm.S.Pm_flags & shared.PMF_TIME_TELEPORT) != 0 {
@@ -815,16 +827,16 @@ func (T *qCommon) Pmove(pm *shared.Pmove_t) {
 	/* set mins, maxs, and viewheight */
 	PM_CheckDuck(pm, &pml)
 
-	// 	if (pm->snapinitial) {
-	// 		PM_InitialSnapPosition();
-	// 	}
+	if pm.Snapinitial {
+		pmInitialSnapPosition(pm, &pml)
+	}
 
 	/* set groundentity, watertype, and waterlevel */
 	PM_CatagorizePosition(pm, &pml)
 
-	// 	if (pm->s.pm_type == PM_DEAD) {
-	// 		PM_DeadMove();
-	// 	}
+	if pm.S.Pm_type == shared.PM_DEAD {
+		// 		PM_DeadMove();
+	}
 
 	// 	PM_CheckSpecialMovement();
 

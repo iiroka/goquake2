@@ -99,11 +99,11 @@ func sv_New_f(args []string, T *qServer) error {
 	/* game server */
 	println("ServerState", T.sv.state)
 	if T.sv.state == ss_game {
-		// 	 /* set up the entity for the client */
-		// 	 ent = EDICT_NUM(playernum + 1);
-		// 	 ent->s.number = playernum + 1;
-		// 	 sv_client->edict = ent;
-		// 	 memset(&sv_client->lastcmd, 0, sizeof(sv_client->lastcmd));
+		/* set up the entity for the client */
+		ent := T.ge.Edict(playernum + 1)
+		ent.S().Number = playernum + 1
+		T.sv_client.edict = ent
+		T.sv_client.lastcmd.Copy(shared.Usercmd_t{})
 
 		/* begin fetching configstrings */
 		T.sv_client.netchan.Message.WriteByte(shared.SvcStufftext)
@@ -113,7 +113,6 @@ func sv_New_f(args []string, T *qServer) error {
 }
 
 func sv_Configstrings_f(args []string, T *qServer) error {
-	// int start;
 
 	T.common.Com_DPrintf("Configstrings() from %s\n", T.sv_client.name)
 
@@ -156,9 +155,6 @@ func sv_Configstrings_f(args []string, T *qServer) error {
 }
 
 func sv_Baselines_f(args []string, T *qServer) error {
-	// int start;
-	// entity_state_t nullstate;
-	// entity_state_t *base;
 
 	T.common.Com_DPrintf("Baselines() from %s\n", T.sv_client.name)
 

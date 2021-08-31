@@ -78,6 +78,10 @@ func (G *qGameImp) Soundindex(name string) int {
 	return G.T.svFindIndex(name, shared.CS_SOUNDS, shared.MAX_SOUNDS, true)
 }
 
+func (G *qGameImp) Imageindex(name string) int {
+	return G.T.svFindIndex(name, shared.CS_IMAGES, shared.MAX_IMAGES, true)
+}
+
 func (G *qGameImp) Linkentity(ent shared.Edict_s) {
 	G.T.svLinkEdict(ent)
 }
@@ -96,6 +100,37 @@ func (G *qGameImp) Trace(start, mins, maxs, end []float32, passent shared.Edict_
 
 func (G *qGameImp) Pointcontents(point []float32) int {
 	return G.T.svPointContents(point)
+}
+
+func (G *qGameImp) BoxEdicts(mins, maxs []float32, edicts []shared.Edict_s, maxcount, areatype int) int {
+	return G.T.svAreaEdicts(mins, maxs, edicts, maxcount, areatype)
+}
+
+/*
+ * Also sets mins and maxs for inline bmodels
+ */
+func (G *qGameImp) Setmodel(ent shared.Edict_s, name string) error {
+
+	if len(name) == 0 {
+		return G.T.common.Com_Error(shared.ERR_DROP, "PF_setmodel: NULL")
+	}
+
+	i := G.T.svFindIndex(name, shared.CS_MODELS, shared.MAX_MODELS, true)
+
+	ent.S().Modelindex = i
+
+	/* if it is an inline model, get
+	the size information for it */
+	if name[0] == '*' {
+		mod, err := G.T.common.CMInlineModel(name)
+		if err != nil {
+			return err
+		}
+		copy(ent.Mins(), mod.Mins[:])
+		copy(ent.Maxs(), mod.Maxs[:])
+		G.T.svLinkEdict(ent)
+	}
+	return nil
 }
 
 /*

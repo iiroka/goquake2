@@ -155,6 +155,32 @@ func clPMTrace(start, mins, maxs, end []float32, a interface{}) shared.Trace_t {
 	return t
 }
 
+func clPMpointcontents(point []float32, a interface{}) int {
+
+	T := a.(*qClient)
+
+	contents := T.common.CMPointContents(point, 0)
+
+	for i := 0; i < T.cl.frame.num_entities; i++ {
+		num := (T.cl.frame.parse_entities + i) & (MAX_PARSE_ENTITIES - 1)
+		ent := &T.cl_parse_entities[num]
+
+		if ent.Solid != 31 { /* special value for bmodel */
+			continue
+		}
+
+		cmodel := T.cl.model_clip[ent.Modelindex]
+
+		if cmodel == nil {
+			continue
+		}
+
+		contents |= T.common.CMTransformedPointContents(point, cmodel.Headnode, ent.Origin[:], ent.Angles[:])
+	}
+
+	return contents
+}
+
 /*
  * Sets cl.predicted_origin and cl.predicted_angles
  */
@@ -195,7 +221,8 @@ func (T *qClient) predictMovement() {
 	pm := shared.Pmove_t{}
 	pm.TraceArg = T
 	pm.Trace = clPMTrace
-	//  pm.pointcontents = CL_PMpointcontents;
+	pm.PCArg = T
+	pm.Pointcontents = clPMpointcontents
 	aa, _ := strconv.ParseFloat(T.cl.configstrings[shared.CS_AIRACCEL], 32)
 	T.common.SetAirAccelerate(float32(aa))
 	pm.S = T.cl.frame.playerstate.Pmove

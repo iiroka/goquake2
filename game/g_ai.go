@@ -97,7 +97,7 @@ func ai_walk(self *edict_t, dist float32, G *qGame) {
 		return
 	}
 
-	// G.mMoveToGoal(self, dist)
+	G.mMoveToGoal(self, dist)
 
 	/* check for noticing a player */
 	if G.findTarget(self) {

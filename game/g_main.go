@@ -76,11 +76,11 @@ func (G *qGame) RunFrame() error {
 			continue
 		}
 
-		// 	 level.current_entity = ent;
+		G.level.current_entity = ent
 
 		copy(ent.s.Old_origin[:], ent.s.Origin[:])
 
-		// 	 /* if the ground entity moved, make sure we are still on it */
+		/* if the ground entity moved, make sure we are still on it */
 		// 	 if ((ent->groundentity) &&
 		// 		 (ent->groundentity->linkcount != ent->groundentity_linkcount))
 		// 	 {

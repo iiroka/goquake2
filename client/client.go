@@ -299,6 +299,8 @@ type qClient struct {
 	window                 *sdl.Window
 	last_display           int
 	glimp_refreshRate      int
+	glimp_last_flags       int
+	glimp_initSuccessful   bool
 
 	rcon_client_password *shared.CvarT
 	rcon_address         *shared.CvarT
@@ -490,6 +492,7 @@ func CreateClient() shared.QClient {
 	q := &qClient{}
 	q.cl_entities = make([]centity_t, shared.MAX_EDICTS)
 	q.cl_parse_entities = make([]shared.Entity_state_t, MAX_PARSE_ENTITIES)
+	q.glimp_last_flags = -1
 	return q
 }
 

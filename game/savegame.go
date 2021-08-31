@@ -182,7 +182,7 @@ var fields = []field_t{
 	{"mass", "Mass", F_INT, 0},
 	{"volume", "Volume", F_FLOAT, 0},
 	{"attenuation", "Attenuation", F_FLOAT, 0},
-	// {"map", FOFS(map), F_LSTRING},
+	{"map", "Map", F_LSTRING, 0},
 	{"origin", "Origin", F_VECTOR, FFL_ENTITYSTATE},
 	{"angles", "Angles", F_VECTOR, FFL_ENTITYSTATE},
 	{"angle", "Angles", F_ANGLEHACK, FFL_ENTITYSTATE},

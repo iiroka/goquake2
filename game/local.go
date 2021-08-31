@@ -235,7 +235,7 @@ type level_locals_t struct {
 	//    edict_t *sound2_entity;
 	//    int sound2_entity_framenum;
 
-	//    int pic_health;
+	pic_health int
 
 	//    int total_secrets;
 	//    int found_secrets;
@@ -265,8 +265,8 @@ type spawn_temp_t struct {
 	Lip int
 	//    int distance;
 	//    int height;
-	Noise string
-	//    float pausetime;
+	Noise     string
+	pausetime float32
 	//    char *item;
 	Ggravity string
 
@@ -373,7 +373,7 @@ type client_persistant_t struct {
 	lastweapon *gitem_t
 
 	// int power_cubes /* used for tracking the cubes in coop games */
-	// int score       /* for calculating total unit score in coop games */
+	score int /* for calculating total unit score in coop games */
 
 	// int game_helpchanged
 	// int helpchanged
@@ -457,17 +457,17 @@ type gclient_t struct {
 	// float killer_yaw; /* when dead, look at killer */
 
 	// weaponstate_t weaponstate;
-	kick_angles [3]float32 /* weapon kicks */
-	kick_origin [3]float32
-	// float v_dmg_roll, v_dmg_pitch, v_dmg_time; /* damage kicks */
-	// float fall_time, fall_value; /* for view drop on fall */
-	// float damage_alpha;
-	// float bonus_alpha;
-	// vec3_t damage_blend;
-	v_angle       [3]float32 /* aiming direction */
-	bobtime       float32    /* so off-ground doesn't change it */
-	oldviewangles [3]float32
-	oldvelocity   [3]float32
+	kick_angles                         [3]float32 /* weapon kicks */
+	kick_origin                         [3]float32
+	v_dmg_roll, v_dmg_pitch, v_dmg_time float32 /* damage kicks */
+	fall_time, fall_value               float32 /* for view drop on fall */
+	damage_alpha                        float32
+	bonus_alpha                         float32
+	damage_blend                        [3]float32
+	v_angle                             [3]float32 /* aiming direction */
+	bobtime                             float32    /* so off-ground doesn't change it */
+	oldviewangles                       [3]float32
+	oldvelocity                         [3]float32
 
 	// float next_drown_time;
 	// int old_waterlevel;
@@ -492,7 +492,7 @@ type gclient_t struct {
 	// int silencer_shots;
 	// int weapon_sound;
 
-	// float pickup_msg_time;
+	pickup_msg_time float32
 
 	// float flood_locktill; /* locked from talking */
 	// float flood_when[10]; /* when messages were said */
@@ -649,14 +649,13 @@ type edict_t struct {
 	prethink  func(self *edict_t, G *qGame)
 	think     func(self *edict_t, G *qGame)
 	// void (*blocked)(edict_t *self, edict_t *other);
-	// void (*touch)(edict_t *self, edict_t *other, cplane_t *plane,
-	// 		csurface_t *surf);
-	// void (*use)(edict_t *self, edict_t *other, edict_t *activator);
+	touch func(self, other *edict_t, plane *shared.Cplane_t, surf *shared.Csurface_t, G *qGame)
+	use   func(self, other, activator *edict_t, G *qGame)
 	// void (*pain)(edict_t *self, edict_t *other, float kick, int damage);
 	// void (*die)(edict_t *self, edict_t *inflictor, edict_t *attacker,
 	// 		int damage, vec3_t point);
 
-	// float touch_debounce_time;
+	touch_debounce_time float32
 	// float pain_debounce_time;
 	// float damage_debounce_time;
 	// float fly_sound_debounce_time;	/* now also used by insane marines to store pain sound timeout */
@@ -670,7 +669,7 @@ type edict_t struct {
 	// float show_hostile;
 	// float powerarmor_time;
 
-	// char *map; /* target_changelevel */
+	Map string /* target_changelevel */
 
 	viewheight int /* height above origin where eyesight is determined */
 	// int takedamage;
@@ -678,12 +677,12 @@ type edict_t struct {
 	// int radius_dmg;
 	// float dmg_radius;
 	Sounds int /* make this a spawntemp var? */
-	// int count;
+	count  int
 
-	// edict_t *chain;
-	enemy *edict_t
-	// edict_t *oldenemy;
-	// edict_t *activator;
+	chain                  *edict_t
+	enemy                  *edict_t
+	oldenemy               *edict_t
+	activator              *edict_t
 	groundentity           *edict_t
 	groundentity_linkcount int
 	// edict_t *teamchain;
@@ -715,7 +714,7 @@ type edict_t struct {
 
 	Style int /* also used as areaportal number */
 
-	// gitem_t *item; /* for bonus items */
+	item *gitem_t /* for bonus items */
 
 	/* common data blocks */
 	// moveinfo_t moveinfo;
@@ -814,6 +813,16 @@ func (G *edict_t) Owner() shared.Edict_s {
 	return G.owner
 }
 
+/* item spawnflags */
+const ITEM_TRIGGER_SPAWN = 0x00000001
+const ITEM_NO_TOUCH = 0x00000002
+
+/* 6 bits reserved for editor flags */
+/* 8 bits used as power cube id bits for coop games */
+const DROPPED_ITEM = 0x00010000
+const DROPPED_PLAYER_ITEM = 0x00020000
+const ITEM_TARGETS_USED = 0x00040000
+
 /* fields are needed for spawning from the entity
    string and saving / loading games */
 const FFL_SPAWNTEMP = 1
@@ -900,11 +909,15 @@ type qGame struct {
 
 	pm_passent *edict_t
 
-	current_player      *edict_t
-	current_client      *gclient_t
-	player_view_forward [3]float32
-	player_view_right   [3]float32
-	player_view_up      [3]float32
+	current_player         *edict_t
+	current_client         *gclient_t
+	player_view_forward    [3]float32
+	player_view_right      [3]float32
+	player_view_up         [3]float32
+	player_view_xyspeed    float32
+	player_view_bobmove    float32
+	player_view_bobcycle   int
+	player_view_bobfracsin float32
 }
 
 func QGameCreate(gi shared.Game_import_t) shared.Game_export_t {

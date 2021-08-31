@@ -228,6 +228,22 @@ func (T *Pmove_state_t) Copy(other Pmove_state_t) {
 	T.Gravity = other.Gravity
 }
 
+func (T *Pmove_state_t) Equals(other Pmove_state_t) bool {
+	if T.Pm_type != other.Pm_type ||
+		T.Pm_flags != other.Pm_flags ||
+		T.Pm_time != other.Pm_time ||
+		T.Gravity != other.Gravity {
+		return false
+	}
+	for i := 0; i < 3; i++ {
+		if T.Origin[i] != other.Origin[i] ||
+			T.Velocity[i] != other.Velocity[i] || T.Delta_angles[i] != other.Delta_angles[i] {
+			return false
+		}
+	}
+	return true
+}
+
 /* button bits */
 const BUTTON_ATTACK byte = 1
 const BUTTON_USE byte = 2
@@ -284,6 +300,8 @@ type Pmove_t struct {
 	TraceArg interface{}
 	Trace    func(start, mins, maxs, end []float32, a interface{}) Trace_t
 	// trace_t (*trace)(vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end);
+	PCArg         interface{}
+	Pointcontents func(point []float32, a interface{}) int
 	// int (*pointcontents)(vec3_t point);
 }
 
@@ -1080,6 +1098,10 @@ func LerpAngle(a2, a1, frac float32) float32 {
 	}
 
 	return a2 + frac*(a1-a2)
+}
+
+func Anglemod(a float32) float32 {
+	return (360.0 / 65536) * float32(int(a*(65536/360.0))&65535)
 }
 
 /*

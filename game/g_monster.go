@@ -356,7 +356,6 @@ func (G *qGame) monster_start_go(self *edict_t) {
 	}
 
 	if len(self.Target) > 0 {
-		println("monster_start_go")
 		self.movetarget = G.gPickTarget(self.Target)
 		self.goalentity = self.movetarget
 

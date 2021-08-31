@@ -26,6 +26,7 @@
 package game
 
 import (
+	"fmt"
 	"goquake2/shared"
 	"strconv"
 )
@@ -217,8 +218,8 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 	// 	 }
 	//  }
 
-	// userinfo := string(client.pers.userinfo)
-	//  ClientUserinfoChanged(ent, userinfo);
+	userinfo := string(client.pers.userinfo)
+	G.clientUserinfoChanged(ent, userinfo)
 
 	/* clear everything but the persistant data */
 	var saved client_persistant_t
@@ -232,8 +233,8 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 
 	client.resp = resp
 
-	//  /* copy some data from the client to the entity */
-	//  FetchClientEntData(ent);
+	/* copy some data from the client to the entity */
+	G.fetchClientEntData(ent)
 
 	/* clear entity values */
 	ent.groundentity = nil
@@ -247,13 +248,13 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 	ent.solid = shared.SOLID_BBOX
 	ent.deadflag = DEAD_NO
 	//  ent->air_finished = level.time + 12;
-	//  ent->clipmask = MASK_PLAYERSOLID;
+	// ent.clipmask = MASK_PLAYERSOLID
 	ent.Model = "players/male/tris.md2"
 	//  ent->pain = player_pain;
 	//  ent->die = player_die;
-	// ent.waterlevel = 0
-	// ent.watertype = 0
-	//  ent->flags &= ~FL_NO_KNOCKBACK;
+	ent.waterlevel = 0
+	ent.watertype = 0
+	ent.flags &^= FL_NO_KNOCKBACK
 	ent.svflags = 0
 
 	copy(ent.mins[:], mins)
@@ -267,20 +268,17 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 	client.ps.Pmove.Origin[1] = int16(spawn_origin[1] * 8)
 	client.ps.Pmove.Origin[2] = int16(spawn_origin[2] * 8)
 
-	//  if (deathmatch->value && ((int)dmflags->value & DF_FIXED_FOV))
-	//  {
-	// 	 client->ps.fov = 90;
-	//  }
-	//  else
-	//  {
-	fv, _ := strconv.ParseInt(shared.Info_ValueForKey(client.pers.userinfo, "fov"), 10, 32)
-	client.ps.Fov = float32(fv)
-	if client.ps.Fov < 1 {
+	if G.deathmatch.Bool() && (G.dmflags.Int()&shared.DF_FIXED_FOV) != 0 {
 		client.ps.Fov = 90
-	} else if client.ps.Fov > 160 {
-		client.ps.Fov = 160
+	} else {
+		fv, _ := strconv.ParseInt(shared.Info_ValueForKey(client.pers.userinfo, "fov"), 10, 32)
+		client.ps.Fov = float32(fv)
+		if client.ps.Fov < 1 {
+			client.ps.Fov = 90
+		} else if client.ps.Fov > 160 {
+			client.ps.Fov = 160
+		}
 	}
-	//  }
 
 	client.ps.Gunindex = G.gi.Modelindex(client.pers.weapon.view_model)
 
@@ -298,7 +296,7 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 	ent.s.Origin[2] += 1 /* make sure off ground */
 	copy(ent.s.Old_origin[:], ent.s.Origin[:])
 
-	//  /* set the delta angle */
+	/* set the delta angle */
 	for i := 0; i < 3; i++ {
 		client.ps.Pmove.Delta_angles[i] = shared.ANGLE2SHORT(
 			spawn_angles[i] - client.resp.cmd_angles[i])
@@ -359,7 +357,6 @@ func spCreateUnnamedSpawn(self *edict_t, G *qGame) {
 
 	spot, _ := G.gSpawn()
 
-	println("spCreateUnnamedSpawn", G.level.mapname, self.Targetname)
 	/* mine1 */
 	if G.level.mapname == "mine1" {
 		if self.Targetname == "mintro" {
@@ -500,15 +497,15 @@ func spInfoPlayerStart(self *edict_t, G *qGame) error {
 	self.think = spCreateUnnamedSpawn
 	self.nextthink = G.level.time + FRAMETIME
 
-	// if (!coop->value) {
-	// 	return;
-	// }
+	if !G.coop.Bool() {
+		return nil
+	}
 
-	// if (Q_stricmp(level.mapname, "security") == 0) {
-	// 	/* invoke one of our gross, ugly, disgusting hacks */
-	// 	self->think = SP_CreateCoopSpots;
-	// 	self->nextthink = level.time + FRAMETIME;
-	// }
+	if G.level.mapname == "security" {
+		/* invoke one of our gross, ugly, disgusting hacks */
+		// 	self->think = SP_CreateCoopSpots;
+		// 	self->nextthink = level.time + FRAMETIME;
+	}
 	return nil
 }
 
@@ -520,6 +517,20 @@ func (G *qGame) initClientResp(client *gclient_t) {
 	client.resp = client_respawn_t{}
 	client.resp.enterframe = G.level.framenum
 	client.resp.coop_respawn = client.pers
+}
+
+func (G *qGame) fetchClientEntData(ent *edict_t) {
+	if ent == nil {
+		return
+	}
+
+	ent.Health = ent.client.pers.health
+	ent.max_health = ent.client.pers.max_health
+	ent.flags |= ent.client.pers.savedFlags
+
+	if G.coop.Bool() {
+		ent.client.resp.score = ent.client.pers.score
+	}
 }
 
 /*
@@ -582,6 +593,71 @@ func (G *qGame) ClientBegin(sent shared.Edict_s) error {
 	/* make sure all view stuff is valid */
 	G.clientEndServerFrame(ent)
 	return nil
+}
+
+/*
+ * Called whenever the player updates a userinfo variable.
+ * The game can override any of the settings in place
+ * (forcing skins or names, etc) before copying it off.
+ */
+func (G *qGame) clientUserinfoChanged(ent *edict_t, userinfo string) {
+
+	if ent == nil {
+		return
+	}
+
+	/* check for malformed or illegal info strings */
+	// if !Info_Validate(userinfo) {
+	// 	strcpy(userinfo, "\\name\\badinfo\\skin\\male/grunt")
+	// }
+
+	/* set name */
+	s := shared.Info_ValueForKey(userinfo, "name")
+	ent.client.pers.netname = s
+
+	/* set spectator */
+	//  s = shared.Info_ValueForKey(userinfo, "spectator");
+
+	/* spectators are only supported in deathmatch */
+	//  if (deathmatch.value && *s && strcmp(s, "0")) {
+	// 	 ent->client->pers.spectator = true;
+	//  } else {
+	ent.client.pers.spectator = false
+	//  }
+
+	/* set skin */
+	s = shared.Info_ValueForKey(userinfo, "skin")
+
+	playernum := ent.index - 1
+
+	/* combine name and skin into a configstring */
+	G.gi.Configstring(shared.CS_PLAYERSKINS+playernum,
+		fmt.Sprintf("%s\\%s", ent.client.pers.netname, s))
+
+	/* fov */
+	if G.deathmatch.Bool() && (G.dmflags.Int()&shared.DF_FIXED_FOV) != 0 {
+		ent.client.ps.Fov = 90
+	} else {
+		fov, _ := strconv.ParseInt(shared.Info_ValueForKey(userinfo, "fov"), 10, 32)
+
+		ent.client.ps.Fov = float32(fov)
+		if ent.client.ps.Fov < 1 {
+			ent.client.ps.Fov = 90
+		} else if ent.client.ps.Fov > 160 {
+			ent.client.ps.Fov = 160
+		}
+	}
+
+	/* handedness */
+	s = shared.Info_ValueForKey(userinfo, "hand")
+
+	if len(s) > 0 {
+		h, _ := strconv.ParseInt(s, 10, 32)
+		ent.client.pers.hand = int(h)
+	}
+
+	/* save off the userinfo in case we want to check something later */
+	ent.client.pers.userinfo = userinfo
 }
 
 /*
@@ -661,16 +737,16 @@ func (G *qGame) ClientConnect(sent shared.Edict_s, userinfo string) bool {
 		/* clear the respawning variables */
 		G.initClientResp(ent.client)
 
-		// 	 if (!game.autosaved || !ent->client->pers.weapon) {
-		// 		 InitClientPersistant(ent->client);
-		// 	 }
+		if !G.game.autosaved || ent.client.pers.weapon == nil {
+			G.initClientPersistant(ent.client)
+		}
 	}
 
-	//  ClientUserinfoChanged(ent, userinfo);
+	G.clientUserinfoChanged(ent, userinfo)
 
-	//  if (game.maxclients > 1) {
-	// 	 gi.dprintf("%s connected\n", ent->client->pers.netname);
-	//  }
+	if G.game.maxclients > 1 {
+		G.gi.Dprintf("%s connected\n", ent.client.pers.netname)
+	}
 
 	ent.svflags = 0 /* make sure we start with known default */
 	ent.client.pers.connected = true
@@ -680,6 +756,10 @@ func (G *qGame) ClientConnect(sent shared.Edict_s, userinfo string) bool {
 /* ============================================================== */
 
 // edict_t *pm_passent;
+func pmPointcontents(point []float32, a interface{}) int {
+	G := a.(*qGame)
+	return G.gi.Pointcontents(point)
+}
 
 /*
  * pmove doesn't need to know
@@ -756,15 +836,16 @@ func (G *qGame) ClientThink(sent shared.Edict_s, ucmd *shared.Usercmd_t) {
 			pm.S.Velocity[i] = tmpVel
 		}
 
-		// 	 if (memcmp(&client->old_pmove, &pm.s, sizeof(pm.s))) {
-		// 		 pm.snapinitial = true;
-		// 	 }
+		if !client.old_pmove.Equals(pm.S) {
+			pm.Snapinitial = true
+		}
 
 		pm.Cmd.Copy(*ucmd)
 
 		pm.TraceArg = G
 		pm.Trace = PM_trace /* adds default parms */
-		// 	 pm.pointcontents = gi.pointcontents;
+		pm.PCArg = G
+		pm.Pointcontents = pmPointcontents
 
 		/* perform a pmove */
 		G.gi.Pmove(&pm)
@@ -793,8 +874,8 @@ func (G *qGame) ClientThink(sent shared.Edict_s, ucmd *shared.Usercmd_t) {
 		// 	 }
 
 		ent.viewheight = int(pm.Viewheight)
-		// ent.waterlevel = pm.Waterlevel
-		// 	 ent->watertype = pm.watertype;
+		ent.waterlevel = pm.Waterlevel
+		ent.watertype = pm.Watertype
 		if pm.Groundentity == nil {
 			ent.groundentity = nil
 		} else {
@@ -813,30 +894,35 @@ func (G *qGame) ClientThink(sent shared.Edict_s, ucmd *shared.Usercmd_t) {
 
 		G.gi.Linkentity(ent)
 
-		// 	 if (ent->movetype != MOVETYPE_NOCLIP) {
-		// 		 G_TouchTriggers(ent);
-		// 	 }
+		if ent.movetype != MOVETYPE_NOCLIP {
+			G.gTouchTriggers(ent)
+		}
 
-		// 	 /* touch other objects */
-		// 	 for (i = 0; i < pm.numtouch; i++) {
-		// 		 other = pm.touchents[i];
+		/* touch other objects */
+		for i := 0; i < pm.Numtouch; i++ {
+			other, ok := pm.Touchents[i].(*edict_t)
+			if !ok {
+				continue
+			}
 
-		// 		 for j := 0; j < i; j++ {
-		// 			 if (pm.touchents[j] == other) {
-		// 				 break;
-		// 			 }
-		// 		 }
+			var found = false
+			for j := 0; j < i; j++ {
+				if pm.Touchents[j] == other {
+					found = true
+					break
+				}
+			}
 
-		// 		 if (j != i) {
-		// 			 continue; /* duplicated */
-		// 		 }
+			if found {
+				continue /* duplicated */
+			}
 
-		// 		 if (!other->touch) {
-		// 			 continue;
-		// 		 }
+			if other.touch == nil {
+				continue
+			}
 
-		// 		 other->touch(other, ent, NULL, NULL);
-		// 	 }
+			other.touch(other, ent, nil, nil, G)
+		}
 	}
 
 	client.oldbuttons = client.buttons
@@ -917,7 +1003,7 @@ func (G *qGame) clientBeginServerFrame(ent *edict_t) {
 
 	//  /* run weapon animations if it hasn't been done by a ucmd_t */
 	if !client.weapon_thunk && !client.resp.spectator {
-		// 	 Think_Weapon(ent);
+		G.thinkWeapon(ent)
 	} else {
 		client.weapon_thunk = false
 	}

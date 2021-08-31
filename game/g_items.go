@@ -31,6 +31,15 @@ var jacketarmor_info = gitem_armor_t{25, 50, .30, .00, ARMOR_JACKET}
 var combatarmor_info = gitem_armor_t{50, 100, .60, .30, ARMOR_COMBAT}
 var bodyarmor_info = gitem_armor_t{100, 200, .80, .60, ARMOR_BODY}
 
+func itemIndex(item *gitem_t) int {
+	for i, it := range gameitemlist {
+		if it.classname == item.classname {
+			return i
+		}
+	}
+	return 0
+}
+
 func (G *qGame) findItem(pickup_name string) *gitem_t {
 
 	if len(pickup_name) == 0 {
@@ -83,6 +92,279 @@ func (G *qGame) setItemNames() {
 	// body_armor_index = ITEM_INDEX(FindItem("Body Armor"))
 	// power_screen_index = ITEM_INDEX(FindItem("Power Screen"))
 	// power_shield_index = ITEM_INDEX(FindItem("Power Shield"))
+}
+
+/* ====================================================================== */
+
+func touch_Item(ent, other *edict_t, plane /* unused */ *shared.Cplane_t, surf /* unused */ *shared.Csurface_t, G *qGame) {
+
+	if ent == nil || other == nil || G == nil {
+		return
+	}
+
+	if other.client == nil {
+		return
+	}
+
+	if other.Health < 1 {
+		return /* dead people can't pickup */
+	}
+
+	if ent.item.pickup == nil {
+		return /* not a grabbable item? */
+	}
+
+	taken := ent.item.pickup(ent, other, G)
+
+	if taken {
+		/* flash the screen */
+		other.client.bonus_alpha = 0.25
+
+		/* show icon and name on status bar */
+		other.client.ps.Stats[shared.STAT_PICKUP_ICON] = int16(G.gi.Imageindex(ent.item.icon))
+		other.client.ps.Stats[shared.STAT_PICKUP_STRING] = int16(shared.CS_ITEMS + itemIndex(ent.item))
+		other.client.pickup_msg_time = G.level.time + 3.0
+
+		/* change selected item */
+		if ent.item.use != nil {
+			other.client.ps.Stats[shared.STAT_SELECTED_ITEM] = int16(itemIndex(ent.item))
+			other.client.pers.selected_item = int(other.client.ps.Stats[shared.STAT_SELECTED_ITEM])
+		}
+
+		// if (ent->item->pickup == Pickup_Health) {
+		// 	if (ent->count == 2) {
+		// 		gi.sound(other, CHAN_ITEM, gi.soundindex(
+		// 						"items/s_health.wav"), 1, ATTN_NORM, 0);
+		// 	}
+		// 	else if (ent->count == 10)
+		// 	{
+		// 		gi.sound(other, CHAN_ITEM, gi.soundindex(
+		// 						"items/n_health.wav"), 1, ATTN_NORM, 0);
+		// 	}
+		// 	else if (ent->count == 25)
+		// 	{
+		// 		gi.sound(other, CHAN_ITEM, gi.soundindex(
+		// 						"items/l_health.wav"), 1, ATTN_NORM, 0);
+		// 	}
+		// 	else /* (ent->count == 100) */
+		// 	{
+		// 		gi.sound(other, CHAN_ITEM, gi.soundindex(
+		// 						"items/m_health.wav"), 1, ATTN_NORM, 0);
+		// 	}
+		// }
+		// else if (ent->item->pickup_sound)
+		// {
+		// 	gi.sound(other, CHAN_ITEM, gi.soundindex(
+		// 					ent->item->pickup_sound), 1, ATTN_NORM, 0);
+		// }
+
+		/* activate item instantly if appropriate */
+		/* moved down here so activation sounds override the pickup sound */
+		// if (deathmatch->value)
+		// {
+		// 	if ((((int)dmflags->value & DF_INSTANT_ITEMS) &&
+		// 		 (ent->item->flags & IT_INSTANT_USE)) ||
+		// 		((ent->item->use == Use_Quad) &&
+		// 		 (ent->spawnflags & DROPPED_PLAYER_ITEM)))
+		// 	{
+		// 		if ((ent->item->use == Use_Quad) &&
+		// 			(ent->spawnflags & DROPPED_PLAYER_ITEM))
+		// 		{
+		// 			quad_drop_timeout_hack =
+		// 				(ent->nextthink - level.time) / FRAMETIME;
+		// 		}
+
+		// 		if (ent->item->use)
+		// 		{
+		// 			ent->item->use(other, ent->item);
+		// 		}
+		// 	}
+		// }
+	}
+
+	if (ent.Spawnflags & ITEM_TARGETS_USED) == 0 {
+		G.gUseTargets(ent, other)
+		ent.Spawnflags |= ITEM_TARGETS_USED
+	}
+
+	if !taken {
+		return
+	}
+
+	if !((G.coop.Bool()) &&
+		(ent.item.flags&IT_STAY_COOP) != 0) ||
+		(ent.Spawnflags&(DROPPED_ITEM|DROPPED_PLAYER_ITEM)) != 0 {
+		if (ent.flags & FL_RESPAWN) != 0 {
+			ent.flags &^= FL_RESPAWN
+		} else {
+			G.gFreeEdict(ent)
+		}
+	}
+}
+
+func use_Item(ent, other /* unused */, activator /* unused */ *edict_t, G *qGame) {
+	if ent == nil {
+		return
+	}
+
+	ent.svflags &^= shared.SVF_NOCLIENT
+	ent.use = nil
+
+	if (ent.Spawnflags & ITEM_NO_TOUCH) != 0 {
+		ent.solid = shared.SOLID_BBOX
+		ent.touch = nil
+	} else {
+		ent.solid = shared.SOLID_TRIGGER
+		ent.touch = touch_Item
+	}
+
+	G.gi.Linkentity(ent)
+}
+
+/* ====================================================================== */
+
+func droptofloor(ent *edict_t, G *qGame) {
+
+	if ent == nil || G == nil {
+		return
+	}
+
+	copy(ent.mins[:], []float32{-15, -15, -15})
+	copy(ent.maxs[:], []float32{15, 15, 15})
+
+	if len(ent.Model) > 0 {
+		G.gi.Setmodel(ent, ent.Model)
+	} else {
+		G.gi.Setmodel(ent, ent.item.world_model)
+	}
+
+	ent.solid = shared.SOLID_TRIGGER
+	ent.movetype = MOVETYPE_TOSS
+	// ent->touch = Touch_Item;
+
+	dest := make([]float32, 3)
+	shared.VectorAdd(ent.s.Origin[:], []float32{0, 0, -129}, dest)
+
+	tr := G.gi.Trace(ent.s.Origin[:], ent.mins[:], ent.maxs[:], dest, ent, shared.MASK_SOLID)
+
+	if tr.Startsolid {
+		G.gi.Dprintf("droptofloor: %s startsolid at %s\n", ent.Classname,
+			vtos(ent.s.Origin[:]))
+		G.gFreeEdict(ent)
+		return
+	}
+
+	copy(ent.s.Origin[:], tr.Endpos[:])
+
+	// if (ent->team) {
+	// 	ent->flags &= ~FL_TEAMSLAVE;
+	// 	ent->chain = ent->teamchain;
+	// 	ent->teamchain = NULL;
+
+	// 	ent->svflags |= SVF_NOCLIENT;
+	// 	ent->solid = SOLID_NOT;
+
+	// 	if (ent == ent->teammaster) {
+	// 		ent->nextthink = level.time + FRAMETIME;
+	// 		ent->think = DoRespawn;
+	// 	}
+	// }
+
+	if (ent.Spawnflags & ITEM_NO_TOUCH) != 0 {
+		ent.solid = shared.SOLID_BBOX
+		ent.touch = nil
+		ent.s.Effects &^= shared.EF_ROTATE
+		ent.s.Renderfx &^= shared.RF_GLOW
+	}
+
+	if (ent.Spawnflags & ITEM_TRIGGER_SPAWN) != 0 {
+		ent.svflags |= shared.SVF_NOCLIENT
+		ent.solid = shared.SOLID_NOT
+		ent.use = use_Item
+	}
+
+	G.gi.Linkentity(ent)
+}
+
+/*
+ * ============
+ * Sets the clipping size and
+ * plants the object on the floor.
+ *
+ * Items can't be immediately dropped
+ * to floor, because they might be on
+ * an entity that hasn't spawned yet.
+ * ============
+ */
+func (G *qGame) spawnItem(ent *edict_t, item *gitem_t) {
+	if ent == nil || item == nil {
+		return
+	}
+
+	// PrecacheItem(item)
+
+	if ent.Spawnflags != 0 {
+		if ent.Classname != "key_power_cube" {
+			ent.Spawnflags = 0
+			G.gi.Dprintf("%s at %s has invalid spawnflags set\n",
+				ent.Classname, vtos(ent.s.Origin[:]))
+		}
+	}
+
+	/* some items will be prevented in deathmatch */
+	//  if (deathmatch.value) {
+	// 	 if ((int)dmflags->value & DF_NO_ARMOR) != 0 {
+	// 		 if ((item->pickup == Pickup_Armor) ||
+	// 			 (item->pickup == Pickup_PowerArmor)) {
+	// 			 G_FreeEdict(ent);
+	// 			 return;
+	// 		 }
+	// 	 }
+
+	// 	 if ((int)dmflags->value & DF_NO_ITEMS) != 0 {
+	// 		 if (item->pickup == Pickup_Powerup) {
+	// 			 G_FreeEdict(ent);
+	// 			 return;
+	// 		 }
+	// 	 }
+
+	// 	 if ((int)dmflags->value & DF_NO_HEALTH) != 0 {
+	// 		 if ((item->pickup == Pickup_Health) ||
+	// 			 (item->pickup == Pickup_Adrenaline) ||
+	// 			 (item->pickup == Pickup_AncientHead)) {
+	// 			 G_FreeEdict(ent);
+	// 			 return;
+	// 		 }
+	// 	 }
+
+	// 	 if ((int)dmflags->value & DF_INFINITE_AMMO) != 0 {
+	// 		 if ((item->flags == IT_AMMO) ||
+	// 			 (strcmp(ent->classname, "weapon_bfg") == 0)) {
+	// 			 G_FreeEdict(ent);
+	// 			 return;
+	// 		 }
+	// 	 }
+	//  }
+
+	//  if (coop->value && (strcmp(ent->classname, "key_power_cube") == 0)) {
+	// 	 ent->spawnflags |= (1 << (8 + level.power_cubes));
+	// 	 level.power_cubes++;
+	//  }
+
+	/* don't let them drop items that stay in a coop game */
+	//  if ((coop->value) && (item->flags & IT_STAY_COOP) != 0) {
+	// 	 item->drop = NULL;
+	//  }
+
+	ent.item = item
+	ent.nextthink = G.level.time + 2*FRAMETIME /* items start after other solids */
+	ent.think = droptofloor
+	//  ent->s.effects = item->world_model_flags;
+	ent.s.Renderfx = shared.RF_GLOW
+
+	if len(ent.Model) > 0 {
+		G.gi.Modelindex(ent.Model)
+	}
 }
 
 /* ====================================================================== */
@@ -1001,4 +1283,86 @@ var gameitemlist = []gitem_t{
 		0,
 		"items/s_health.wav items/n_health.wav items/l_health.wav items/m_health.wav",
 	},
+}
+
+/*
+ * QUAKED item_health (.3 .3 1) (-16 -16 -16) (16 16 16)
+ */
+func spItemHealth(self *edict_t, G *qGame) error {
+	if self == nil || G == nil {
+		return nil
+	}
+
+	if G.deathmatch.Bool() && (G.dmflags.Int()&shared.DF_NO_HEALTH) != 0 {
+		G.gFreeEdict(self)
+		return nil
+	}
+
+	self.Model = "models/items/healing/medium/tris.md2"
+	self.count = 10
+	G.spawnItem(self, G.findItem("Health"))
+	G.gi.Soundindex("items/n_health.wav")
+	return nil
+}
+
+/*
+ * QUAKED item_health_small (.3 .3 1) (-16 -16 -16) (16 16 16)
+ */
+func spItemHealthSmall(self *edict_t, G *qGame) error {
+	if self == nil || G == nil {
+		return nil
+	}
+
+	if G.deathmatch.Bool() && (G.dmflags.Int()&shared.DF_NO_HEALTH) != 0 {
+		G.gFreeEdict(self)
+		return nil
+	}
+
+	self.Model = "models/items/healing/stimpack/tris.md2"
+	self.count = 2
+	G.spawnItem(self, G.findItem("Health"))
+	// self.Style = HEALTH_IGNORE_MAX
+	G.gi.Soundindex("items/s_health.wav")
+	return nil
+}
+
+/*
+ * QUAKED item_health_large (.3 .3 1) (-16 -16 -16) (16 16 16)
+ */
+func spItemHealthLarge(self *edict_t, G *qGame) error {
+	if self == nil || G == nil {
+		return nil
+	}
+
+	if G.deathmatch.Bool() && (G.dmflags.Int()&shared.DF_NO_HEALTH) != 0 {
+		G.gFreeEdict(self)
+		return nil
+	}
+
+	self.Model = "models/items/healing/large/tris.md2"
+	self.count = 25
+	G.spawnItem(self, G.findItem("Health"))
+	G.gi.Soundindex("items/l_health.wav")
+	return nil
+}
+
+/*
+ * QUAKED item_health_mega (.3 .3 1) (-16 -16 -16) (16 16 16)
+ */
+func spItemHealthMega(self *edict_t, G *qGame) error {
+	if self == nil || G == nil {
+		return nil
+	}
+
+	if G.deathmatch.Bool() && (G.dmflags.Int()&shared.DF_NO_HEALTH) != 0 {
+		G.gFreeEdict(self)
+		return nil
+	}
+
+	self.Model = "models/items/mega_h/tris.md2"
+	self.count = 100
+	G.spawnItem(self, G.findItem("Health"))
+	G.gi.Soundindex("items/m_health.wav")
+	// self.Style = HEALTH_IGNORE_MAX | HEALTH_TIMED
+	return nil
 }

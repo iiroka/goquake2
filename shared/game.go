@@ -129,9 +129,9 @@ type Game_import_t interface {
 	   and some internal server state */
 	Modelindex(name string) int
 	Soundindex(name string) int
-	// int (*imageindex)(char *name);
+	Imageindex(name string) int
 
-	// void (*setmodel)(edict_t *ent, char *name);
+	Setmodel(ent Edict_s, name string) error
 
 	// /* collision detection */
 	Trace(start, mins, maxs, end []float32, passent Edict_s, contentmask int) Trace_t
@@ -146,8 +146,7 @@ type Game_import_t interface {
 	   solidity changes, it must be relinked. */
 	Linkentity(ent Edict_s)
 	Unlinkentity(ent Edict_s) /* call before removing an interactive edict */
-	// int (*BoxEdicts)(vec3_t mins, vec3_t maxs, edict_t **list, int maxcount,
-	// 		int areatype);
+	BoxEdicts(mins, maxs []float32, edicts []Edict_s, maxcount, areatype int) int
 	Pmove(pmove *Pmove_t) /* player movement code common with client prediction */
 
 	// /* network messaging */

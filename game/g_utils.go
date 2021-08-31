@@ -118,6 +118,128 @@ func (G *qGame) gPickTarget(targetname string) *edict_t {
 }
 
 /*
+ * The global "activator" should be set to
+ * the entity that initiated the firing.
+ *
+ * If self.delay is set, a DelayedUse entity
+ * will be created that will actually do the
+ * SUB_UseTargets after that many seconds have passed.
+ *
+ * Centerprints any self.message to the activator.
+ *
+ * Search for (string)targetname in all entities that
+ * match (string)self.target and call their .use function
+ */
+func (G *qGame) gUseTargets(ent, activator *edict_t) {
+
+	if ent == nil {
+		return
+	}
+
+	/* check for a delay */
+	if ent.Delay != 0 {
+		/* create a temp object to fire at a later time */
+		t, _ := G.gSpawn()
+		t.Classname = "DelayedUse"
+		t.nextthink = G.level.time + ent.Delay
+		// t.think = Think_Delay
+		t.activator = activator
+
+		if activator == nil {
+			G.gi.Dprintf("Think_Delay with no activator\n")
+		}
+
+		t.Message = ent.Message
+		t.Target = ent.Target
+		t.Killtarget = ent.Killtarget
+		return
+	}
+
+	if activator == nil {
+		return
+	}
+
+	/* print the message */
+	if len(ent.Message) > 0 && (activator.svflags&shared.SVF_MONSTER) == 0 {
+		//  gi.centerprintf(activator, "%s", ent->message);
+
+		//  if (ent->noise_index) {
+		// 	 gi.sound(activator, CHAN_AUTO, ent->noise_index, 1, ATTN_NORM, 0);
+		//  } else {
+		// 	 gi.sound(activator, CHAN_AUTO, gi.soundindex(
+		// 					 "misc/talk1.wav"), 1, ATTN_NORM, 0);
+		//  }
+	}
+
+	/* kill killtargets */
+	if len(ent.Killtarget) > 0 {
+		var t *edict_t
+
+		for {
+			t = G.gFind(t, "TargetName", ent.Killtarget)
+			if t == nil {
+				break
+			}
+			// 	 while ((t = G_Find(t, FOFS(targetname), ent->killtarget))) {
+			/* decrement secret count if target_secret is removed */
+			// 		 if (!Q_stricmp(t->classname,"target_secret")) {
+			// 			 level.total_secrets--;
+			/* same deal with target_goal, but also turn off CD music if applicable */
+			// 		 } else if (!Q_stricmp(t->classname,"target_goal")) {
+			// 			 level.total_goals--;
+
+			// 			 if (level.found_goals >= level.total_goals) {
+			// 				 gi.configstring (CS_CDTRACK, "0");
+			// 			 }
+			// 		 }
+
+			G.gFreeEdict(t)
+
+			if !ent.inuse {
+				G.gi.Dprintf("entity was removed while using killtargets\n")
+				return
+			}
+		}
+	}
+
+	/* fire targets */
+	if len(ent.Target) > 0 {
+		// 	 t = NULL;
+		var t *edict_t
+
+		for {
+			t = G.gFind(t, "TargetName", ent.Target)
+			if t == nil {
+				break
+			}
+
+			// 	 while ((t = G_Find(t, FOFS(targetname), ent->target)))
+			// 	 {
+			// 		 /* doors fire area portals in a specific way */
+			// 		 if (!Q_stricmp(t->classname, "func_areaportal") &&
+			// 			 (!Q_stricmp(ent->classname, "func_door") ||
+			// 			  !Q_stricmp(ent->classname, "func_door_rotating")))
+			// 		 {
+			// 			 continue;
+			// 		 }
+
+			if t == ent {
+				G.gi.Dprintf("WARNING: Entity used itself.\n")
+			} else {
+				if t.use != nil {
+					t.use(t, ent, activator, G)
+				}
+			}
+
+			if !ent.inuse {
+				G.gi.Dprintf("entity was removed while using targets\n")
+				return
+			}
+		}
+	}
+}
+
+/*
  * This is just a convenience function
  * for printing vectors
  */
@@ -213,4 +335,35 @@ func (G *qGame) gFreeEdict(ed *edict_t) {
 	ed.Classname = "freed"
 	ed.freetime = G.level.time
 	ed.inuse = false
+}
+
+func (G *qGame) gTouchTriggers(ent *edict_t) {
+
+	if ent == nil {
+		return
+	}
+
+	/* dead things don't activate triggers! */
+	if (ent.client != nil || (ent.svflags&shared.SVF_MONSTER) != 0) && (ent.Health <= 0) {
+		return
+	}
+
+	touch := make([]shared.Edict_s, shared.MAX_EDICTS)
+	num := G.gi.BoxEdicts(ent.absmin[:], ent.absmax[:], touch, shared.MAX_EDICTS, shared.AREA_TRIGGERS)
+
+	/* be careful, it is possible to have an entity in this
+	   list removed before we get to it (killtriggered) */
+	for i := 0; i < num; i++ {
+		hit := touch[i].(*edict_t)
+
+		if !hit.inuse {
+			continue
+		}
+
+		if hit.touch == nil {
+			continue
+		}
+
+		hit.touch(hit, ent, nil, nil, G)
+	}
 }

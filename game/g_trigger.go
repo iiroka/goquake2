@@ -43,6 +43,6 @@ func spTriggerRelay(self *edict_t, G *qGame) error {
 		return nil
 	}
 
-	// self.use = trigger_relay_use
+	self.use = trigger_relay_use
 	return nil
 }

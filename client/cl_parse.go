@@ -643,7 +643,6 @@ func (T *qClient) parseServerData(msg *shared.QReadbuf) error {
 	}
 
 	T.cl.servercount = msg.ReadLong()
-	println("servercount", T.cl.servercount)
 	T.cl.attractloop = msg.ReadByte() != 0
 
 	/* game directory */

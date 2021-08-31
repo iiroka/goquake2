@@ -34,7 +34,12 @@ import (
 )
 
 var spawns = map[string]func(ent *edict_t, G *qGame) error{
+	"item_health":       spItemHealth,
+	"item_health_small": spItemHealthSmall,
+	"item_health_large": spItemHealthLarge,
+	"item_health_mega":  spItemHealthMega,
 	"info_player_start": spInfoPlayerStart,
+	"func_timer":        spFuncTimer,
 	"trigger_relay":     spTriggerRelay,
 	"target_speaker":    spTargetSpeaker,
 	"worldspawn":        spWorldspawn,
@@ -59,7 +64,7 @@ func (G *qGame) edCallSpawn(ent *edict_t) error {
 
 	if len(ent.Classname) == 0 {
 		G.gi.Dprintf("ED_CallSpawn: NULL classname\n")
-		//  G_FreeEdict(ent);
+		G.gFreeEdict(ent)
 		return nil
 	}
 
@@ -581,11 +586,11 @@ func spWorldspawn(ent *edict_t, G *qGame) error {
 		G.gi.Configstring(shared.CS_STATUSBAR, single_statusbar)
 	}
 
-	//  /* --------------- */
+	/* --------------- */
 
-	//  /* help icon for statusbar */
+	/* help icon for statusbar */
 	//  gi.imageindex("i_help");
-	//  level.pic_health = gi.imageindex("i_health");
+	G.level.pic_health = G.gi.Imageindex("i_health")
 	//  gi.imageindex("help");
 	//  gi.imageindex("field_3");
 

@@ -114,22 +114,19 @@ func (T *qClient) glimpInitGraphics(fullscreen, width, height int) (int, int) {
 	// int curWidth, curHeight;
 	// int width = *pwidth;
 	// int height = *pheight;
-	// unsigned int fs_flag = 0;
+	fs_flag := 0
 
-	// if (fullscreen == 1)
-	// {
-	// 	fs_flag = SDL_WINDOW_FULLSCREEN;
-	// }
-	// else if (fullscreen == 2)
-	// {
-	// 	fs_flag = SDL_WINDOW_FULLSCREEN_DESKTOP;
-	// }
+	if fullscreen == 1 {
+		fs_flag = sdl.WINDOW_FULLSCREEN
+	} else if fullscreen == 2 {
+		fs_flag = sdl.WINDOW_FULLSCREEN_DESKTOP
+	}
 
-	// /* Only do this if we already have a working window and a fully
-	// initialized rendering backend GLimp_InitGraphics() is also
-	// called when recovering if creating GL context fails or the
-	// one we got is unusable. */
-	// if (initSuccessful && GetWindowSize(&curWidth, &curHeight)
+	/* Only do this if we already have a working window and a fully
+	initialized rendering backend GLimp_InitGraphics() is also
+	called when recovering if creating GL context fails or the
+	one we got is unusable. */
+	// if (T.glimp_initSuccessful && GetWindowSize(&curWidth, &curHeight)
 	// 		&& (curWidth == width) && (curHeight == height))
 	// {
 	// 	/* If we want fullscreen, but aren't */
@@ -151,23 +148,22 @@ func (T *qClient) glimpInitGraphics(fullscreen, width, height int) (int, int) {
 		// 	re.ShutdownContext();
 		// 	ShutdownGraphics();
 
-		// 	window = NULL;
+		T.window = nil
 	}
 
 	/* We need the window size for the menu, the HUD, etc. */
 	T.viddef.width = width
 	T.viddef.height = height
 
-	// if(last_flags != -1 && (last_flags & SDL_WINDOW_OPENGL))
-	// {
-	// 	/* Reset SDL. */
-	// 	SDL_GL_ResetAttributes();
-	// }
+	if T.glimp_last_flags != -1 && (T.glimp_last_flags&sdl.WINDOW_OPENGL) != 0 {
+		/* Reset SDL. */
+		// 	SDL_GL_ResetAttributes();
+	}
 
-	// /* Let renderer prepare things (set OpenGL attributes).
-	//    FIXME: This is no longer necessary, the renderer
-	//    could and should pass the flags when calling this
-	//    function. */
+	/* Let renderer prepare things (set OpenGL attributes).
+	   FIXME: This is no longer necessary, the renderer
+	   could and should pass the flags when calling this
+	   function. */
 	flags := T.re.PrepareForWindow()
 
 	if flags == -1 {
@@ -175,12 +171,11 @@ func (T *qClient) glimpInitGraphics(fullscreen, width, height int) (int, int) {
 		return -1, -1
 	}
 
-	// if (fs_flag)
-	// {
-	// 	flags |= fs_flag;
-	// }
+	if fs_flag != 0 {
+		flags |= fs_flag
+	}
 
-	// /* Mkay, now the hard work. Let's create the window. */
+	/* Mkay, now the hard work. Let's create the window. */
 	// cvar_t *gl_msaa_samples = Cvar_Get("r_msaa_samples", "0", CVAR_ARCHIVE);
 
 	for {
@@ -223,7 +218,7 @@ func (T *qClient) glimpInitGraphics(fullscreen, width, height int) (int, int) {
 		}
 	}
 
-	// last_flags = flags;
+	T.glimp_last_flags = flags
 
 	/* Now that we've got a working window print it's mode. */
 	curdisplay, err := T.window.GetDisplayIndex()
@@ -251,7 +246,7 @@ func (T *qClient) glimpInitGraphics(fullscreen, width, height int) (int, int) {
 	// /* No cursor */
 	// SDL_ShowCursor(0);
 
-	// initSuccessful = true;
+	T.glimp_initSuccessful = true
 
 	return width, height
 }
