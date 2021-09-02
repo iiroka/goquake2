@@ -192,7 +192,7 @@ type Game_export_t interface {
 	   not each time a level is loaded.  Persistant data for clients
 	   and the server can be allocated in init */
 	Init()
-	// void (*Shutdown)(void);
+	Shutdown()
 
 	/* each new level entered will cause a call to SpawnEntities */
 	SpawnEntities(mapname, entstring, spawnpoint string) error

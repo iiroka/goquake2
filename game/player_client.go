@@ -64,6 +64,160 @@ func (G *qGame) initClientPersistant(client *gclient_t) {
 	client.pers.connected = true
 }
 
+/* ======================================================================= */
+
+/*
+ * Returns the distance to the
+ * nearest player from the given spot
+ */
+func (G *qGame) playersRangeFromSpot(spot *edict_t) float32 {
+	//  edict_t *player;
+	//  float bestplayerdistance;
+	//  vec3_t v;
+	//  int n;
+	//  float playerdistance;
+
+	if spot == nil {
+		return 0
+	}
+
+	var bestplayerdistance float32 = 9999999
+
+	v := make([]float32, 3)
+	for n := 1; n <= G.maxclients.Int(); n++ {
+		player := &G.g_edicts[n]
+
+		if !player.inuse {
+			continue
+		}
+
+		if player.Health <= 0 {
+			continue
+		}
+
+		shared.VectorSubtract(spot.s.Origin[:], player.s.Origin[:], v)
+		playerdistance := shared.VectorLength(v)
+
+		if playerdistance < bestplayerdistance {
+			bestplayerdistance = playerdistance
+		}
+	}
+
+	return bestplayerdistance
+}
+
+/*
+ * go to a random point, but NOT the two
+ * points closest to other players
+ */
+func (G *qGame) selectRandomDeathmatchSpawnPoint() *edict_t {
+	//  edict_t *spot, *spot1, *spot2;
+	//  int count = 0;
+	//  int selection;
+	//  float range, range1, range2;
+
+	var spot *edict_t = nil
+	var spot1 *edict_t = nil
+	var spot2 *edict_t = nil
+	//  spot = NULL;
+	//  range1 = range2 = 99999;
+	//  spot1 = spot2 = NULL;
+
+	count := 0
+	var range1 float32 = 99999
+	var range2 float32 = 99999
+	for {
+		spot = G.gFind(spot, "Classname", "info_player_deathmatch")
+		if spot == nil {
+			break
+		}
+
+		count += 1
+		r := G.playersRangeFromSpot(spot)
+
+		if r < range1 {
+			range1 = r
+			spot1 = spot
+		} else if r < range2 {
+			range2 = r
+			spot2 = spot
+		}
+	}
+
+	if count == 0 {
+		return nil
+	}
+
+	if count <= 2 {
+		spot1 = nil
+		spot2 = nil
+	} else {
+		if spot1 != nil {
+			count--
+		}
+
+		if spot2 != nil {
+			count--
+		}
+	}
+
+	selection := shared.Randk() % count
+
+	spot = nil
+
+	for {
+		spot = G.gFind(spot, "Classname", "info_player_deathmatch")
+
+		if (spot == spot1) || (spot == spot2) {
+			selection++
+		}
+		if selection <= 0 {
+			break
+		}
+		selection--
+	}
+
+	return spot
+}
+
+func (G *qGame) selectFarthestDeathmatchSpawnPoint() *edict_t {
+
+	var spot *edict_t = nil
+	var bestspot *edict_t = nil
+	var bestdistance float32 = 0
+
+	for {
+		spot = G.gFind(spot, "Classname", "info_player_deathmatch")
+		if spot == nil {
+			break
+		}
+		bestplayerdistance := G.playersRangeFromSpot(spot)
+
+		if bestplayerdistance > bestdistance {
+			bestspot = spot
+			bestdistance = bestplayerdistance
+		}
+	}
+
+	if bestspot != nil {
+		return bestspot
+	}
+
+	/* if there is a player just spawned on each and every start spot/
+	we have no choice to turn one into a telefrag meltdown */
+	spot = G.gFind(nil, "Classname", "info_player_deathmatch")
+
+	return spot
+}
+
+func (G *qGame) selectDeathmatchSpawnPoint() *edict_t {
+	if (G.dmflags.Int() & shared.DF_SPAWN_FARTHEST) != 0 {
+		return G.selectFarthestDeathmatchSpawnPoint()
+	} else {
+		return G.selectRandomDeathmatchSpawnPoint()
+	}
+}
+
 /*
  * Chooses a player start, deathmatch start, coop start, etc
  */
@@ -78,16 +232,14 @@ func (G *qGame) selectSpawnPoint(ent *edict_t, origin, angles []float32) error {
 		return nil
 	}
 
-	//  if (deathmatch->value) {
-	// 	 spot = SelectDeathmatchSpawnPoint();
-	//  }
-	//  else if (coop->value)
-	//  {
-	// 	 spot = SelectCoopSpawnPoint(ent);
-	//  }
+	var spot *edict_t = nil
+	if G.deathmatch.Bool() {
+		spot = G.selectDeathmatchSpawnPoint()
+	} else if G.coop.Bool() {
+		// 	 spot = SelectCoopSpawnPoint(ent);
+	}
 
 	/* find a single player start spot */
-	var spot *edict_t = nil
 	if spot == nil {
 		for {
 			spot = G.gFind(spot, "Classname", "info_player_start")
@@ -196,13 +348,12 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 
 	resp := client_respawn_t{}
 	/* deathmatch wipes most client data every spawn */
-	//  if (deathmatch->value)
-	//  {
-	// 	 resp = client->resp;
-	// 	 memcpy(userinfo, client->pers.userinfo, sizeof(userinfo));
-	// 	 InitClientPersistant(client);
-	// 	 ClientUserinfoChanged(ent, userinfo);
-	//  }
+	if G.deathmatch.Bool() {
+		// 	 resp = client->resp;
+		userinfo := string(client.pers.userinfo)
+		// 	 InitClientPersistant(client);
+		G.clientUserinfoChanged(ent, userinfo)
+	}
 	//  else if (coop->value)
 	//  {
 	// 	 resp = client->resp;

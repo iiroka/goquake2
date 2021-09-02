@@ -26,9 +26,42 @@
 package server
 
 import (
+	"fmt"
 	"goquake2/shared"
 	"strconv"
 )
+
+/*
+ * Responds with short info for broadcast scans
+ * The second parameter should be the current protocol version number.
+ */
+func (T *qServer) svcInfo(args []string, adr shared.Netadr_t) error {
+
+	if T.maxclients.Int() == 1 {
+		return nil /* ignore in single player */
+	}
+
+	version, _ := strconv.ParseInt(args[1], 10, 32)
+
+	var str string
+	if version != shared.PROTOCOL_VERSION {
+		str = fmt.Sprintf("%s: wrong version\n", T.hostname.String)
+	} else {
+		count := 0
+
+		for i := 0; i < T.maxclients.Int(); i++ {
+			if T.svs.clients[i].state >= cs_connected {
+				count++
+			}
+		}
+
+		str = fmt.Sprintf("%16s %8s %2v/%2v\n",
+			T.hostname.String, T.sv.name, count,
+			T.maxclients.Int())
+	}
+
+	return T.common.Netchan_OutOfBandPrint(shared.NS_SERVER, adr, "info\n%s", str)
+}
 
 /*
  * Returns a challenge number that can be used
@@ -65,7 +98,6 @@ func (T *qServer) getChallenge(args []string, adr shared.Netadr_t) error {
 	}
 
 	/* send it back */
-	println("getChallenge %v", T.svs.challenges[index].challenge)
 	return T.common.Netchan_OutOfBandPrint(shared.NS_SERVER, adr, "challenge %v p=34",
 		T.svs.challenges[index].challenge)
 }
@@ -276,10 +308,8 @@ func (T *qServer) connectionlessPacket(msg *shared.QReadbuf, from *shared.Netadr
 	//  {
 	// 	 SVC_Status();
 	//  }
-	//  else if (!strcmp(c, "info"))
-	//  {
-	// 	 SVC_Info();
-	//  }
+	case "info":
+		return T.svcInfo(args, *from)
 	case "getchallenge":
 		return T.getChallenge(args, *from)
 	case "connect":

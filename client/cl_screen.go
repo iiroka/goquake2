@@ -503,16 +503,16 @@ func (T *qClient) scrExecuteLayoutString(s string) {
 		// 		continue;
 		// 	}
 
-		// 	if (!strcmp(token, "num"))
-		// 	{
-		// 		/* draw a number */
-		// 		token = COM_Parse(&s);
-		// 		width = (int)strtol(token, (char **)NULL, 10);
-		// 		token = COM_Parse(&s);
-		// 		value = cl.frame.playerstate.stats[(int)strtol(token, (char **)NULL, 10)];
-		// 		SCR_DrawFieldScaled(x, y, 0, width, value, scale);
-		// 		continue;
-		// 	}
+		if token == "num" {
+			/* draw a number */
+			token, index = shared.COM_Parse(s, index)
+			width, _ := strconv.ParseInt(token, 10, 32)
+			token, index = shared.COM_Parse(s, index)
+			v, _ := strconv.ParseInt(token, 10, 32)
+			value := T.cl.frame.playerstate.Stats[v]
+			T.scrDrawFieldScaled(x, y, 0, int(width), int(value), scale)
+			continue
+		}
 
 		if token == "hnum" {
 			/* health number */

@@ -322,9 +322,6 @@ func (G *qGame) svStepDirection(ent *edict_t, yaw, dist float32) bool {
 }
 
 func (G *qGame) svNewChaseDir(actor, enemy *edict_t, dist float32) {
-	// float deltax, deltay;
-	// float d[3];
-	// float tdir, olddir, turnaround;
 
 	if actor == nil || enemy == nil {
 		return

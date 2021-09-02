@@ -125,3 +125,9 @@ func (G *qGame) NumEdicts() int {
 func (G *qGame) MaxEdicts() int {
 	return G.game.maxentities
 }
+
+func (G *qGame) Shutdown() {
+	G.gi.Dprintf("==== ShutdownGame ====\n")
+	// gi.FreeTags(TAG_LEVEL);
+	// gi.FreeTags(TAG_GAME);
+}

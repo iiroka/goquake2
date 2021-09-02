@@ -28,6 +28,7 @@ package server
 import (
 	"fmt"
 	"goquake2/shared"
+	"strconv"
 	"strings"
 )
 
@@ -231,28 +232,29 @@ func (T *qServer) initGame() error {
 	// 	 edict_t *ent;
 	// 	 char idmaster[32];
 
-	// 	 if (svs.initialized) {
-	// 		 /* cause any connected clients to reconnect */
-	// 		 SV_Shutdown("Server restarted\n", true);
-	// 	 } else {
-	// 		 /* make sure the client is down */
-	// 		 CL_Drop();
-	// 		 SCR_BeginLoadingPlaque();
-	// 	 }
+	if T.svs.initialized {
+		/* cause any connected clients to reconnect */
+		T.Shutdown("Server restarted\n", true)
+	} else {
+		// 		 /* make sure the client is down */
+		// 		 CL_Drop();
+		// 		 SCR_BeginLoadingPlaque();
+	}
 
-	// 	 /* get any latched variable changes (maxclients, etc) */
-	// 	 Cvar_GetLatchedVars();
+	/* get any latched variable changes (maxclients, etc) */
+	T.common.Cvar_GetLatchedVars()
 
 	T.svs.initialized = true
 
+	println("SinglePlayer", T.common.Cvar_Get("singleplayer", "", 0).String)
 	if T.common.Cvar_VariableBool("singleplayer") {
 		T.common.Cvar_FullSet("coop", "0", shared.CVAR_SERVERINFO|shared.CVAR_LATCH)
 		T.common.Cvar_FullSet("deathmatch", "0", shared.CVAR_SERVERINFO|shared.CVAR_LATCH)
 	}
 
 	if T.common.Cvar_VariableBool("coop") && T.common.Cvar_VariableBool("deathmatch") {
-		// 		 T.common.Com_Printf("Deathmatch and Coop both set, disabling Coop\n");
-		// 		 T.common.Cvar_FullSet("coop", "0", shared.CVAR_SERVERINFO | shared.CVAR_LATCH);
+		T.common.Com_Printf("Deathmatch and Coop both set, disabling Coop\n")
+		T.common.Cvar_FullSet("coop", "0", shared.CVAR_SERVERINFO|shared.CVAR_LATCH)
 	}
 
 	// 	 /* dedicated servers can't be single player and are usually DM
@@ -265,14 +267,13 @@ func (T *qServer) initGame() error {
 	// 		 }
 	// 	 }
 
-	// 	 /* init clients */
+	/* init clients */
 	if T.common.Cvar_VariableBool("deathmatch") {
-		// 		 if (maxclients->value <= 1) {
-		// 			 T.common.Cvar_FullSet("maxclients", "8", shared.CVAR_SERVERINFO | shared.CVAR_LATCH);
-		// 		 } else if (maxclients->value > MAX_CLIENTS) {
-		// 			 T.common.Cvar_FullSet("maxclients", va("%i", MAX_CLIENTS), shared.CVAR_SERVERINFO | shared.CVAR_LATCH);
-		// 		 }
-
+		if T.maxclients.Int() <= 1 {
+			T.common.Cvar_FullSet("maxclients", "8", shared.CVAR_SERVERINFO|shared.CVAR_LATCH)
+		} else if T.maxclients.Int() > shared.MAX_CLIENTS {
+			T.common.Cvar_FullSet("maxclients", strconv.Itoa(shared.MAX_CLIENTS), shared.CVAR_SERVERINFO|shared.CVAR_LATCH)
+		}
 		T.common.Cvar_FullSet("singleplayer", "0", 0)
 	} else if T.common.Cvar_VariableBool("coop") {
 		if (T.maxclients.Int() <= 1) || (T.maxclients.Int() > 4) {
@@ -307,7 +308,7 @@ func (T *qServer) initGame() error {
 	// 	 }
 	// 	 else
 	// 	 {
-	// 		 NET_Config((maxclients->value > 1));
+	T.common.NET_Config((T.maxclients.Int() > 1))
 	// 	 }
 
 	/* heartbeats will always be sent to the id master */
@@ -387,7 +388,7 @@ func (T *qServer) svMap(attractloop bool, levelstring string, loadgame bool) err
 	}
 
 	if strings.HasSuffix(level, ".cin") {
-		// 		SCR_BeginLoadingPlaque(); /* for local system */
+		// T.scrBeginLoadingPlaque(); /* for local system */
 		T.svBroadcastCommand("changing\n")
 		if err := T.spawnServer(level, spawnpoint, ss_cinematic, attractloop, loadgame); err != nil {
 			return err

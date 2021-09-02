@@ -32,7 +32,10 @@ package client
 
 import (
 	"fmt"
+	"goquake2/shared"
 	"log"
+	"strconv"
+	"strings"
 )
 
 /* Number of the frames of the spinning quake logo */
@@ -57,6 +60,14 @@ type MenuStr struct {
 	m_game_cursor int
 	cached        bool
 
+	m_popup_string  string
+	m_popup_endtime int
+
+	s_multiplayer_menu            menuframework_t
+	s_join_network_server_action  menuaction_t
+	s_start_network_server_action menuaction_t
+	s_player_setup_action         menuaction_t
+
 	s_game_menu          menuframework_t
 	s_easy_game_action   menuaction_t
 	s_medium_game_action menuaction_t
@@ -67,6 +78,28 @@ type MenuStr struct {
 	s_credits_action     menuaction_t
 	s_mods_action        menuaction_t
 	// static menuseparator_s s_blankline;
+
+	s_joinserver_menu                menuframework_t
+	s_joinserver_search_action       menuaction_t
+	s_joinserver_address_book_action menuaction_t
+	s_joinserver_server_actions      [MAX_LOCAL_SERVERS]menuaction_t
+	local_server_names               [MAX_LOCAL_SERVERS]string
+	local_server_netadr_strings      [MAX_LOCAL_SERVERS]string
+	m_num_servers                    int
+
+	s_startserver_menu             menuframework_t
+	mapnames                       []string
+	nummaps                        int
+	s_startserver_start_action     menuaction_t
+	s_startserver_dmoptions_action menuaction_t
+	s_timelimit_field              menufield_t
+	s_fraglimit_field              menufield_t
+	s_capturelimit_field           menufield_t
+	s_maxclients_field             menufield_t
+	s_hostname_field               menufield_t
+	//  static menulist_s s_startmap_list;
+	//  static menulist_s s_rules_box;
+
 }
 
 func (T *qClient) mBanner(name string) {
@@ -308,6 +341,31 @@ func (T *qClient) defaultMenuKey(m *menuframework_t, key int) string {
 }
 
 /*
+ * Draws one solid graphics character cx and cy are in 320*240
+ * coordinates, and will be centered on higher res screens.
+ */
+func (T *qClient) mDrawCharacter(cx, cy, num int) {
+	scale := T.scrGetMenuScale()
+	T.Draw_CharScaled(cx+(int(T.viddef.width-int(320*scale))>>1), cy+(int(T.viddef.height-int(240*scale))>>1), num, scale)
+}
+
+func (T *qClient) mPrint(x, y int, str string) {
+	scale := T.scrGetMenuScale()
+
+	cx := x
+	cy := y
+	for index := 0; index < len(str); index++ {
+		if str[index] == '\n' {
+			cx = x
+			cy += 8
+		} else {
+			T.mDrawCharacter(int(float32(cx)*scale), int(float32(cy)*scale), int(str[index])+128)
+			cx += 8
+		}
+	}
+}
+
+/*
  * Draws an animating cursor with the point at
  * x,y. The pic will extend to the left of x,
  * and both above and below y.
@@ -328,6 +386,96 @@ func (T *qClient) mDrawCursor(x, y, f int) {
 
 	cursorname := fmt.Sprintf("m_cursor%d", f)
 	T.Draw_PicScaled(int(float32(x)*scale), int(float32(y)*scale), cursorname, scale)
+}
+
+func (T *qClient) mDrawTextBox(x, y, width, lines int) {
+	// int cx, cy;
+	// int n;
+	scale := T.scrGetMenuScale()
+
+	/* draw left side */
+	cx := x
+	cy := y
+	T.mDrawCharacter(int(float32(cx)*scale), int(float32(cy)*scale), 1)
+
+	for n := 0; n < lines; n++ {
+		cy += 8
+		T.mDrawCharacter(int(float32(cx)*scale), int(float32(cy)*scale), 4)
+	}
+
+	T.mDrawCharacter(int(float32(cx)*scale), int(float32(cy)*scale+8*scale), 7)
+
+	/* draw middle */
+	cx += 8
+
+	for width > 0 {
+		cy = y
+		T.mDrawCharacter(int(float32(cx)*scale), int(float32(cy)*scale), 2)
+
+		for n := 0; n < lines; n++ {
+			cy += 8
+			T.mDrawCharacter(int(float32(cx)*scale), int(float32(cy)*scale), 5)
+		}
+
+		T.mDrawCharacter(int(float32(cx)*scale), int(float32(cy)*scale+8*scale), 8)
+		width -= 1
+		cx += 8
+	}
+
+	/* draw right side */
+	cy = y
+	T.mDrawCharacter(int(float32(cx)*scale), int(float32(cy)*scale), 3)
+
+	for n := 0; n < lines; n++ {
+		cy += 8
+		T.mDrawCharacter(int(float32(cx)*scale), int(float32(cy)*scale), 6)
+	}
+
+	T.mDrawCharacter(int(float32(cx)*scale), int(float32(cy)*scale+8*scale), 9)
+}
+
+func (T *qClient) mPopup() {
+
+	if len(T.menu.m_popup_string) == 0 {
+		return
+	}
+
+	if T.menu.m_popup_endtime != 0 && T.menu.m_popup_endtime < T.cls.realtime {
+		T.menu.m_popup_string = ""
+		return
+	}
+
+	// if (!R_EndWorldRenderpass()) {
+	//     return;
+	// }
+
+	width := 0
+	lines := 0
+	n := 0
+	for str := range T.menu.m_popup_string {
+		if str == '\n' {
+			lines++
+			n = 0
+		} else {
+			n++
+			if n > width {
+				width = n
+			}
+		}
+	}
+	if n != 0 {
+		lines++
+	}
+
+	if width != 0 {
+		width += 2
+
+		x := (320 - (width+2)*8) / 2
+		y := (240 - (lines+2)*8) / 3
+
+		T.mDrawTextBox(x, y, width, lines)
+		T.mPrint(x+16, y+8, T.menu.m_popup_string)
+	}
 }
 
 /*
@@ -408,7 +556,7 @@ func m_Main_Key(T *qClient, key int) string {
 			m_Menu_Game_f([]string{}, T)
 
 		case 1:
-			// M_Menu_Multiplayer_f()
+			m_Menu_Multiplayer_f([]string{}, T)
 
 		case 2:
 			// M_Menu_Options_f()
@@ -426,6 +574,75 @@ func m_Main_Key(T *qClient, key int) string {
 
 func m_Menu_Main_f(args []string, a interface{}) error {
 	a.(*qClient).mPushMenu(m_Main_Draw, m_Main_Key, "main")
+	return nil
+}
+
+/*
+ * MULTIPLAYER MENU
+ */
+
+func multiplayer_MenuDraw(T *qClient) {
+	T.mBanner("m_banner_multiplayer")
+
+	T.menu.s_multiplayer_menu.adjustCursor(1)
+	T.menu.s_multiplayer_menu.draw()
+}
+
+//  static void
+//  PlayerSetupFunc(void *unused)
+//  {
+// 	 M_Menu_PlayerConfig_f();
+//  }
+
+func joinNetworkServerFunc(data *menucommon_t) {
+	m_Menu_JoinServer_f([]string{}, data.parent.owner)
+}
+
+func startNetworkServerFunc(data *menucommon_t) {
+	m_Menu_StartServer_f([]string{}, data.parent.owner)
+}
+
+func (T *qClient) multiplayer_MenuInit() {
+	scale := T.scrGetMenuScale()
+
+	T.menu.s_multiplayer_menu.x = int(float32(T.viddef.width)*0.50) - int(64*scale)
+	T.menu.s_multiplayer_menu.owner = T
+
+	T.menu.s_join_network_server_action.flags = QMF_LEFT_JUSTIFY
+	T.menu.s_join_network_server_action.x = 0
+	T.menu.s_join_network_server_action.y = 0
+	T.menu.s_join_network_server_action.name = " join network server"
+	T.menu.s_join_network_server_action.callback = joinNetworkServerFunc
+
+	T.menu.s_start_network_server_action.flags = QMF_LEFT_JUSTIFY
+	T.menu.s_start_network_server_action.x = 0
+	T.menu.s_start_network_server_action.y = 10
+	T.menu.s_start_network_server_action.name = " start network server"
+	T.menu.s_start_network_server_action.callback = startNetworkServerFunc
+
+	T.menu.s_player_setup_action.flags = QMF_LEFT_JUSTIFY
+	T.menu.s_player_setup_action.x = 0
+	T.menu.s_player_setup_action.y = 20
+	T.menu.s_player_setup_action.name = " player setup"
+	// T.menu.s_player_setup_action.callback = PlayerSetupFunc
+
+	T.menu.s_multiplayer_menu.addItem(&T.menu.s_join_network_server_action)
+	T.menu.s_multiplayer_menu.addItem(&T.menu.s_start_network_server_action)
+	T.menu.s_multiplayer_menu.addItem(&T.menu.s_player_setup_action)
+
+	T.menu.s_multiplayer_menu.setStatusBar("")
+
+	T.menu.s_multiplayer_menu.center()
+}
+
+func multiplayer_MenuKey(T *qClient, key int) string {
+	return T.defaultMenuKey(&T.menu.s_multiplayer_menu, key)
+}
+
+func m_Menu_Multiplayer_f(args []string, a interface{}) error {
+	q := a.(*qClient)
+	q.multiplayer_MenuInit()
+	q.mPushMenu(multiplayer_MenuDraw, multiplayer_MenuKey, "multiplayer")
 	return nil
 }
 
@@ -548,20 +765,565 @@ func m_Menu_Game_f(args []string, a interface{}) error {
 	return nil
 }
 
+/*
+ * JOIN SERVER MENU
+ */
+
+const MAX_LOCAL_SERVERS = 8
+
+//  int m_num_servers;
+const NO_SERVER_STRING = "<no server>"
+
+//  /* network address */
+//  static netadr_t local_server_netadr[MAX_LOCAL_SERVERS];
+
+//  /* user readable information */
+//  static char local_server_names[MAX_LOCAL_SERVERS][80];
+//  static char local_server_netadr_strings[MAX_LOCAL_SERVERS][80];
+
+//  void
+//  M_AddToServerList(netadr_t adr, char *info)
+//  {
+// 	 char *s;
+// 	 int i;
+
+// 	 if (m_num_servers == MAX_LOCAL_SERVERS)
+// 	 {
+// 		 return;
+// 	 }
+
+// 	 while (*info == ' ')
+// 	 {
+// 		 info++;
+// 	 }
+
+// 	 s = NET_AdrToString(adr);
+
+// 	 /* ignore if duplicated */
+// 	 for (i = 0; i < m_num_servers; i++)
+// 	 {
+// 		 if (!strcmp(local_server_names[i], info) &&
+// 			 !strcmp(local_server_netadr_strings[i], s))
+// 		 {
+// 			 return;
+// 		 }
+// 	 }
+
+// 	 local_server_netadr[m_num_servers] = adr;
+// 	 Q_strlcpy(local_server_names[m_num_servers], info,
+// 			 sizeof(local_server_names[m_num_servers]));
+// 	 Q_strlcpy(local_server_netadr_strings[m_num_servers], s,
+// 			 sizeof(local_server_netadr_strings[m_num_servers]));
+// 	 m_num_servers++;
+//  }
+
+//  static void
+//  JoinServerFunc(void *self)
+//  {
+// 	 char buffer[128];
+// 	 int index;
+
+// 	 index = (int)((menuaction_s *)self - s_joinserver_server_actions);
+
+// 	 if (Q_stricmp(local_server_names[index], NO_SERVER_STRING) == 0)
+// 	 {
+// 		 return;
+// 	 }
+
+// 	 if (index >= m_num_servers)
+// 	 {
+// 		 return;
+// 	 }
+
+// 	 Com_sprintf(buffer, sizeof(buffer), "connect %s\n",
+// 				 NET_AdrToString(local_server_netadr[index]));
+// 	 Cbuf_AddText(buffer);
+// 	 M_ForceMenuOff();
+//  }
+
+//  static void
+//  AddressBookFunc(void *self)
+//  {
+// 	 M_Menu_AddressBook_f();
+//  }
+
+func (T *qClient) searchLocalGames() {
+
+	T.menu.m_num_servers = 0
+
+	for i := 0; i < MAX_LOCAL_SERVERS; i++ {
+		T.menu.local_server_names[i] = NO_SERVER_STRING
+		T.menu.local_server_netadr_strings[i] = ""
+	}
+
+	T.menu.m_popup_string = "Searching for local servers. This\n" +
+		"could take up to a minute, so\n" +
+		"please be patient."
+	T.menu.m_popup_endtime = T.cls.realtime + 2000
+	T.mPopup()
+
+	/* the text box won't show up unless we do a buffer swap */
+	T.R_EndFrame()
+
+	/* send out info packets */
+	T.clPingServers()
+}
+
+func searchLocalGamesFunc(data *menucommon_t) {
+	data.parent.owner.searchLocalGames()
+}
+
+func (T *qClient) joinServer_MenuInit() {
+	// 	 int i;
+	scale := T.scrGetMenuScale()
+
+	T.menu.s_joinserver_menu.x = int(float32(T.viddef.width)*0.50) - int(120*scale)
+	T.menu.s_joinserver_menu.owner = T
+
+	// 	 s_joinserver_address_book_action.generic.type = MTYPE_ACTION;
+	T.menu.s_joinserver_address_book_action.name = "address book"
+	T.menu.s_joinserver_address_book_action.flags = QMF_LEFT_JUSTIFY
+	T.menu.s_joinserver_address_book_action.x = 0
+	T.menu.s_joinserver_address_book_action.y = 0
+	// 	 s_joinserver_address_book_action.generic.callback = AddressBookFunc;
+
+	// 	 s_joinserver_search_action.generic.type = MTYPE_ACTION;
+	T.menu.s_joinserver_search_action.name = "refresh server list"
+	T.menu.s_joinserver_search_action.flags = QMF_LEFT_JUSTIFY
+	T.menu.s_joinserver_search_action.x = 0
+	T.menu.s_joinserver_search_action.y = 10
+	T.menu.s_joinserver_search_action.callback = searchLocalGamesFunc
+	// T.menu.s_joinserver_search_action.statusbar = "search for servers"
+
+	// 	 s_joinserver_server_title.generic.type = MTYPE_SEPARATOR;
+	// 	 s_joinserver_server_title.generic.name = "connect to...";
+	// 	 s_joinserver_server_title.generic.y = 30;
+	// 	 s_joinserver_server_title.generic.x = 80 * scale;
+
+	for i := 0; i < MAX_LOCAL_SERVERS; i++ {
+		// 		 s_joinserver_server_actions[i].generic.type = MTYPE_ACTION;
+		T.menu.s_joinserver_server_actions[i].name = T.menu.local_server_names[i]
+		T.menu.s_joinserver_server_actions[i].flags = QMF_LEFT_JUSTIFY
+		T.menu.s_joinserver_server_actions[i].x = 0
+		T.menu.s_joinserver_server_actions[i].y = 40 + i*10
+		// 		 s_joinserver_server_actions[i].generic.callback = JoinServerFunc;
+		// 		 s_joinserver_server_actions[i].generic.statusbar =
+		// 			 local_server_netadr_strings[i];
+	}
+
+	T.menu.s_joinserver_menu.addItem(&T.menu.s_joinserver_address_book_action)
+	// T.menu.s_joinserver_menu.addItem(&T.menu.s_joinserver_server_title)
+	T.menu.s_joinserver_menu.addItem(&T.menu.s_joinserver_search_action)
+
+	for i := 0; i < MAX_LOCAL_SERVERS; i++ {
+		T.menu.s_joinserver_menu.addItem(&T.menu.s_joinserver_server_actions[i])
+	}
+
+	T.menu.s_joinserver_menu.center()
+
+	// 	 SearchLocalGames();
+}
+
+func joinServer_MenuDraw(T *qClient) {
+	T.mBanner("m_banner_join_server")
+	T.menu.s_joinserver_menu.draw()
+	T.mPopup()
+}
+
+func joinServer_MenuKey(T *qClient, key int) string {
+	if len(T.menu.m_popup_string) > 0 {
+		T.menu.m_popup_string = ""
+		return ""
+	}
+	return T.defaultMenuKey(&T.menu.s_joinserver_menu, key)
+}
+
+func m_Menu_JoinServer_f(args []string, a interface{}) error {
+	T := a.(*qClient)
+	T.joinServer_MenuInit()
+	T.mPushMenu(joinServer_MenuDraw, joinServer_MenuKey, "joinserver")
+	return nil
+}
+
+/*
+ * START SERVER MENU
+ */
+
+//  static void
+//  DMOptionsFunc(void *self)
+//  {
+// 	 M_Menu_DMOptions_f();
+//  }
+
+//  static void
+//  RulesChangeFunc(void *self)
+//  {
+// 	 /* Deathmatch */
+// 	 if (s_rules_box.curvalue == 0)
+// 	 {
+// 		 s_maxclients_field.generic.statusbar = NULL;
+// 		 s_startserver_dmoptions_action.generic.statusbar = NULL;
+// 	 }
+
+// 	 /* Ground Zero game modes */
+// 	 else if (M_IsGame("rogue"))
+// 	 {
+// 		 if (s_rules_box.curvalue == 2)
+// 		 {
+// 			 s_maxclients_field.generic.statusbar = NULL;
+// 			 s_startserver_dmoptions_action.generic.statusbar = NULL;
+// 		 }
+// 	 }
+//  }
+
+func startServerActionFunc(data *menucommon_t) {
+	Q := data.parent.owner
+
+	// 	 char startmap[1024];
+	// 	 float timelimit;
+	// 	 float fraglimit;
+	// 	 float capturelimit;
+	// 	 float maxclients;
+	// 	 char *spot;
+
+	startmap := strings.Split(Q.menu.mapnames[0], "\n")[1]
+	// 	 strcpy(startmap, strchr(mapnames[s_startmap_list.curvalue], '\n') + 1);
+
+	maxclients, _ := strconv.ParseInt(Q.menu.s_maxclients_field.buffer, 10, 32)
+	timelimit, _ := strconv.ParseInt(Q.menu.s_timelimit_field.buffer, 10, 32)
+	fraglimit, _ := strconv.ParseInt(Q.menu.s_fraglimit_field.buffer, 10, 32)
+
+	// 	 if (M_IsGame("ctf"))
+	// 	 {
+	// 		 capturelimit = (float)strtod(s_capturelimit_field.buffer, (char **)NULL);
+	// 		 Cvar_SetValue("capturelimit", ClampCvar(0, capturelimit, capturelimit));
+	// 	 }
+
+	Q.common.Cvar_Set("maxclients", strconv.Itoa(clampCvarInt(0, int(maxclients), int(maxclients))))
+	Q.common.Cvar_Set("timelimit", strconv.Itoa(clampCvarInt(0, int(timelimit), int(timelimit))))
+	Q.common.Cvar_Set("fraglimit", strconv.Itoa(clampCvarInt(0, int(fraglimit), int(fraglimit))))
+	// 	 Cvar_Set("hostname", s_hostname_field.buffer);
+
+	// 	 if ((s_rules_box.curvalue < 2) || M_IsGame("rogue"))
+	// 	 {
+	// 		 Cvar_SetValue("deathmatch", (float)!s_rules_box.curvalue);
+	// 		 Cvar_SetValue("coop", (float)s_rules_box.curvalue);
+	// 	 }
+	// 	 else
+	// 	 {
+	Q.common.Cvar_Set("singleplayer", "0")
+	Q.common.Cvar_Set("deathmatch", "1") /* deathmatch is always true for rogue games */
+	Q.common.Cvar_Set("coop", "0")       /* This works for at least the main game and both addons */
+	// 	 }
+
+	// 	 spot = NULL;
+
+	// 	 if (s_rules_box.curvalue == 1)
+	// 	 {
+	// 		 if (Q_stricmp(startmap, "bunk1") == 0)
+	// 		 {
+	// 			 spot = "start";
+	// 		 }
+
+	// 		 else if (Q_stricmp(startmap, "mintro") == 0)
+	// 		 {
+	// 			 spot = "start";
+	// 		 }
+
+	// 		 else if (Q_stricmp(startmap, "fact1") == 0)
+	// 		 {
+	// 			 spot = "start";
+	// 		 }
+
+	// 		 else if (Q_stricmp(startmap, "power1") == 0)
+	// 		 {
+	// 			 spot = "pstart";
+	// 		 }
+
+	// 		 else if (Q_stricmp(startmap, "biggun") == 0)
+	// 		 {
+	// 			 spot = "bstart";
+	// 		 }
+
+	// 		 else if (Q_stricmp(startmap, "hangar1") == 0)
+	// 		 {
+	// 			 spot = "unitstart";
+	// 		 }
+
+	// 		 else if (Q_stricmp(startmap, "city1") == 0)
+	// 		 {
+	// 			 spot = "unitstart";
+	// 		 }
+
+	// 		 else if (Q_stricmp(startmap, "boss1") == 0)
+	// 		 {
+	// 			 spot = "bosstart";
+	// 		 }
+	// 	 }
+
+	// 	 if (spot)
+	// 	 {
+	// 		 if (Com_ServerState())
+	// 		 {
+	// 			 Cbuf_AddText("disconnect\n");
+	// 		 }
+
+	// 		 Cbuf_AddText(va("gamemap \"*%s$%s\"\n", startmap, spot));
+	// 	 }
+	// 	 else
+	// 	 {
+	Q.common.Cbuf_AddText(fmt.Sprintf("map %s\n", startmap))
+	// 	 }
+
+	Q.mForceMenuOff()
+}
+
+func (T *qClient) startServer_MenuInit() error {
+	// 	 static const char *dm_coop_names[] =
+	// 	 {
+	// 		 "deathmatch",
+	// 		 "cooperative",
+	// 		 0
+	// 	 };
+	// 	 static const char *dm_coop_names_rogue[] =
+	// 	 {
+	// 		 "deathmatch",
+	// 		 "cooperative",
+	// 		 "tag",
+	// 		 0
+	// 	 };
+
+	// 	 char *buffer;
+	// 	 char *s;
+	scale := T.scrGetMenuScale()
+
+	/* initialize list of maps once, reuse it afterwards (=> it isn't freed unless the game dir is changed) */
+	if T.menu.mapnames == nil || len(T.menu.mapnames) == 0 {
+		// 		 int i, length;
+		// 		 size_t nummapslen;
+
+		T.menu.mapnames = []string{}
+		T.menu.nummaps = 0
+		// 		 s_startmap_list.curvalue = 0;
+
+		/* load the list of map names */
+		buffer, err := T.common.LoadFile("maps.lst")
+		if err != nil || buffer == nil {
+			return T.common.Com_Error(shared.ERR_DROP, "couldn't find maps.lst\n")
+		}
+
+		s := string(buffer)
+		i := 0
+
+		for i < len(s) {
+			if s[i] == '\n' {
+				T.menu.nummaps++
+			}
+			i++
+		}
+
+		if T.menu.nummaps == 0 {
+			return T.common.Com_Error(shared.ERR_DROP, "no maps in maps.lst\n")
+		}
+
+		T.menu.mapnames = make([]string, T.menu.nummaps)
+		index := 0
+
+		for i := 0; i < T.menu.nummaps; i++ {
+			// 			 char shortname[MAX_TOKEN_CHARS];
+			// 			 char longname[MAX_TOKEN_CHARS];
+			// 			 char scratch[200];
+			// 			 int j, l;
+
+			shortname, indx2 := shared.COM_Parse(s, index)
+			// 			 strcpy(shortname, COM_Parse(&s));
+			// 			 l = strlen(shortname);
+
+			// 			 for (j = 0; j < l; j++)
+			// 			 {
+			// 				 shortname[j] = toupper((unsigned char)shortname[j]);
+			// 			 }
+
+			longname, indx3 := shared.COM_Parse(s, indx2)
+
+			T.menu.mapnames[i] = fmt.Sprintf("%s\n%s", longname, shortname)
+			println(T.menu.mapnames[i])
+			index = indx3
+		}
+	}
+
+	/* initialize the menu stuff */
+	T.menu.s_startserver_menu.x = int(float32(T.viddef.width) * 0.50)
+	T.menu.s_startserver_menu.owner = T
+
+	// 	 s_startmap_list.generic.type = MTYPE_SPINCONTROL;
+	// 	 s_startmap_list.generic.x = 0;
+
+	// 	 if (M_IsGame("ctf"))
+	// 		 s_startmap_list.generic.y = -8;
+	// 	 else
+	// 		 s_startmap_list.generic.y = 0;
+
+	// 	 s_startmap_list.generic.name = "initial map";
+	// 	 s_startmap_list.itemnames = (const char **)mapnames;
+
+	// 	 if (M_IsGame("ctf"))
+	// 	 {
+	// 		 s_capturelimit_field.generic.type = MTYPE_FIELD;
+	// 		 s_capturelimit_field.generic.name = "capture limit";
+	// 		 s_capturelimit_field.generic.flags = QMF_NUMBERSONLY;
+	// 		 s_capturelimit_field.generic.x = 0;
+	// 		 s_capturelimit_field.generic.y = 18;
+	// 		 s_capturelimit_field.generic.statusbar = "0 = no limit";
+	// 		 s_capturelimit_field.length = 3;
+	// 		 s_capturelimit_field.visible_length = 3;
+	// 		 strcpy(s_capturelimit_field.buffer, Cvar_VariableString("capturelimit"));
+	// 	 }
+	// 	 else
+	// 	 {
+	// 		 s_rules_box.generic.type = MTYPE_SPINCONTROL;
+	// 		 s_rules_box.generic.x = 0;
+	// 		 s_rules_box.generic.y = 20;
+	// 		 s_rules_box.generic.name = "rules";
+
+	// 		 /* Ground Zero games only available with rogue game */
+	// 		 if (M_IsGame("rogue"))
+	// 		 {
+	// 			 s_rules_box.itemnames = dm_coop_names_rogue;
+	// 		 }
+	// 		 else
+	// 		 {
+	// 			 s_rules_box.itemnames = dm_coop_names;
+	// 		 }
+
+	// 		 if (Cvar_VariableValue("coop"))
+	// 		 {
+	// 			 s_rules_box.curvalue = 1;
+	// 		 }
+	// 		 else
+	// 		 {
+	// 			 s_rules_box.curvalue = 0;
+	// 		 }
+
+	// 		 s_rules_box.generic.callback = RulesChangeFunc;
+	// 	 }
+
+	// 	 s_timelimit_field.generic.type = MTYPE_FIELD;
+	T.menu.s_timelimit_field.name = "time limit"
+	T.menu.s_timelimit_field.flags = QMF_NUMBERSONLY
+	T.menu.s_timelimit_field.x = 0
+	T.menu.s_timelimit_field.y = 36
+	T.menu.s_timelimit_field.statusbar = "0 = no limit"
+	T.menu.s_timelimit_field.length = 3
+	T.menu.s_timelimit_field.visible_length = 3
+	T.menu.s_timelimit_field.buffer = T.common.Cvar_VariableString("timelimit")
+
+	// 	 s_fraglimit_field.generic.type = MTYPE_FIELD;
+	T.menu.s_fraglimit_field.name = "frag limit"
+	T.menu.s_fraglimit_field.flags = QMF_NUMBERSONLY
+	T.menu.s_fraglimit_field.x = 0
+	T.menu.s_fraglimit_field.y = 54
+	T.menu.s_fraglimit_field.statusbar = "0 = no limit"
+	T.menu.s_fraglimit_field.length = 3
+	T.menu.s_fraglimit_field.visible_length = 3
+	T.menu.s_fraglimit_field.buffer = T.common.Cvar_VariableString("fraglimit")
+
+	/* maxclients determines the maximum number of players that can join
+	the game. If maxclients is only "1" then we should default the menu
+	option to 8 players, otherwise use whatever its current value is.
+	Clamping will be done when the server is actually started. */
+	T.menu.s_maxclients_field.name = "max players"
+	T.menu.s_maxclients_field.flags = QMF_NUMBERSONLY
+	T.menu.s_maxclients_field.x = 0
+	T.menu.s_maxclients_field.y = 72
+	T.menu.s_maxclients_field.statusbar = ""
+	T.menu.s_maxclients_field.length = 3
+	T.menu.s_maxclients_field.visible_length = 3
+
+	if T.common.Cvar_VariableInt("maxclients") == 1 {
+		T.menu.s_maxclients_field.buffer = "8"
+	} else {
+		T.menu.s_maxclients_field.buffer = T.common.Cvar_VariableString("maxclients")
+	}
+
+	// 	 s_hostname_field.generic.type = MTYPE_FIELD;
+	// 	 s_hostname_field.generic.name = "hostname";
+	// 	 s_hostname_field.generic.flags = 0;
+	// 	 s_hostname_field.generic.x = 0;
+	// 	 s_hostname_field.generic.y = 90;
+	// 	 s_hostname_field.generic.statusbar = NULL;
+	// 	 s_hostname_field.length = 12;
+	// 	 s_hostname_field.visible_length = 12;
+	// 	 strcpy(s_hostname_field.buffer, Cvar_VariableString("hostname"));
+	// 	 s_hostname_field.cursor = strlen(s_hostname_field.buffer);
+
+	// 	 s_startserver_dmoptions_action.generic.type = MTYPE_ACTION;
+	T.menu.s_startserver_dmoptions_action.name = " deathmatch flags"
+	T.menu.s_startserver_dmoptions_action.flags = QMF_LEFT_JUSTIFY
+	T.menu.s_startserver_dmoptions_action.x = int(24 * scale)
+	T.menu.s_startserver_dmoptions_action.y = 108
+	//  s_startserver_dmoptions_action.generic.statusbar = NULL;
+	// 	 s_startserver_dmoptions_action.generic.callback = DMOptionsFunc;
+
+	// 	 s_startserver_start_action.generic.type = MTYPE_ACTION;
+	T.menu.s_startserver_start_action.name = " begin"
+	T.menu.s_startserver_start_action.flags = QMF_LEFT_JUSTIFY
+	T.menu.s_startserver_start_action.x = int(24 * scale)
+	T.menu.s_startserver_start_action.y = 128
+	T.menu.s_startserver_start_action.callback = startServerActionFunc
+
+	// 	 Menu_AddItem(&s_startserver_menu, &s_startmap_list);
+
+	// 	 if (M_IsGame("ctf"))
+	// 		 Menu_AddItem(&s_startserver_menu, &s_capturelimit_field);
+	// 	 else
+	// 		 Menu_AddItem(&s_startserver_menu, &s_rules_box);
+
+	T.menu.s_startserver_menu.addItem(&T.menu.s_timelimit_field)
+	T.menu.s_startserver_menu.addItem(&T.menu.s_fraglimit_field)
+	T.menu.s_startserver_menu.addItem(&T.menu.s_maxclients_field)
+	// 	 Menu_AddItem(&s_startserver_menu, &s_hostname_field);
+	T.menu.s_startserver_menu.addItem(&T.menu.s_startserver_dmoptions_action)
+	T.menu.s_startserver_menu.addItem(&T.menu.s_startserver_start_action)
+
+	T.menu.s_startserver_menu.center()
+
+	// 	 /* call this now to set proper inital state */
+	// 	 RulesChangeFunc(NULL);
+	return nil
+}
+
+func startServer_MenuDraw(T *qClient) {
+	T.menu.s_startserver_menu.draw()
+}
+
+func startServer_MenuKey(T *qClient, key int) string {
+	return T.defaultMenuKey(&T.menu.s_startserver_menu, key)
+}
+
+func m_Menu_StartServer_f(args []string, a interface{}) error {
+	T := a.(*qClient)
+	if err := T.startServer_MenuInit(); err != nil {
+		return err
+	}
+	T.mPushMenu(startServer_MenuDraw, startServer_MenuKey, "startserver")
+	return nil
+}
+
 func (T *qClient) mInit() {
 	T.common.Cmd_AddCommand("menu_main", m_Menu_Main_f, T)
 	T.common.Cmd_AddCommand("menu_game", m_Menu_Game_f, T)
 	// Cmd_AddCommand("menu_loadgame", M_Menu_LoadGame_f);
 	// Cmd_AddCommand("menu_savegame", M_Menu_SaveGame_f);
-	// Cmd_AddCommand("menu_joinserver", M_Menu_JoinServer_f);
+	T.common.Cmd_AddCommand("menu_joinserver", m_Menu_JoinServer_f, T)
 	// Cmd_AddCommand("menu_addressbook", M_Menu_AddressBook_f);
-	// Cmd_AddCommand("menu_startserver", M_Menu_StartServer_f);
+	T.common.Cmd_AddCommand("menu_startserver", m_Menu_StartServer_f, T)
 	// Cmd_AddCommand("menu_dmoptions", M_Menu_DMOptions_f);
 	// Cmd_AddCommand("menu_playerconfig", M_Menu_PlayerConfig_f);
 	// Cmd_AddCommand("menu_downloadoptions", M_Menu_DownloadOptions_f);
 	// Cmd_AddCommand("menu_credits", M_Menu_Credits_f);
 	// Cmd_AddCommand("menu_mods", M_Menu_Mods_f);
-	// Cmd_AddCommand("menu_multiplayer", M_Menu_Multiplayer_f);
+	T.common.Cmd_AddCommand("menu_multiplayer", m_Menu_Multiplayer_f, T)
 	// Cmd_AddCommand("menu_video", M_Menu_Video_f);
 	// Cmd_AddCommand("menu_options", M_Menu_Options_f);
 	// Cmd_AddCommand("menu_keys", M_Menu_Keys_f);
@@ -611,4 +1373,16 @@ func (T *qClient) mKeydown(key int) {
 		//         S_StartLocalSound((char *)s);
 		//     }
 	}
+}
+
+func clampCvarInt(min, max, value int) int {
+	if value < min {
+		return min
+	}
+
+	if value > max {
+		return max
+	}
+
+	return value
 }

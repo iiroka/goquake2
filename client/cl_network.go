@@ -26,7 +26,9 @@
 package client
 
 import (
+	"fmt"
 	"goquake2/shared"
+	"strconv"
 	"strings"
 )
 
@@ -256,6 +258,65 @@ func cl_Reconnect_f(args []string, a interface{}) error {
 	return nil
 }
 
+func (T *qClient) clPingServers() {
+	// int i;
+	// netadr_t adr;
+	// char name[32];
+	// const char *adrstring;
+	// cvar_t *noudp;
+	// cvar_t *noipx;
+
+	T.common.NET_Config(true) /* allow remote but do we even need lokal pings? */
+
+	/* send a broadcast packet */
+	T.common.Com_Printf("pinging broadcast...\n")
+
+	noudp := T.common.Cvar_Get("noudp", "0", shared.CVAR_NOSET)
+
+	if !noudp.Bool() {
+		adr := shared.Netadr_t{}
+		adr.Type = shared.NA_BROADCAST
+		adr.Port = shared.PORT_SERVER
+		T.common.Netchan_OutOfBandPrint(shared.NS_CLIENT, adr, fmt.Sprintf("info %v", shared.PROTOCOL_VERSION))
+
+		T.common.Com_Printf("pinging multicast...\n")
+		adr.Type = shared.NA_MULTICAST6
+		adr.Port = shared.PORT_SERVER
+		T.common.Netchan_OutOfBandPrint(shared.NS_CLIENT, adr, fmt.Sprintf("info %v", shared.PROTOCOL_VERSION))
+	}
+
+	// noipx = Cvar_Get("noipx", "0", CVAR_NOSET);
+
+	// if (!noipx->value) {
+	// 	adr.type = NA_BROADCAST_IPX;
+	// 	adr.port = BigShort(PORT_SERVER);
+	// 	Netchan_OutOfBandPrint(NS_CLIENT, adr, va("info %i", PROTOCOL_VERSION));
+	// }
+
+	/* send a packet to each address book entry */
+	for i := 0; i < 16; i++ {
+		name := fmt.Sprintf("adr%v", i)
+		adrstring := T.common.Cvar_VariableString(name)
+
+		if len(adrstring) == 0 {
+			continue
+		}
+
+		T.common.Com_Printf("pinging %s...\n", adrstring)
+
+		// 	if (!NET_StringToAdr(adrstring, &adr)) {
+		// 		Com_Printf("Bad address: %s\n", adrstring);
+		// 		continue;
+		// 	}
+
+		// 	if (!adr.port) {
+		// 		adr.port = BigShort(PORT_SERVER);
+		// 	}
+
+		// 	Netchan_OutOfBandPrint(NS_CLIENT, adr, va("info %i", PROTOCOL_VERSION));
+	}
+}
+
 /*
  * Responses to broadcasts, etc
  */
@@ -380,13 +441,13 @@ func (T *qClient) connectionlessPacket(msg *shared.QReadbuf, from *shared.Netadr
 	// 		 return;
 	// 	 }
 
-	// 	 /* challenge from the server we are connecting to */
-	// 	 if (!strcmp(c, "challenge"))
-	// 	 {
-	// 		 cls.challenge = (int)strtol(Cmd_Argv(1), (char **)NULL, 10);
-	// 		 CL_SendConnectPacket();
-	// 		 return;
-	// 	 }
+	/* challenge from the server we are connecting to */
+	if args[0] == "challenge" {
+		i, _ := strconv.ParseInt(args[1], 10, 32)
+		T.cls.challenge = int(i)
+		T.sendConnectPacket()
+		return nil
+	}
 
 	// 	 /* echo request from server */
 	// 	 if (!strcmp(c, "echo"))

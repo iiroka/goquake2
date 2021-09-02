@@ -53,6 +53,12 @@ const (
 	MAX_ITEMS       = 256
 	MAX_GENERAL     = (MAX_CLIENTS * 2) /* general config strings */
 
+	/* game print flags */
+	PRINT_LOW    = 0 /* pickup messages */
+	PRINT_MEDIUM = 1 /* death messages */
+	PRINT_HIGH   = 2 /* critical messages */
+	PRINT_CHAT   = 3 /* chat messages */
+
 	ERR_FATAL      = 0 /* exit the entire game with a popup window */
 	ERR_DROP       = 1 /* print to console and disconnect from game */
 	ERR_DISCONNECT = 2 /* don't kill server */
@@ -1402,6 +1408,7 @@ type QCommon interface {
 	Cvar_VariableString(var_name string) string
 	Cvar_Userinfo() string
 	Cvar_ClearUserinfoModified()
+	Cvar_GetLatchedVars()
 
 	Cbuf_AddText(text string)
 	Cbuf_Execute() error
@@ -1410,6 +1417,7 @@ type QCommon interface {
 
 	Netchan_OutOfBandPrint(net_socket Netsrc_t, adr Netadr_t, format string, a ...interface{}) error
 
+	NET_Config(multiplayer bool)
 	NET_GetPacket(sock Netsrc_t) (*Netadr_t, []byte)
 	NET_SendPacket(sock Netsrc_t, data []byte, to Netadr_t) error
 

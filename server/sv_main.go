@@ -283,16 +283,59 @@ func (T *qServer) Frame(usec int) error {
 }
 
 /*
+ * Used by SV_Shutdown to send a final message to all
+ * connected clients before the server goes down. The
+ * messages are sent immediately, not just stuck on the
+ * outgoing message list, because the server is going
+ * to totally exit after returning from this function.
+ */
+func (T *qServer) finalMessage(message string, reconnect bool) {
+
+	msg := shared.QWritebufCreate(shared.MAX_MSGLEN)
+	msg.WriteByte(shared.SvcPrint)
+	msg.WriteByte(shared.PRINT_HIGH)
+	msg.WriteString(message)
+
+	if reconnect {
+		msg.WriteByte(shared.SvcReconnect)
+	} else {
+		msg.WriteByte(shared.SvcDisconnect)
+	}
+
+	/* stagger the packets to crutch operating system limited buffers */
+	/* DG: we can't just use the maxclients cvar here for the number of clients,
+	 *     because this is called by SV_Shutdown() and the shut down server might have
+	 *     a different number of clients (e.g. 1 if it's single player), when maxclients
+	 *     has already been set to a higher value for multiplayer (e.g. 4 for coop)
+	 *     Luckily, svs.num_client_entities = maxclients->value * UPDATE_BACKUP * 64;
+	 *     with the maxclients value from when the current server was started (see SV_InitGame())
+	 *     so we can just calculate the right number of clients from that
+	 */
+	//  int numClients = svs.num_client_entities / ( UPDATE_BACKUP * 64 );
+	for i, cl := range T.svs.clients {
+		if cl.state >= cs_connected {
+			T.svs.clients[i].netchan.Transmit(msg.Data())
+		}
+	}
+
+	for i, cl := range T.svs.clients {
+		if cl.state >= cs_connected {
+			T.svs.clients[i].netchan.Transmit(msg.Data())
+		}
+	}
+}
+
+/*
  * Called when each game quits,
  * before Sys_Quit or Sys_Error
  */
 func (T *qServer) Shutdown(finalmsg string, reconnect bool) {
-	// if svs.clients {
-	// 	SV_FinalMessage(finalmsg, reconnect)
-	// }
+	if T.svs.clients != nil {
+		T.finalMessage(finalmsg, reconnect)
+	}
 
 	// Master_Shutdown()
-	// SV_ShutdownGameProgs()
+	T.svShutdownGameProgs()
 
 	/* free current level */
 	if T.sv.demofile != nil {
@@ -303,14 +346,9 @@ func (T *qServer) Shutdown(finalmsg string, reconnect bool) {
 	T.sv = server_t{}
 	T.common.SetServerState(int(T.sv.state))
 
-	// /* free server static data */
-	// if svs.clients {
-	// 	Z_Free(svs.clients)
-	// }
-
-	// if svs.client_entities {
-	// 	Z_Free(svs.client_entities)
-	// }
+	/* free server static data */
+	T.svs.clients = nil
+	T.svs.client_entities = nil
 
 	// if T.svs.demofile {
 	// 	fclose(svs.demofile)

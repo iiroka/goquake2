@@ -134,6 +134,19 @@ func (G *qGameImp) Setmodel(ent shared.Edict_s, name string) error {
 }
 
 /*
+ * Called when either the entire server is being killed, or
+ * it is changing to a different game directory.
+ */
+func (T *qServer) svShutdownGameProgs() {
+	if T.ge == nil {
+		return
+	}
+
+	T.ge.Shutdown()
+	T.ge = nil
+}
+
+/*
  * Init the game subsystem for a new map
  */
 func (T *qServer) svInitGameProgs() error {

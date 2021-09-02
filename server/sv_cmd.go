@@ -198,7 +198,7 @@ func sv_KillServer_f(args []string, arg interface{}) error {
 	}
 
 	T.Shutdown("Server was killed.\n", false)
-	//  NET_Config(false);   /* close network sockets */
+	T.common.NET_Config(false) /* close network sockets */
 	return nil
 }
 

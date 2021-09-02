@@ -25,7 +25,13 @@
  */
 package common
 
-import "goquake2/shared"
+import (
+	"fmt"
+	"goquake2/shared"
+	"net"
+	"strconv"
+	"time"
+)
 
 func (T *qCommon) NET_GetPacket(sock shared.Netsrc_t) (*shared.Netadr_t, []byte) {
 	index := (int(sock) + 1) & 1
@@ -35,6 +41,25 @@ func (T *qCommon) NET_GetPacket(sock shared.Netsrc_t) (*shared.Netadr_t, []byte)
 		a.Type = shared.NA_LOOPBACK
 		return a, c
 	default:
+		var msg [shared.MAX_MSGLEN]byte
+		if T.ip_sockets[sock] != nil {
+			T.ip_sockets[sock].SetReadDeadline(time.Now().Add(time.Microsecond))
+			r, addr, err := T.ip_sockets[sock].ReadFromUDP(msg[:])
+			if err != nil {
+				// T.Com_Printf("ERROR receiving %s\n", err.Error())
+			}
+			if r > 0 {
+				println("Received", r, addr)
+				a := &shared.Netadr_t{}
+				a.Type = shared.NA_IP
+				a.Port = uint16(addr.Port)
+				a.Ip[0] = addr.IP[0]
+				a.Ip[1] = addr.IP[1]
+				a.Ip[2] = addr.IP[2]
+				a.Ip[3] = addr.IP[3]
+				return a, msg[:r]
+			}
+		}
 		return nil, nil
 	}
 }
@@ -51,38 +76,45 @@ func (T *qCommon) NET_SendPacket(sock shared.Netsrc_t, data []byte, to shared.Ne
 		T.loopback[index] <- data
 		return nil
 
-	// 		case NA_BROADCAST:
-	// 		case NA_IP:
-	// 			net_socket = ip_sockets[sock];
+	case shared.NA_BROADCAST:
+		net_socket := T.ip_sockets[sock]
+		if net_socket == nil {
+			println("NO SOCKET")
+			return nil
+		}
+		_, err := net_socket.Write(data)
+		if err != nil {
+			T.Com_Printf("NET_SendPacket ERROR: %s to %v\n", err.Error(), to)
+			return err
+		}
+		return nil
 
-	// 			if (!net_socket)
-	// 			{
-	// 				return;
+	case shared.NA_IP:
+		// net_socket := T.ip_sockets[sock]
+		// if net_socket == nil {
+		// 	println("NO SOCKET")
+		// 	return nil
+		// }
+		// addr := &net.UDPAddr{
+		// 	IP:   net.IPv4(to.Ip[0], to.Ip[1], to.Ip[2], to.Ip[3]),
+		// 	Port: int(to.Port),
+		// }
+		return nil
+
+	case shared.NA_IP6,
+		shared.NA_MULTICAST6:
+		// 			net_socket = ip6_sockets[sock];
+		// 			addr_size = sizeof(struct sockaddr_in6);
+		// 			if (!net_socket) {
+		return nil
 	// 			}
-
-	// 			break;
-
-	// 		case NA_IP6:
-	// 		case NA_MULTICAST6:
-	// 			net_socket = ip6_sockets[sock];
-	// 			addr_size = sizeof(struct sockaddr_in6);
-
-	// 			if (!net_socket)
-	// 			{
-	// 				return;
-	// 			}
-
-	// 			break;
 
 	// 		case NA_IPX:
 	// 		case NA_BROADCAST_IPX:
 	// 			net_socket = ipx_sockets[sock];
-
-	// 			if (!net_socket)
-	// 			{
+	// 			if (!net_socket) {
 	// 				return;
 	// 			}
-
 	// 			break;
 
 	default:
@@ -175,6 +207,14 @@ func (T *qCommon) NET_SendPacket(sock shared.Netsrc_t, data []byte, to shared.Ne
 	// 		}
 	// 	}
 
+	// println("WriteToUDP")
+	// r, err := net_socket.WriteToUDP(data, addr)
+	// if err != nil {
+	// 	T.Com_Printf("NET_SendPacket ERROR: %s to %v\n", err.Error(), to)
+	// 	return err
+	// }
+	// T.Com_Printf("NET_SendPacket %v\n", r)
+
 	// 	ret = sendto(net_socket,
 	// 			data,
 	// 			length,
@@ -188,4 +228,83 @@ func (T *qCommon) NET_SendPacket(sock shared.Netsrc_t, data []byte, to shared.Ne
 	// 				NET_AdrToString(to));
 	// 	}
 	return nil
+}
+
+func (T *qCommon) netOpenIP() {
+
+	println("netOpenIP")
+	port := T.Cvar_Get("port", strconv.Itoa(shared.PORT_SERVER), shared.CVAR_NOSET)
+	ip := T.Cvar_Get("ip", "localhost", shared.CVAR_NOSET)
+	host := ip.String
+	if len(host) == 0 || host == "localhost" {
+		host = "0.0.0.0"
+	}
+
+	// if (!ip6_sockets[NS_SERVER])
+	// {
+	// 	ip6_sockets[NS_SERVER] = NET_Socket(ip->string, port->value,
+	// 			NS_SERVER, AF_INET6);
+	// }
+
+	// if (!ip6_sockets[NS_CLIENT])
+	// {
+	// 	ip6_sockets[NS_CLIENT] = NET_Socket(ip->string, PORT_ANY,
+	// 			NS_CLIENT, AF_INET6);
+	// }
+
+	if T.ip_sockets[shared.NS_SERVER] == nil {
+		addr := net.UDPAddr{
+			Port: port.Int(),
+			IP:   net.ParseIP(host),
+		}
+		sock, err := net.ListenUDP("udp4", &addr)
+		if err != nil {
+			fmt.Printf("Failed to open SERVER socket %s\n", err.Error())
+		} else {
+			T.ip_sockets[shared.NS_SERVER] = sock
+		}
+	}
+
+	if T.ip_sockets[shared.NS_CLIENT] == nil {
+		addr := net.UDPAddr{
+			Port: port.Int(),
+			IP:   net.IPv4(255, 255, 255, 255),
+		}
+		sock, err := net.DialUDP("udp4", nil, &addr)
+		if err != nil {
+			fmt.Printf("Failed to open CLIENT socket %s\n", err.Error())
+		} else {
+			T.ip_sockets[shared.NS_CLIENT] = sock
+		}
+	}
+}
+
+/*
+ * A single player game will only use the loopback code
+ */
+func (T *qCommon) NET_Config(multiplayer bool) {
+	println("NET_Config", multiplayer)
+	if !multiplayer {
+
+		/* shut down any existing sockets */
+		for i := 0; i < 2; i++ {
+			if T.ip_sockets[i] != nil {
+				T.ip_sockets[i].Close()
+				T.ip_sockets[i] = nil
+			}
+
+			// 	if (ip6_sockets[i]) {
+			// 		close(ip6_sockets[i]);
+			// 		ip6_sockets[i] = 0;
+			// 	}
+
+			// 	if (ipx_sockets[i]) {
+			// 		close(ipx_sockets[i]);
+			// 		ipx_sockets[i] = 0;
+			// 	}
+		}
+	} else {
+		/* open sockets */
+		T.netOpenIP()
+	}
 }

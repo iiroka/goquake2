@@ -338,6 +338,24 @@ func (T *qCommon) Cvar_ClearUserinfoModified() {
 }
 
 /*
+ * Any variables with latched values will now be updated
+ */
+func (T *qCommon) Cvar_GetLatchedVars() {
+
+	for _, val := range T.cvarVars {
+		if val.LatchedString == nil {
+			continue
+		}
+
+		val.String = *val.LatchedString
+		val.LatchedString = nil
+		//  if (!strcmp(var->name, "game")) {
+		// 	 FS_BuildGameSpecificSearchPath(var->string);
+		//  }
+	}
+}
+
+/*
  * Handles variable inspection and changing from the console
  */
 func (T *qCommon) cvar_Command(args []string) bool {
@@ -369,10 +387,7 @@ func (T *qCommon) cvar_Command(args []string) bool {
  * Allows setting and defining of arbitrary cvars from console
  */
 func cvar_Set_f(args []string, arg interface{}) error {
-	//  char *firstarg;
-	//  int c, i;
 
-	//  c = Cmd_Argc();
 	T := arg.(*qCommon)
 
 	if (len(args) != 3) && (len(args) != 4) {

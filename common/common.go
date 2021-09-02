@@ -29,6 +29,7 @@ package common
 
 import (
 	"goquake2/shared"
+	"net"
 	"time"
 )
 
@@ -111,6 +112,8 @@ type qCommon struct {
 	pm_friction        float32
 	pm_waterfriction   float32
 	pm_waterspeed      float32
+
+	ip_sockets [2]*net.UDPConn
 }
 
 func CreateQCommon(client shared.QClient, server shared.QServer) shared.QCommon {
@@ -133,6 +136,8 @@ func CreateQCommon(client shared.QClient, server shared.QServer) shared.QCommon 
 	T.pm_friction = 6
 	T.pm_waterfriction = 1
 	T.pm_waterspeed = 400
+	T.ip_sockets[0] = nil
+	T.ip_sockets[1] = nil
 
 	return T
 }

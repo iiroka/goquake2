@@ -197,9 +197,7 @@ const (
 
 type Netadr_t struct {
 	Type Netadrtype_t
-	// byte ip[16];
-	// unsigned int scope_id;
-	// byte ipx[10];
+	Ip   [16]byte
 	Port uint16
 }
 

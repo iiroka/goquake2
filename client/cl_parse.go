@@ -998,8 +998,8 @@ func (T *qClient) parseServerMessage(msg *shared.QReadbuf) error {
 		case shared.SvcDisconnect:
 			return T.common.Com_Error(shared.ERR_DISCONNECT, "Server disconnected\n")
 
-			// 		case svc_reconnect:
-			// 			Com_Printf("Server disconnected, reconnecting\n");
+		case shared.SvcReconnect:
+			T.common.Com_Printf("Server disconnected, reconnecting\n")
 
 			// 			if (cls.download)
 			// 			{
@@ -1008,22 +1008,19 @@ func (T *qClient) parseServerMessage(msg *shared.QReadbuf) error {
 			// 				cls.download = NULL;
 			// 			}
 
-			// 			cls.state = ca_connecting;
-			// 			cls.connect_time = -99999; /* CL_CheckForResend() will fire immediately */
-			// 			break;
+			T.cls.state = ca_connecting
+			T.cls.connect_time = -99999 /* CL_CheckForResend() will fire immediately */
 
-			// 		case svc_print:
-			// 			i = MSG_ReadByte(&net_message);
+		case shared.SvcPrint:
+			i := msg.ReadByte()
 
-			// 			if (i == PRINT_CHAT)
-			// 			{
-			// 				S_StartLocalSound("misc/talk.wav");
-			// 				con.ormask = 128;
-			// 			}
+			if i == shared.PRINT_CHAT {
+				// 				S_StartLocalSound("misc/talk.wav");
+				T.con.ormask = 128
+			}
 
-			// 			Com_Printf("%s", MSG_ReadString(&net_message));
-			// 			con.ormask = 0;
-			// 			break;
+			T.common.Com_Printf(msg.ReadString())
+			T.con.ormask = 0
 
 			// 		case svc_centerprint:
 			// 			SCR_CenterPrint(MSG_ReadString(&net_message));

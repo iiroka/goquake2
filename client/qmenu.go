@@ -53,6 +53,7 @@ type menuitem_t interface {
 	getFlags() uint
 	getCursorOffset() int
 	doEnter() bool
+	isField() bool
 }
 
 type menucommon_t struct {
@@ -63,7 +64,7 @@ type menucommon_t struct {
 	// int localdata[4];
 	flags uint
 
-	// const char *statusbar;
+	statusbar string
 
 	callback func(self *menucommon_t)
 	// void (*statusbarfunc)(void *self);
@@ -89,6 +90,24 @@ func (T *menucommon_t) getFlags() uint {
 
 func (T *menucommon_t) getCursorOffset() int {
 	return T.cursor_offset
+}
+
+func (T *menucommon_t) isField() bool {
+	return false
+}
+
+type menufield_t struct {
+	menucommon_t
+
+	buffer         string
+	cursor         int
+	length         int
+	visible_length int
+	visible_offset int
+}
+
+func (T *menufield_t) isField() bool {
+	return true
 }
 
 type menuaction_t struct {
@@ -172,34 +191,16 @@ func (T *menuframework_t) center() {
 	T.y = (int(float32(T.owner.viddef.height)/scale) - height) / 2
 }
 
+func (T *menuframework_t) setStatusBar(str string) {
+	T.statusbar = str
+}
+
 func (T *menuframework_t) draw() {
-	// int i;
-	// menucommon_s *item;
 	scale := T.owner.scrGetMenuScale()
 
 	/* draw contents */
 	for i := range T.items {
 		T.items[i].draw()
-		// switch (((menucommon_s *)menu->items[i])->type) {
-		// 	case MTYPE_FIELD:
-		// 		Field_Draw((menufield_s *)menu->items[i]);
-		// 		break;
-		// 	case MTYPE_SLIDER:
-		// 		Slider_Draw((menuslider_s *)menu->items[i]);
-		// 		break;
-		// 	case MTYPE_LIST:
-		// 		MenuList_Draw((menulist_s *)menu->items[i]);
-		// 		break;
-		// 	case MTYPE_SPINCONTROL:
-		// 		SpinControl_Draw((menulist_s *)menu->items[i]);
-		// 		break;
-		// 	case MTYPE_ACTION:
-		// 		Action_Draw((menuaction_s *)menu->items[i]);
-		// 		break;
-		// 	case MTYPE_SEPARATOR:
-		// 		Separator_Draw((menuseparator_s *)menu->items[i]);
-		// 		break;
-		// }
 	}
 
 	item := T.itemAtCursor()
@@ -212,40 +213,37 @@ func (T *menuframework_t) draw() {
 	// {
 	// 	menu->cursordraw(menu);
 	// }
-	// else if (item && (item->type != MTYPE_FIELD))
-	// {
-	if (item.getFlags() & QMF_LEFT_JUSTIFY) == 0 {
-		T.owner.Draw_CharScaled(T.x+int(float32(int(float32(item.getX())/scale)-24+item.getCursorOffset())*scale),
-			int(float32(T.y+item.getY())*scale),
-			12+(int(T.owner.common.Sys_Milliseconds()/250)&1), scale)
-	} else {
-		// 	Draw_CharScaled(menu->x + (item->cursor_offset) * scale,
-		// 			(menu->y + item->y) * scale,
-		// 			12 + ((int)(Sys_Milliseconds() / 250) & 1), scale);
-	}
-	// }
-
-	// if (item)
-	// {
-	// 	if (item->statusbarfunc)
-	// 	{
-	// 		item->statusbarfunc((void *)item);
-	// 	}
-
-	// 	else if (item->statusbar)
-	// 	{
-	// 		Menu_DrawStatusBar(item->statusbar);
-	// 	}
-
-	// 	else
-	// 	{
-	// 		Menu_DrawStatusBar(menu->statusbar);
-	// 	}
-	// }
 	// else
-	// {
-	// 	Menu_DrawStatusBar(menu->statusbar);
-	// }
+	if item != nil && !item.isField() {
+		if (item.getFlags() & QMF_LEFT_JUSTIFY) == 0 {
+			T.owner.Draw_CharScaled(T.x+int(float32(int(float32(item.getX())/scale)-24+item.getCursorOffset())*scale),
+				int(float32(T.y+item.getY())*scale),
+				12+(int(T.owner.common.Sys_Milliseconds()/250)&1), scale)
+		} else {
+			T.owner.Draw_CharScaled(T.x+int(float32(item.getCursorOffset())*scale),
+				int(float32(T.y+item.getY())*scale),
+				12+(int(T.owner.common.Sys_Milliseconds()/250)&1), scale)
+		}
+	}
+
+	if item != nil {
+		// 	if (item->statusbarfunc)
+		// 	{
+		// 		item->statusbarfunc((void *)item);
+		// 	}
+
+		// 	else if (item->statusbar)
+		// 	{
+		// 		Menu_DrawStatusBar(item->statusbar);
+		// 	}
+
+		// 	else
+		// 	{
+		// 		Menu_DrawStatusBar(menu->statusbar);
+		// 	}
+	} else {
+		// 	Menu_DrawStatusBar(menu->statusbar);
+	}
 }
 
 func (T *menuframework_t) selectItem() bool {
@@ -299,12 +297,76 @@ func (T *menuframework_t) tallySlots() int {
 	return total
 }
 
-func (T *qClient) menuDrawString(x, y int, str string) {
-	scale := T.scrGetMenuScale()
-
-	for i := range str {
-		T.Draw_CharScaled(x+int(float32(i*8)*scale), int(float32(y)*scale), int(str[i]), scale)
+func (T *menufield_t) doEnter() bool {
+	if T.callback != nil {
+		T.callback(&T.menucommon_t)
+		return true
 	}
+
+	return false
+}
+
+func (T *menufield_t) draw() {
+	Q := T.parent.owner
+	scale := Q.scrGetMenuScale()
+
+	if len(T.name) > 0 {
+		Q.menuDrawStringR2LDark(T.x+T.parent.x+int(LCOLUMN_OFFSET*scale), T.y+T.parent.y,
+			T.name)
+	}
+
+	Q.Draw_CharScaled(int(float32(T.x+T.parent.x+16)*scale), int(float32(T.y+T.parent.y-4)*scale), 18, scale)
+	Q.Draw_CharScaled(int(float32(T.x+T.parent.x+16)*scale), int(float32(T.y+T.parent.y+4)*scale), 24, scale)
+
+	Q.Draw_CharScaled(int(float32(T.x+T.parent.x+24)*scale)+int(float32(T.visible_length)*8*scale),
+		int(float32(T.y+T.parent.y-4)*scale), 20, scale)
+	Q.Draw_CharScaled(int(float32(T.x+T.parent.x+24)*scale)+int(float32(T.visible_length)*8*scale),
+		int(float32(T.y+T.parent.y+4)*scale), 26, scale)
+
+	for i := 0; i < T.visible_length; i++ {
+		Q.Draw_CharScaled(int(float32(T.x+T.parent.x+24)*scale)+int(float32(i)*8*scale),
+			int(float32(T.y+T.parent.y-4)*scale), 19, scale)
+		Q.Draw_CharScaled(int(float32(T.x+T.parent.x+24)*scale)+int(float32(i)*8*scale),
+			int(float32(T.y+T.parent.y+4)*scale), 25, scale)
+	}
+
+	n := T.visible_length + 1 + T.visible_offset
+	var tempbuffer string
+	if n >= len(T.buffer) {
+		tempbuffer = T.buffer[T.visible_offset:]
+	} else {
+		tempbuffer = T.buffer[T.visible_offset:n]
+	}
+	Q.menuDrawString(int(float32(T.x+T.parent.x+24)*scale),
+		T.y+T.parent.y, tempbuffer)
+
+	// if (Menu_ItemAtCursor(f->generic.parent) == f)
+	// {
+	// 	int offset;
+
+	// 	if (f->visible_offset)
+	// 	{
+	// 		offset = f->visible_length;
+	// 	}
+
+	// 	else
+	// 	{
+	// 		offset = f->cursor;
+	// 	}
+
+	// 	if (((int)(Sys_Milliseconds() / 250)) & 1)
+	// 	{
+	// 		Draw_CharScaled(
+	// 			f->generic.x + f->generic.parent->x + 24 * scale + (offset * 8 * scale),
+	// 			(f->generic.y + f->generic.parent->y) * scale, 11, scale);
+	// 	}
+	// 	else
+	// 	{
+	// 		Draw_CharScaled(
+	// 			f->generic.x + f->generic.parent->x + 24 * scale + (offset * 8 * scale),
+	// 			(f->generic.y + f->generic.parent->y) * scale, ' ', scale);
+	// 	}
+	// }
 }
 
 func (T *menuaction_t) draw() {
@@ -313,8 +375,8 @@ func (T *menuaction_t) draw() {
 
 	if (T.flags & QMF_LEFT_JUSTIFY) != 0 {
 		if (T.flags & QMF_GRAYED) != 0 {
-			// 		Menu_DrawStringDark(a->generic.x + a->generic.parent->x + (LCOLUMN_OFFSET * scale),
-			// 				a->generic.y + a->generic.parent->y, a->generic.name);
+			Q.menuDrawStringDark(T.x+T.parent.x+int(LCOLUMN_OFFSET*scale),
+				T.y+T.parent.y, T.name)
 		} else {
 			Q.menuDrawString(T.x+T.parent.x+int(LCOLUMN_OFFSET*scale),
 				T.y+T.parent.y, T.name)
@@ -333,9 +395,42 @@ func (T *menuaction_t) draw() {
 	// 	a->generic.ownerdraw(a);
 	// }
 }
+
 func (T *menuaction_t) doEnter() bool {
 	if T.callback != nil {
 		T.callback(&T.menucommon_t)
 	}
 	return true
+}
+
+func (T *qClient) menuDrawString(x, y int, str string) {
+	scale := T.scrGetMenuScale()
+
+	for i := range str {
+		T.Draw_CharScaled(x+int(float32(i*8)*scale), int(float32(y)*scale), int(str[i]), scale)
+	}
+}
+
+func (T *qClient) menuDrawStringDark(x, y int, str string) {
+	scale := T.scrGetMenuScale()
+
+	for i := range str {
+		T.Draw_CharScaled(x+int(float32(i*8)*scale), int(float32(y)*scale), int(str[i])+128, scale)
+	}
+}
+
+func (T *qClient) menuDrawStringR2L(x, y int, str string) {
+	scale := T.scrGetMenuScale()
+
+	for i := range str {
+		T.Draw_CharScaled(x-int(float32(i*8)*scale), int(float32(y)*scale), int(str[len(str)-i-1]), scale)
+	}
+}
+
+func (T *qClient) menuDrawStringR2LDark(x, y int, str string) {
+	scale := T.scrGetMenuScale()
+
+	for i := range str {
+		T.Draw_CharScaled(x-int(float32(i*8)*scale), int(float32(y)*scale), int(str[len(str)-i-1])+128, scale)
+	}
 }
