@@ -203,7 +203,7 @@ func (G *qGame) weapon_Generic(ent *edict_t, FRAME_ACTIVATE_LAST, FRAME_FIRE_LAS
 	fire_frames []int, fire func(*edict_t, *qGame)) {
 	//  int n;
 
-	// FRAME_FIRE_FIRST := (FRAME_ACTIVATE_LAST + 1)
+	FRAME_FIRE_FIRST := (FRAME_ACTIVATE_LAST + 1)
 	FRAME_IDLE_FIRST := (FRAME_FIRE_LAST + 1)
 	FRAME_DEACTIVATE_FIRST := (FRAME_IDLE_LAST + 1)
 
@@ -266,96 +266,82 @@ func (G *qGame) weapon_Generic(ent *edict_t, FRAME_ACTIVATE_LAST, FRAME_FIRE_LAS
 	}
 
 	if ent.client.weaponstate == WEAPON_READY {
-		// 	 if (((ent->client->latched_buttons |
-		// 		   ent->client->buttons) & BUTTON_ATTACK))
-		// 	 {
-		// 		 ent->client->latched_buttons &= ~BUTTON_ATTACK;
+		if ((ent.client.latched_buttons |
+			ent.client.buttons) & int(shared.BUTTON_ATTACK)) != 0 {
+			ent.client.latched_buttons &^= int(shared.BUTTON_ATTACK)
 
-		// 		 if ((!ent->client->ammo_index) ||
-		// 			 (ent->client->pers.inventory[ent->client->ammo_index] >=
-		// 			  ent->client->pers.weapon->quantity))
-		// 		 {
-		// 			 ent->client->ps.gunframe = FRAME_FIRE_FIRST;
-		// 			 ent->client->weaponstate = WEAPON_FIRING;
+			if (ent.client.ammo_index == 0) ||
+				(ent.client.pers.inventory[ent.client.ammo_index] >= ent.client.pers.weapon.quantity) {
+				ent.client.ps.Gunframe = FRAME_FIRE_FIRST
+				ent.client.weaponstate = WEAPON_FIRING
 
-		// 			 /* start the animation */
-		// 			 ent->client->anim_priority = ANIM_ATTACK;
+				/* start the animation */
+				ent.client.anim_priority = ANIM_ATTACK
 
-		// 			 if (ent->client->ps.pmove.pm_flags & PMF_DUCKED)
-		// 			 {
-		// 				 ent->s.frame = FRAME_crattak1 - 1;
-		// 				 ent->client->anim_end = FRAME_crattak9;
-		// 			 }
-		// 			 else
-		// 			 {
-		// 				 ent->s.frame = FRAME_attack1 - 1;
-		// 				 ent->client->anim_end = FRAME_attack8;
-		// 			 }
-		// 		 }
-		// 		 else
-		// 		 {
-		// 			 if (level.time >= ent->pain_debounce_time)
-		// 			 {
-		// 				 gi.sound(ent, CHAN_VOICE, gi.soundindex(
-		// 							 "weapons/noammo.wav"), 1, ATTN_NORM, 0);
-		// 				 ent->pain_debounce_time = level.time + 1;
-		// 			 }
+				if (ent.client.ps.Pmove.Pm_flags & shared.PMF_DUCKED) != 0 {
+					ent.s.Frame = misc.FRAME_crattak1 - 1
+					ent.client.anim_end = misc.FRAME_crattak9
+				} else {
+					ent.s.Frame = misc.FRAME_attack1 - 1
+					ent.client.anim_end = misc.FRAME_attack8
+				}
+			} else {
+				// 			 if (level.time >= ent->pain_debounce_time)
+				// 			 {
+				// 				 gi.sound(ent, CHAN_VOICE, gi.soundindex(
+				// 							 "weapons/noammo.wav"), 1, ATTN_NORM, 0);
+				// 				 ent->pain_debounce_time = level.time + 1;
+				// 			 }
 
-		// 			 NoAmmoWeaponChange(ent);
-		// 		 }
-		// 	 }
-		// 	 else
-		// 	 {
-		// 		 if (ent->client->ps.gunframe == FRAME_IDLE_LAST)
-		// 		 {
-		// 			 ent->client->ps.gunframe = FRAME_IDLE_FIRST;
-		// 			 return;
-		// 		 }
+				// 			 NoAmmoWeaponChange(ent);
+			}
+		} else {
+			if ent.client.ps.Gunframe == FRAME_IDLE_LAST {
+				ent.client.ps.Gunframe = FRAME_IDLE_FIRST
+				return
+			}
 
-		// 		 if (pause_frames)
-		// 		 {
-		// 			 for (n = 0; pause_frames[n]; n++)
-		// 			 {
-		// 				 if (ent->client->ps.gunframe == pause_frames[n])
-		// 				 {
-		// 					 if (randk() & 15)
-		// 					 {
-		// 						 return;
-		// 					 }
-		// 				 }
-		// 			 }
-		// 		 }
+			// 		 if (pause_frames)
+			// 		 {
+			// 			 for (n = 0; pause_frames[n]; n++)
+			// 			 {
+			// 				 if (ent->client->ps.gunframe == pause_frames[n])
+			// 				 {
+			// 					 if (randk() & 15)
+			// 					 {
+			// 						 return;
+			// 					 }
+			// 				 }
+			// 			 }
+			// 		 }
 
-		// 		 ent->client->ps.gunframe++;
-		// 		 return;
-		// 	 }
+			ent.client.ps.Gunframe++
+			return
+		}
 	}
 
 	if ent.client.weaponstate == WEAPON_FIRING {
-		// 	 for (n = 0; fire_frames[n]; n++)
-		// 	 {
-		// 		 if (ent->client->ps.gunframe == fire_frames[n])
-		// 		 {
-		// 			 if (ent->client->quad_framenum > level.framenum)
-		// 			 {
-		// 				 gi.sound(ent, CHAN_ITEM, gi.soundindex(
-		// 							 "items/damage3.wav"), 1, ATTN_NORM, 0);
-		// 			 }
+		n := 0
+		for n = 0; fire_frames[n] != 0; n++ {
+			if ent.client.ps.Gunframe == fire_frames[n] {
+				// 			 if (ent->client->quad_framenum > level.framenum)
+				// 			 {
+				// 				 gi.sound(ent, CHAN_ITEM, gi.soundindex(
+				// 							 "items/damage3.wav"), 1, ATTN_NORM, 0);
+				// 			 }
 
-		// 			 fire(ent);
-		// 			 break;
-		// 		 }
-		// 	 }
+				fire(ent, G)
+				break
+			}
+		}
 
-		// 	 if (!fire_frames[n])
-		// 	 {
-		// 		 ent->client->ps.gunframe++;
-		// 	 }
+		if fire_frames[n] == 0 {
+			ent.client.ps.Gunframe++
+		}
 
-		// 	 if (ent->client->ps.gunframe == FRAME_IDLE_FIRST + 1)
-		// 	 {
-		// 		 ent->client->weaponstate = WEAPON_READY;
-		// 	 }
+		if ent.client.ps.Gunframe == FRAME_IDLE_FIRST+1 {
+			ent.client.weaponstate = WEAPON_READY
+		}
 	}
 }
 
@@ -365,9 +351,6 @@ func (G *qGame) weapon_Generic(ent *edict_t, FRAME_ACTIVATE_LAST, FRAME_FIRE_LAS
 
 func (G *qGame) blaster_Fire(ent *edict_t, g_offset []float32, damage int,
 	hyper bool, effect int) {
-	// vec3_t forward, right;
-	// vec3_t start;
-	// vec3_t offset;
 
 	if ent == nil {
 		return
@@ -388,11 +371,11 @@ func (G *qGame) blaster_Fire(ent *edict_t, g_offset []float32, damage int,
 	shared.VectorScale(forward, -2, ent.client.kick_origin[:])
 	ent.client.kick_angles[0] = -1
 
-	// fire_blaster(ent, start, forward, damage, 1000, effect, hyper);
+	G.fire_blaster(ent, start, forward, damage, 1000, effect, hyper)
 
-	// /* send muzzle flash */
-	// gi.WriteByte(svc_muzzleflash);
-	// gi.WriteShort(ent - g_edicts);
+	/* send muzzle flash */
+	// G.gi.WriteByte(shared.SvcMuzzleflash)
+	// G.gi.WriteShort(ent.index)
 
 	// if (hyper)
 	// {

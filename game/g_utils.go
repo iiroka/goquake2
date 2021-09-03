@@ -294,6 +294,44 @@ func vectoyaw(vec []float32) float32 {
 	return yaw
 }
 
+func vectoangles(value1, angles []float32) {
+
+	var yaw float32 = 0
+	var pitch float32 = 0
+	if (value1[1] == 0) && (value1[0] == 0) {
+		yaw = 0
+
+		if value1[2] > 0 {
+			pitch = 90
+		} else {
+			pitch = 270
+		}
+	} else {
+		if value1[0] != 0 {
+			yaw = float32(int(math.Atan2(float64(value1[1]), float64(value1[0])) * 180 / math.Pi))
+		} else if value1[1] > 0 {
+			yaw = 90
+		} else {
+			yaw = -90
+		}
+
+		if yaw < 0 {
+			yaw += 360
+		}
+
+		forward := math.Sqrt(float64(value1[0]*value1[0]) + float64(value1[1]*value1[1]))
+		pitch = float32(int(math.Atan2(float64(value1[2]), forward) * 180 / math.Pi))
+
+		if pitch < 0 {
+			pitch += 360
+		}
+	}
+
+	angles[shared.PITCH] = -pitch
+	angles[shared.YAW] = yaw
+	angles[shared.ROLL] = 0
+}
+
 func G_InitEdict(e *edict_t, index int) {
 	e.inuse = true
 	e.Classname = "noclass"

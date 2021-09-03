@@ -27,6 +27,7 @@ package game
 
 import (
 	"fmt"
+	"goquake2/shared"
 	"strings"
 )
 
@@ -70,5 +71,64 @@ func spTargetSpeaker(ent *edict_t, G *qGame) error {
 	/* must link the entity so we get areas and clusters so
 	   the server can determine who to send updates to */
 	G.gi.Linkentity(ent)
+	return nil
+}
+
+/* ========================================================== */
+
+/*
+ * QUAKED target_explosion (1 0 0) (-8 -8 -8) (8 8 8)
+ * Spawns an explosion temporary entity when used.
+ *
+ * "delay"		wait this long before going off
+ * "dmg"		how much radius damage should be done, defaults to 0
+ */
+func target_explosion_explode(self *edict_t, G *qGame) {
+
+	if self == nil || G == nil {
+		return
+	}
+
+	println("target_explosion_explode")
+	//  gi.WriteByte(svc_temp_entity);
+	//  gi.WriteByte(TE_EXPLOSION1);
+	//  gi.WritePosition(self->s.origin);
+	//  gi.multicast(self->s.origin, MULTICAST_PHS);
+
+	//  T_RadiusDamage(self, self->activator, self->dmg, NULL,
+	// 		 self->dmg + 40, MOD_EXPLOSIVE);
+
+	save := self.Delay
+	self.Delay = 0
+	G.gUseTargets(self, self.activator)
+	self.Delay = save
+}
+
+func use_target_explosion(self, other /* unused */, activator *edict_t, G *qGame) {
+	if self == nil || G == nil {
+		return
+	}
+	self.activator = activator
+
+	if activator == nil {
+		return
+	}
+
+	if self.Delay == 0 {
+		target_explosion_explode(self, G)
+		return
+	}
+
+	self.think = target_explosion_explode
+	self.nextthink = G.level.time + self.Delay
+}
+
+func spTargetExplosion(ent *edict_t, G *qGame) error {
+	if ent == nil || G == nil {
+		return nil
+	}
+
+	ent.use = use_target_explosion
+	ent.svflags = shared.SVF_NOCLIENT
 	return nil
 }

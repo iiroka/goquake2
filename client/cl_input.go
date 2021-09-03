@@ -380,9 +380,9 @@ func (T *qClient) refreshCmd() {
 	T.old_sys_frame_time = T.input.Sys_frame_time
 
 	// Important events are send immediately
-	// if (((in_attack.state & 2) != 0) || (in_use.state & 2) != 0) {
-	// 	cls.forcePacket = true;
-	// }
+	if ((T.in_attack.state & 2) != 0) || (T.in_use.state&2) != 0 {
+		T.cls.forcePacket = true
+	}
 }
 
 func (T *qClient) refreshMove() {
