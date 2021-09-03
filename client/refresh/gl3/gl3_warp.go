@@ -491,20 +491,16 @@ func (T *qGl3) clearSkyBox() {
 	}
 }
 
-func (T *qGl3) makeSkyVec(s, t float32, axis int) {
+func (T *qGl3) makeSkyVec(s, t float32, axis int, vert *gl3_3D_vtx_t) {
 
-	var b [3]float32
+	var dist float32 = 4096.0
 	if !T.r_farsee.Bool() {
-		b[0] = s * 2300
-		b[1] = t * 2300
-		b[2] = 2300
-	} else {
-		b[0] = s * 4096
-		b[1] = t * 4096
-		b[2] = 4096
+		dist = 2300.0
 	}
 
-	var v [3]float32
+	b := []float32{s * dist, t * dist, dist}
+
+	v := make([]float32, 3)
 	for j := 0; j < 3; j++ {
 		k := st_to_vec[axis][j]
 
@@ -533,68 +529,74 @@ func (T *qGl3) makeSkyVec(s, t float32, axis int) {
 
 	t = 1.0 - t
 
-	T.tex_sky[T.index_tex] = s
-	T.tex_sky[T.index_tex+1] = t
-
-	T.vtx_sky[T.index_vtx+2] = v[0]
-	T.vtx_sky[T.index_vtx+3] = v[1]
-	T.vtx_sky[T.index_vtx+4] = v[2]
-	T.index_tex += 5
+	vert.setPos(v)
+	vert.setTexCoord(s, t)
+	vert.setLmTexCoord(0, 0)
 }
 
 func (T *qGl3) drawSkyBox() {
 
-	// if T.skyrotate != 0 {
-	// 	/* check for no sky at all */
-	// 	for i := 0; i < 6; i++ {
-	// 		if (T.skymins[0][i] < T.skymaxs[0][i]) &&
-	// 			(T.skymins[1][i] < T.skymaxs[1][i]) {
-	// 			break
-	// 		}
-	// 	}
+	if T.skyrotate != 0 {
+		/* check for no sky at all */
+		found := false
+		for i := 0; i < 6; i++ {
+			if (T.skymins[0][i] < T.skymaxs[0][i]) &&
+				(T.skymins[1][i] < T.skymaxs[1][i]) {
+				found = true
+				break
+			}
+		}
 
-	// 	if i == 6 {
-	// 		return /* nothing visible */
-	// 	}
-	// }
+		if !found {
+			return /* nothing visible */
+		}
+	}
 
-	// gl.PushMatrix()
-	// gl.Translatef(r_origin[0], r_origin[1], r_origin[2])
-	// gl.Rotatef(r_newrefdef.time*skyrotate, skyaxis[0], skyaxis[1], skyaxis[2])
+	// glPushMatrix();
+	origModelMat := T.gl3state.uni3DData.getTransModelMat4()
 
-	// for i := 0; i < 6; i++ {
-	// 	if T.skyrotate != 0 {
-	// 		T.skymins[0][i] = -1
-	// 		T.skymins[1][i] = -1
-	// 		T.skymaxs[0][i] = 1
-	// 		T.skymaxs[1][i] = 1
-	// 	}
+	// glTranslatef(gl3_origin[0], gl3_origin[1], gl3_origin[2]);
+	modMVmat := HMM_MultiplyMat4(origModelMat, HMM_Translate(T.gl3_origin[:]))
+	if T.skyrotate != 0.0 {
+		// glRotatef(gl3_newrefdef.time * skyrotate, skyaxis[0], skyaxis[1], skyaxis[2]);
+		// rotAxis = HMM_Vec3(skyaxis[0], skyaxis[1], skyaxis[2])
+		modMVmat = HMM_MultiplyMat4(modMVmat, HMM_Rotate(T.gl3_newrefdef.Time*T.skyrotate, T.skyaxis[:]))
+	}
+	T.gl3state.uni3DData.setTransModelMat4(modMVmat)
+	T.updateUBO3D()
 
-	// 	if (T.skymins[0][i] >= T.skymaxs[0][i]) ||
-	// 		(T.skymins[1][i] >= T.skymaxs[1][i]) {
-	// 		continue
-	// 	}
+	T.useProgram(T.gl3state.si3Dsky.shaderProgram)
+	T.bindVAO(T.gl3state.vao3D)
+	T.bindVBO(T.gl3state.vbo3D)
 
-	// 	T.bind(T.sky_images[skytexorder[i]].texnum)
+	// TODO: this could all be done in one drawcall.. but.. whatever, it's <= 6 drawcalls/frame
 
-	// 	gl.EnableClientState(gl.VERTEX_ARRAY)
-	// 	gl.EnableClientState(gl.TEXTURE_COORD_ARRAY)
+	skyVertices := make([]uint32, gl3_3D_vtx_size*4)
 
-	// 	T.index_vtx = 0
-	// 	T.index_tex = 0
+	for i := 0; i < 6; i++ {
+		if T.skyrotate != 0.0 {
+			T.skymins[0][i] = -1
+			T.skymins[1][i] = -1
+			T.skymaxs[0][i] = 1
+			T.skymaxs[1][i] = 1
+		}
 
-	// 	T.makeSkyVec(T.skymins[0][i], T.skymins[1][i], i)
-	// 	T.makeSkyVec(T.skymins[0][i], T.skymaxs[1][i], i)
-	// 	T.makeSkyVec(T.skymaxs[0][i], T.skymaxs[1][i], i)
-	// 	T.makeSkyVec(T.skymaxs[0][i], T.skymins[1][i], i)
+		if (T.skymins[0][i] >= T.skymaxs[0][i]) ||
+			(T.skymins[1][i] >= T.skymaxs[1][i]) {
+			continue
+		}
 
-	// 	gl.VertexPointer(3, GL_FLOAT, 0, vtx_sky)
-	// 	gl.TexCoordPointer(2, GL_FLOAT, 0, tex_sky)
-	// 	gl.DrawArrays(GL_TRIANGLE_FAN, 0, 4)
+		T.bind(T.sky_images[skytexorder[i]].texnum)
 
-	// 	gl.DisableClientState(GL_VERTEX_ARRAY)
-	// 	gl.DisableClientState(GL_TEXTURE_COORD_ARRAY)
-	// }
+		T.makeSkyVec(T.skymins[0][i], T.skymins[1][i], i, &gl3_3D_vtx_t{skyVertices[:]})
+		T.makeSkyVec(T.skymins[0][i], T.skymaxs[1][i], i, &gl3_3D_vtx_t{skyVertices[1*gl3_3D_vtx_size:]})
+		T.makeSkyVec(T.skymaxs[0][i], T.skymaxs[1][i], i, &gl3_3D_vtx_t{skyVertices[2*gl3_3D_vtx_size:]})
+		T.makeSkyVec(T.skymaxs[0][i], T.skymins[1][i], i, &gl3_3D_vtx_t{skyVertices[3*gl3_3D_vtx_size:]})
 
-	// glPopMatrix()
+		T.bufferAndDraw3D(gl.Ptr(skyVertices), 4, gl.TRIANGLE_FAN)
+	}
+
+	// glPopMatrix();
+	T.gl3state.uni3DData.setTransModelMat4(origModelMat)
+	T.updateUBO3D()
 }

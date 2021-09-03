@@ -1034,7 +1034,7 @@ func (T *qGl3) BeginRegistration(model string) error {
 	T.registration_sequence++
 	T.gl3_oldviewcluster = -1 /* force markleafs */
 
-	// gl3state.currentlightmap = -1;
+	T.gl3state.currentlightmap = -1
 
 	fullname := fmt.Sprintf("maps/%s.bsp", model)
 
@@ -1068,12 +1068,11 @@ func (T *qGl3) RegisterModel(name string) (interface{}, error) {
 
 		/* register any images used by the models */
 		if mod.mtype == mod_sprite {
-			// 	sprout = (dsprite_t *)mod->extradata;
+			extra := mod.extradata.(shared.Dsprite_t)
 
-			// 	for (i = 0; i < sprout->numframes; i++)
-			// 	{
-			// 		mod->skins[i] = GL3_FindImage(sprout->frames[i].name, it_sprite);
-			// 	}
+			for i := range mod.skins {
+				mod.skins[i] = T.findImage(extra.Frames[i].Name, it_sprite)
+			}
 		} else if mod.mtype == mod_alias {
 			extra := mod.extradata.(aliasExtra)
 

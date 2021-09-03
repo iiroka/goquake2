@@ -27,6 +27,67 @@ package game
 
 import "goquake2/shared"
 
+func think_CalcMoveSpeed(ent *edict_t, G *qGame) {
+	// edict_t *ent;
+	// float min;
+	// float time;
+	// float newspeed;
+	// float ratio;
+	// float dist;
+
+	// if (!self)
+	// {
+	// 	return;
+	// }
+
+	// if (self->flags & FL_TEAMSLAVE)
+	// {
+	// 	return; /* only the team master does this */
+	// }
+
+	// /* find the smallest distance any member of the team will be moving */
+	// min = fabs(self->moveinfo.distance);
+
+	// for (ent = self->teamchain; ent; ent = ent->teamchain)
+	// {
+	// 	dist = fabs(ent->moveinfo.distance);
+
+	// 	if (dist < min)
+	// 	{
+	// 		min = dist;
+	// 	}
+	// }
+
+	// time = min / self->moveinfo.speed;
+
+	// /* adjust speeds so they will all complete at the same time */
+	// for (ent = self; ent; ent = ent->teamchain)
+	// {
+	// 	newspeed = fabs(ent->moveinfo.distance) / time;
+	// 	ratio = newspeed / ent->moveinfo.speed;
+
+	// 	if (ent->moveinfo.accel == ent->moveinfo.speed)
+	// 	{
+	// 		ent->moveinfo.accel = newspeed;
+	// 	}
+	// 	else
+	// 	{
+	// 		ent->moveinfo.accel *= ratio;
+	// 	}
+
+	// 	if (ent->moveinfo.decel == ent->moveinfo.speed)
+	// 	{
+	// 		ent->moveinfo.decel = newspeed;
+	// 	}
+	// 	else
+	// 	{
+	// 		ent->moveinfo.decel *= ratio;
+	// 	}
+
+	// 	ent->moveinfo.speed = newspeed;
+	// }
+}
+
 func think_SpawnDoorTrigger(ent *edict_t, G *qGame) {
 	// edict_t *other;
 	// vec3_t mins, maxs;
@@ -67,7 +128,7 @@ func think_SpawnDoorTrigger(ent *edict_t, G *qGame) {
 	// 	door_use_areaportals(ent, true);
 	// }
 
-	// Think_CalcMoveSpeed(ent);
+	think_CalcMoveSpeed(ent, G)
 }
 
 /*
@@ -117,8 +178,7 @@ func spFuncDoor(ent *edict_t, G *qGame) error {
 	// 	ent->moveinfo.sound_end = gi.soundindex("doors/dr1_end.wav");
 	// }
 
-	// G_SetMovedir(ent->s.angles, ent->movedir);
-	println("spFuncDoor", ent.Model)
+	gSetMovedir(ent.s.Angles[:], ent.movedir[:])
 	ent.movetype = MOVETYPE_PUSH
 	ent.solid = shared.SOLID_BSP
 	G.gi.Setmodel(ent, ent.Model)
@@ -163,7 +223,7 @@ func spFuncDoor(ent *edict_t, G *qGame) error {
 	// ent->moveinfo.distance = abs_movedir[0] * ent->size[0] + abs_movedir[1] *
 	// 						 ent->size[1] + abs_movedir[2] * ent->size[2] -
 	// 						 st.lip;
-	// VectorMA(ent->pos1, ent->moveinfo.distance, ent->movedir, ent->pos2);
+	// shared.VectorMA(ent.pos1[:], ent.moveinfo.distance, ent.movedir[:], ent.pos2[:])
 
 	// /* if it starts open, switch the positions */
 	// if (ent->spawnflags & DOOR_START_OPEN) != 0 {
@@ -174,14 +234,14 @@ func spFuncDoor(ent *edict_t, G *qGame) error {
 
 	// ent.moveinfo.state = STATE_BOTTOM;
 
-	// if (ent->health != 0) {
-	// 	ent->takedamage = DAMAGE_YES;
-	// 	ent->die = door_killed;
-	// 	ent->max_health = ent->health;
-	// } else if (ent->targetname && ent->message) {
-	// 	gi.soundindex("misc/talk.wav");
-	// 	ent->touch = door_touch;
-	// }
+	if ent.Health != 0 {
+		// 	ent->takedamage = DAMAGE_YES;
+		// 	ent->die = door_killed;
+		ent.max_health = ent.Health
+		// } else if (ent->targetname && ent->message) {
+		// 	gi.soundindex("misc/talk.wav");
+		// 	ent->touch = door_touch;
+	}
 
 	// ent->moveinfo.speed = ent->speed;
 	// ent->moveinfo.accel = ent->accel;
@@ -192,13 +252,13 @@ func spFuncDoor(ent *edict_t, G *qGame) error {
 	// VectorCopy(ent->pos2, ent->moveinfo.end_origin);
 	// VectorCopy(ent->s.angles, ent->moveinfo.end_angles);
 
-	// if (ent->spawnflags & 16) != 0 {
-	// 	ent->s.effects |= EF_ANIM_ALL;
-	// }
+	if (ent.Spawnflags & 16) != 0 {
+		ent.s.Effects |= shared.EF_ANIM_ALL
+	}
 
-	// if (ent->spawnflags & 64) != 0 {
-	// 	ent->s.effects |= EF_ANIM_ALLFAST;
-	// }
+	if (ent.Spawnflags & 64) != 0 {
+		ent.s.Effects |= shared.EF_ANIM_ALLFAST
+	}
 
 	// /* to simplify logic elsewhere, make non-teamed doors into a team of one */
 	// if (!ent->team)
@@ -210,14 +270,11 @@ func spFuncDoor(ent *edict_t, G *qGame) error {
 
 	ent.nextthink = G.level.time + FRAMETIME
 
-	// if (ent->health || ent->targetname)
-	// {
-	// 	ent->think = Think_CalcMoveSpeed;
-	// }
-	// else
-	// {
-	ent.think = think_SpawnDoorTrigger
-	// }
+	if ent.Health != 0 || len(ent.Targetname) > 0 {
+		ent.think = think_CalcMoveSpeed
+	} else {
+		ent.think = think_SpawnDoorTrigger
+	}
 
 	// /* Map quirk for waste3 (to make that secret armor behind
 	//  * the secret wall - this func_door - count, #182) */

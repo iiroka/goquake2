@@ -115,7 +115,6 @@ func (G *qGameImp) Setmodel(ent shared.Edict_s, name string) error {
 	}
 
 	i := G.T.svFindIndex(name, shared.CS_MODELS, shared.MAX_MODELS, true)
-	println("Setmodel", name, i)
 	ent.S().Modelindex = i
 
 	/* if it is an inline model, get

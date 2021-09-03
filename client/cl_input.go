@@ -160,6 +160,18 @@ func in_BackUp(args []string, a interface{}) error {
 	return nil
 }
 
+func in_AttackDown(args []string, a interface{}) error {
+	T := a.(*qClient)
+	T.keyDown(args, &T.in_attack)
+	return nil
+}
+
+func in_AttackUp(args []string, a interface{}) error {
+	T := a.(*qClient)
+	T.keyUp(args, &T.in_attack)
+	return nil
+}
+
 func (T *qClient) clampPitch() {
 
 	pitch := shared.SHORT2ANGLE(int(T.cl.frame.playerstate.Pmove.Delta_angles[shared.PITCH]))
@@ -213,8 +225,8 @@ func (T *qClient) initInput() {
 	// Cmd_AddCommand("-moveright", IN_MoverightUp);
 	// Cmd_AddCommand("+speed", IN_SpeedDown);
 	// Cmd_AddCommand("-speed", IN_SpeedUp);
-	// Cmd_AddCommand("+attack", IN_AttackDown);
-	// Cmd_AddCommand("-attack", IN_AttackUp);
+	T.common.Cmd_AddCommand("+attack", in_AttackDown, T)
+	T.common.Cmd_AddCommand("-attack", in_AttackUp, T)
 	// Cmd_AddCommand("+use", IN_UseDown);
 	// Cmd_AddCommand("-use", IN_UseUp);
 	// Cmd_AddCommand("impulse", IN_Impulse);

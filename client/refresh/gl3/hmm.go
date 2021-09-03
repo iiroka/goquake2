@@ -203,6 +203,33 @@ func HMM_ToRadians(Degrees float32) float64 {
 	return float64(Degrees) * (math.Pi / 180.0)
 }
 
+func HMM_DotVec3(VecOne, VecTwo []float32) float32 {
+	return (VecOne[0] * VecTwo[0]) + (VecOne[1] * VecTwo[1]) + (VecOne[2] * VecTwo[2])
+}
+
+func HMM_LengthSquaredVec3(A []float32) float32 {
+	return HMM_DotVec3(A, A)
+}
+
+func HMM_LengthVec3(A []float32) float32 {
+	return float32(math.Sqrt(float64(HMM_LengthSquaredVec3(A))))
+}
+
+func HMM_NormalizeVec3(A []float32) []float32 {
+	Result := make([]float32, 3)
+
+	VectorLength := HMM_LengthVec3(A)
+
+	/* NOTE(kiljacken): We need a zero check to not divide-by-zero */
+	if VectorLength != 0.0 {
+		Result[0] = A[0] * (1.0 / VectorLength)
+		Result[1] = A[1] * (1.0 / VectorLength)
+		Result[2] = A[2] * (1.0 / VectorLength)
+	}
+
+	return (Result)
+}
+
 func HMM_Mat4d(Diagonal float32) []float32 {
 	Result := make([]float32, 16)
 
@@ -257,4 +284,28 @@ func HMM_MultiplyMat4(Left, Right []float32) []float32 {
 		}
 	}
 	return Result
+}
+
+func HMM_Rotate(Angle float32, Axis []float32) []float32 {
+	Result := HMM_Mat4d(1.0)
+
+	Axis = HMM_NormalizeVec3(Axis)
+
+	SinTheta := float32(math.Sin(HMM_ToRadians(Angle)))
+	CosTheta := float32(math.Cos(HMM_ToRadians(Angle)))
+	CosValue := 1.0 - CosTheta
+
+	Result[0*4+0] = (Axis[0] * Axis[0] * CosValue) + CosTheta
+	Result[0*4+1] = (Axis[0] * Axis[1] * CosValue) + (Axis[2] * SinTheta)
+	Result[0*4+2] = (Axis[0] * Axis[2] * CosValue) - (Axis[1] * SinTheta)
+
+	Result[1*4+0] = (Axis[1] * Axis[0] * CosValue) - (Axis[2] * SinTheta)
+	Result[1*4+1] = (Axis[1] * Axis[1] * CosValue) + CosTheta
+	Result[1*4+2] = (Axis[1] * Axis[2] * CosValue) + (Axis[0] * SinTheta)
+
+	Result[2*4+0] = (Axis[2] * Axis[0] * CosValue) + (Axis[1] * SinTheta)
+	Result[2*4+1] = (Axis[2] * Axis[1] * CosValue) - (Axis[0] * SinTheta)
+	Result[2*4+2] = (Axis[2] * Axis[2] * CosValue) + CosTheta
+
+	return (Result)
 }
