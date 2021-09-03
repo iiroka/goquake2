@@ -289,7 +289,16 @@ func (T *qClient) adjustAngles() {
 func (T *qClient) baseMove(cmd *shared.Usercmd_t) {
 	T.adjustAngles()
 
-	cmd.Copy(shared.Usercmd_t{})
+	cmd.Msec = 0
+	cmd.Buttons = 0
+	cmd.Angles[0] = 0
+	cmd.Angles[1] = 0
+	cmd.Angles[2] = 0
+	cmd.Forwardmove = 0
+	cmd.Sidemove = 0
+	cmd.Upmove = 0
+	cmd.Impulse = 0
+	cmd.Lightlevel = 0
 
 	for i := range cmd.Angles {
 		cmd.Angles[i] = int16(T.cl.viewangles[i])

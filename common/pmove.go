@@ -243,7 +243,7 @@ func PM_StepSlideMove(pm *shared.Pmove_t, pml *pml_t) {
  */
 func (T *qCommon) pmFriction(pm *shared.Pmove_t, pml *pml_t) {
 
-	vel := pml.velocity
+	vel := pml.velocity[:]
 
 	speed := float32(math.Sqrt(float64(vel[0]*vel[0]) + float64(vel[1]*vel[1]) + float64(vel[2]*vel[2])))
 
@@ -294,7 +294,6 @@ func PM_Accelerate(wishdir []float32, wishspeed, accel float32, pml *pml_t) {
 
 	currentspeed := shared.DotProduct(pml.velocity[:], wishdir)
 	addspeed := wishspeed - currentspeed
-
 	if addspeed <= 0 {
 		return
 	}
@@ -781,6 +780,8 @@ func (T *qCommon) Pmove(pm *shared.Pmove_t) {
 	pm.Groundentity = nil
 	pm.Watertype = 0
 	pm.Waterlevel = 0
+
+	// println("PMove", pm.Cmd.Forwardmove)
 
 	/* clear all pmove local vars */
 	pml := pml_t{}

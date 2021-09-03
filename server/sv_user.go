@@ -290,10 +290,9 @@ func (T *qServer) executeUserCommand(s string) error {
 	}
 
 	println("executeUserCommand", args[0])
-	// if (!u->name && (sv.state == ss_game))
-	// {
-	// 	ge->ClientCommand(sv_player);
-	// }
+	if T.sv.state == ss_game {
+		T.ge.ClientCommand(T.sv_player, args)
+	}
 	return nil
 }
 

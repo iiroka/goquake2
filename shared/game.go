@@ -214,7 +214,7 @@ type Game_export_t interface {
 	ClientBegin(ent Edict_s) error
 	// void (*ClientUserinfoChanged)(edict_t *ent, char *userinfo);
 	// void (*ClientDisconnect)(edict_t *ent);
-	// void (*ClientCommand)(edict_t *ent);
+	ClientCommand(ent Edict_s, args []string)
 	ClientThink(ent Edict_s, cmd *Usercmd_t)
 
 	RunFrame() error

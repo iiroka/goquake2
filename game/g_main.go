@@ -57,7 +57,7 @@ func (G *qGame) RunFrame() error {
 	//  gibsthisframe = 0;
 	//  debristhisframe = 0;
 
-	//  /* choose a client for monsters to target this frame */
+	/* choose a client for monsters to target this frame */
 	//  AI_SetSightClient();
 
 	//  /* exit intermissions */

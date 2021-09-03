@@ -79,6 +79,12 @@ const (
 	DEAD_DEAD        = 2
 	DEAD_RESPAWNABLE = 3
 
+	/* range */
+	RANGE_MELEE = 0
+	RANGE_NEAR  = 1
+	RANGE_MID   = 2
+	RANGE_FAR   = 3
+
 	/* monster ai flags */
 	AI_STAND_GROUND      = 0x00000001
 	AI_TEMP_STAND_GROUND = 0x00000002
@@ -102,6 +108,15 @@ const (
 	ARMOR_COMBAT = 2
 	ARMOR_BODY   = 3
 	ARMOR_SHARD  = 4
+)
+
+type weaponstate_t int
+
+const (
+	WEAPON_READY      weaponstate_t = 0
+	WEAPON_ACTIVATING weaponstate_t = 1
+	WEAPON_DROPPING   weaponstate_t = 2
+	WEAPON_FIRING     weaponstate_t = 3
 )
 
 /* edict->movetype values */
@@ -295,10 +310,10 @@ type monsterinfo_t struct {
 	nextframe   int
 	scale       float32
 
-	stand func(self *edict_t, G *qGame)
-	idle  func(self *edict_t, G *qGame)
-	// void (*search)(edict_t *self);
-	walk func(self *edict_t, G *qGame)
+	stand  func(self *edict_t, G *qGame)
+	idle   func(self *edict_t, G *qGame)
+	search func(self *edict_t, G *qGame)
+	walk   func(self *edict_t, G *qGame)
 	// void (*run)(edict_t *self);
 	// void (*dodge)(edict_t *self, edict_t *other, float eta);
 	// void (*attack)(edict_t *self);
@@ -402,8 +417,8 @@ func (G *client_persistant_t) copy(other client_persistant_t) {
 	G.max_slugs = other.max_slugs
 	G.weapon = other.weapon
 	G.lastweapon = other.lastweapon
-	// int power_cubes /* used for tracking the cubes in coop games */
-	// int score       /* for calculating total unit score in coop games */
+	// G.power_cubes = other.power_cubes
+	G.score = other.score
 	// int game_helpchanged
 	// int helpchanged
 	G.spectator = other.spectator
@@ -417,6 +432,16 @@ type client_respawn_t struct {
 	cmd_angles   [3]float32          /* angles sent over in the last command */
 
 	spectator bool /* client is a spectator */
+}
+
+func (R *client_respawn_t) copy(other client_respawn_t) {
+	R.coop_respawn.copy(other.coop_respawn)
+	R.enterframe = other.enterframe
+	R.score = other.score
+	for i := range R.cmd_angles {
+		R.cmd_angles[i] = other.cmd_angles[i]
+	}
+	R.spectator = other.spectator
 }
 
 /* this structure is cleared on each PutClientInServer(),
@@ -456,7 +481,7 @@ type gclient_t struct {
 
 	// float killer_yaw; /* when dead, look at killer */
 
-	// weaponstate_t weaponstate;
+	weaponstate                         weaponstate_t
 	kick_angles                         [3]float32 /* weapon kicks */
 	kick_origin                         [3]float32
 	v_dmg_roll, v_dmg_pitch, v_dmg_time float32 /* damage kicks */

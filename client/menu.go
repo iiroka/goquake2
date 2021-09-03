@@ -94,10 +94,11 @@ type MenuStr struct {
 	s_startserver_dmoptions_action menuaction_t
 	s_timelimit_field              menufield_t
 	s_fraglimit_field              menufield_t
-	s_capturelimit_field           menufield_t
-	s_maxclients_field             menufield_t
-	s_hostname_field               menufield_t
+	// s_capturelimit_field           menufield_t
+	s_maxclients_field menufield_t
+	s_hostname_field   menufield_t
 	//  static menulist_s s_startmap_list;
+	s_rules_box menulist_t
 	//  static menulist_s s_rules_box;
 
 }
@@ -320,13 +321,13 @@ func (T *qClient) defaultMenuKey(m *menuframework_t, key int) string {
 
 	case K_LEFTARROW:
 		if m != nil {
-			// Menu_SlideItem(m, -1)
+			m.SlideItem(-1)
 			return menu_move_sound
 		}
 
 	case K_RIGHTARROW:
 		if m != nil {
-			// Menu_SlideItem(m, 1)
+			m.SlideItem(1)
 			return menu_move_sound
 		}
 
@@ -955,26 +956,24 @@ func m_Menu_JoinServer_f(args []string, a interface{}) error {
 // 	 M_Menu_DMOptions_f();
 //  }
 
-//  static void
-//  RulesChangeFunc(void *self)
-//  {
-// 	 /* Deathmatch */
-// 	 if (s_rules_box.curvalue == 0)
-// 	 {
-// 		 s_maxclients_field.generic.statusbar = NULL;
-// 		 s_startserver_dmoptions_action.generic.statusbar = NULL;
-// 	 }
+func rulesChangeFunc(data *menucommon_t) {
+	Q := data.parent.owner
+	/* Deathmatch */
+	if Q.menu.s_rules_box.curvalue == 0 {
+		Q.menu.s_maxclients_field.statusbar = ""
+		Q.menu.s_startserver_dmoptions_action.statusbar = ""
+	}
 
-// 	 /* Ground Zero game modes */
-// 	 else if (M_IsGame("rogue"))
-// 	 {
-// 		 if (s_rules_box.curvalue == 2)
-// 		 {
-// 			 s_maxclients_field.generic.statusbar = NULL;
-// 			 s_startserver_dmoptions_action.generic.statusbar = NULL;
-// 		 }
-// 	 }
-//  }
+	/* Ground Zero game modes */
+	//  else if (M_IsGame("rogue"))
+	//  {
+	// 	 if (s_rules_box.curvalue == 2)
+	// 	 {
+	// 		 s_maxclients_field.generic.statusbar = NULL;
+	// 		 s_startserver_dmoptions_action.generic.statusbar = NULL;
+	// 	 }
+	//  }
+}
 
 func startServerActionFunc(data *menucommon_t) {
 	Q := data.parent.owner
@@ -1018,48 +1017,47 @@ func startServerActionFunc(data *menucommon_t) {
 
 	// 	 spot = NULL;
 
-	// 	 if (s_rules_box.curvalue == 1)
-	// 	 {
-	// 		 if (Q_stricmp(startmap, "bunk1") == 0)
-	// 		 {
-	// 			 spot = "start";
-	// 		 }
+	if Q.menu.s_rules_box.curvalue == 1 {
+		// 		 if (Q_stricmp(startmap, "bunk1") == 0)
+		// 		 {
+		// 			 spot = "start";
+		// 		 }
 
-	// 		 else if (Q_stricmp(startmap, "mintro") == 0)
-	// 		 {
-	// 			 spot = "start";
-	// 		 }
+		// 		 else if (Q_stricmp(startmap, "mintro") == 0)
+		// 		 {
+		// 			 spot = "start";
+		// 		 }
 
-	// 		 else if (Q_stricmp(startmap, "fact1") == 0)
-	// 		 {
-	// 			 spot = "start";
-	// 		 }
+		// 		 else if (Q_stricmp(startmap, "fact1") == 0)
+		// 		 {
+		// 			 spot = "start";
+		// 		 }
 
-	// 		 else if (Q_stricmp(startmap, "power1") == 0)
-	// 		 {
-	// 			 spot = "pstart";
-	// 		 }
+		// 		 else if (Q_stricmp(startmap, "power1") == 0)
+		// 		 {
+		// 			 spot = "pstart";
+		// 		 }
 
-	// 		 else if (Q_stricmp(startmap, "biggun") == 0)
-	// 		 {
-	// 			 spot = "bstart";
-	// 		 }
+		// 		 else if (Q_stricmp(startmap, "biggun") == 0)
+		// 		 {
+		// 			 spot = "bstart";
+		// 		 }
 
-	// 		 else if (Q_stricmp(startmap, "hangar1") == 0)
-	// 		 {
-	// 			 spot = "unitstart";
-	// 		 }
+		// 		 else if (Q_stricmp(startmap, "hangar1") == 0)
+		// 		 {
+		// 			 spot = "unitstart";
+		// 		 }
 
-	// 		 else if (Q_stricmp(startmap, "city1") == 0)
-	// 		 {
-	// 			 spot = "unitstart";
-	// 		 }
+		// 		 else if (Q_stricmp(startmap, "city1") == 0)
+		// 		 {
+		// 			 spot = "unitstart";
+		// 		 }
 
-	// 		 else if (Q_stricmp(startmap, "boss1") == 0)
-	// 		 {
-	// 			 spot = "bosstart";
-	// 		 }
-	// 	 }
+		// 		 else if (Q_stricmp(startmap, "boss1") == 0)
+		// 		 {
+		// 			 spot = "bosstart";
+		// 		 }
+	}
 
 	// 	 if (spot)
 	// 	 {
@@ -1079,12 +1077,10 @@ func startServerActionFunc(data *menucommon_t) {
 }
 
 func (T *qClient) startServer_MenuInit() error {
-	// 	 static const char *dm_coop_names[] =
-	// 	 {
-	// 		 "deathmatch",
-	// 		 "cooperative",
-	// 		 0
-	// 	 };
+	dm_coop_names := []string{
+		"deathmatch",
+		"cooperative",
+	}
 	// 	 static const char *dm_coop_names_rogue[] =
 	// 	 {
 	// 		 "deathmatch",
@@ -1104,7 +1100,7 @@ func (T *qClient) startServer_MenuInit() error {
 
 		T.menu.mapnames = []string{}
 		T.menu.nummaps = 0
-		// 		 s_startmap_list.curvalue = 0;
+		// T.menu.s_startmap_list.curvalue = 0
 
 		/* load the list of map names */
 		buffer, err := T.common.LoadFile("maps.lst")
@@ -1181,10 +1177,10 @@ func (T *qClient) startServer_MenuInit() error {
 	// 	 }
 	// 	 else
 	// 	 {
-	// 		 s_rules_box.generic.type = MTYPE_SPINCONTROL;
-	// 		 s_rules_box.generic.x = 0;
-	// 		 s_rules_box.generic.y = 20;
-	// 		 s_rules_box.generic.name = "rules";
+	//  s_rules_box.generic.type = MTYPE_SPINCONTROL;
+	T.menu.s_rules_box.x = 0
+	T.menu.s_rules_box.y = 20
+	T.menu.s_rules_box.name = "rules"
 
 	// 		 /* Ground Zero games only available with rogue game */
 	// 		 if (M_IsGame("rogue"))
@@ -1193,19 +1189,16 @@ func (T *qClient) startServer_MenuInit() error {
 	// 		 }
 	// 		 else
 	// 		 {
-	// 			 s_rules_box.itemnames = dm_coop_names;
+	T.menu.s_rules_box.itemnames = dm_coop_names
 	// 		 }
 
-	// 		 if (Cvar_VariableValue("coop"))
-	// 		 {
-	// 			 s_rules_box.curvalue = 1;
-	// 		 }
-	// 		 else
-	// 		 {
-	// 			 s_rules_box.curvalue = 0;
-	// 		 }
+	if T.common.Cvar_VariableBool("coop") {
+		T.menu.s_rules_box.curvalue = 1
+	} else {
+		T.menu.s_rules_box.curvalue = 0
+	}
 
-	// 		 s_rules_box.generic.callback = RulesChangeFunc;
+	T.menu.s_rules_box.callback = rulesChangeFunc
 	// 	 }
 
 	// 	 s_timelimit_field.generic.type = MTYPE_FIELD;
@@ -1278,6 +1271,7 @@ func (T *qClient) startServer_MenuInit() error {
 	// 		 Menu_AddItem(&s_startserver_menu, &s_capturelimit_field);
 	// 	 else
 	// 		 Menu_AddItem(&s_startserver_menu, &s_rules_box);
+	T.menu.s_startserver_menu.addItem(&T.menu.s_rules_box)
 
 	T.menu.s_startserver_menu.addItem(&T.menu.s_timelimit_field)
 	T.menu.s_startserver_menu.addItem(&T.menu.s_fraglimit_field)
@@ -1288,8 +1282,8 @@ func (T *qClient) startServer_MenuInit() error {
 
 	T.menu.s_startserver_menu.center()
 
-	// 	 /* call this now to set proper inital state */
-	// 	 RulesChangeFunc(NULL);
+	/* call this now to set proper inital state */
+	rulesChangeFunc(&T.menu.s_rules_box.menucommon_t)
 	return nil
 }
 

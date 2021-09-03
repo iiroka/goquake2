@@ -406,7 +406,7 @@ func (G *qGame) svPhysics_Step(ent *edict_t) {
 		// 		}
 
 		G.gi.Linkentity(ent)
-		// 		G_TouchTriggers(ent);
+		G.gTouchTriggers(ent)
 
 		if !ent.inuse {
 			return

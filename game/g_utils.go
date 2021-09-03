@@ -34,6 +34,13 @@ import (
 
 const MAXCHOICES = 8
 
+func gProjectSource(point, distance, forward, right, result []float32) {
+	result[0] = point[0] + forward[0]*distance[0] + right[0]*distance[1]
+	result[1] = point[1] + forward[1]*distance[0] + right[1]*distance[1]
+	result[2] = point[2] + forward[2]*distance[0] + right[2]*distance[1] +
+		distance[2]
+}
+
 /*
  * Searches all active entities for the next
  * one that holds the matching string at fieldofs

@@ -114,7 +114,6 @@ func (T *qGl3) lmBuildPolygonFromSurface(fa *msurface_t, mod *gl3model_t) {
 	pedges := mod.edges
 	lnumverts := fa.numedges
 
-	// VectorClear(total);
 	total := make([]float32, 3)
 
 	/* draw texture */

@@ -27,6 +27,9 @@ package game
 
 import "goquake2/shared"
 
+const HEALTH_IGNORE_MAX = 1
+const HEALTH_TIMED = 2
+
 var jacketarmor_info = gitem_armor_t{25, 50, .30, .00, ARMOR_JACKET}
 var combatarmor_info = gitem_armor_t{50, 100, .60, .30, ARMOR_COMBAT}
 var bodyarmor_info = gitem_armor_t{100, 200, .80, .60, ARMOR_BODY}
@@ -367,6 +370,41 @@ func (G *qGame) spawnItem(ent *edict_t, item *gitem_t) {
 	}
 }
 
+func Pickup_Health(ent, other *edict_t, G *qGame) bool {
+	if ent == nil || other == nil || G == nil {
+		return false
+	}
+
+	if (ent.Style & HEALTH_IGNORE_MAX) == 0 {
+		if other.Health >= other.max_health {
+			return false
+		}
+	}
+
+	other.Health += ent.count
+
+	if (ent.Style & HEALTH_IGNORE_MAX) == 0 {
+		if other.Health > other.max_health {
+			other.Health = other.max_health
+		}
+	}
+
+	// if (ent.Style & HEALTH_TIMED) != 0 {
+	// 	ent.think = MegaHealth_think
+	// 	ent.nextthink = level.time + 5
+	// 	ent.owner = other
+	// 	ent.flags |= FL_RESPAWN
+	// 	ent.svflags |= SVF_NOCLIENT
+	// 	ent.solid = SOLID_NOT
+	// } else {
+	// 	if (ent.Spawnflags&DROPPED_ITEM) == 0 && G.deathmatch.Bool() {
+	// 		SetRespawn(ent, 30)
+	// 	}
+	// }
+
+	return true
+}
+
 /* ====================================================================== */
 
 var gameitemlist = []gitem_t{
@@ -509,9 +547,9 @@ var gameitemlist = []gitem_t{
 	{
 		"weapon_blaster",
 		nil,
-		nil, // Use_Weapon,
+		use_Weapon,
 		nil,
-		nil, // Weapon_Blaster,
+		weapon_Blaster,
 		"misc/w_pkup.wav",
 		"", 0,
 		"models/weapons/v_blast/tris.md2",
@@ -531,7 +569,7 @@ var gameitemlist = []gitem_t{
 	{
 		"weapon_shotgun",
 		nil, // Pickup_Weapon,
-		nil, // Use_Weapon,
+		use_Weapon,
 		nil, // Drop_Weapon,
 		nil, // Weapon_Shotgun,
 		"misc/w_pkup.wav",
@@ -553,7 +591,7 @@ var gameitemlist = []gitem_t{
 	{
 		"weapon_supershotgun",
 		nil, // Pickup_Weapon,
-		nil, // Use_Weapon,
+		use_Weapon,
 		nil, // Drop_Weapon,
 		nil, // Weapon_SuperShotgun,
 		"misc/w_pkup.wav",
@@ -575,7 +613,7 @@ var gameitemlist = []gitem_t{
 	{
 		"weapon_machinegun",
 		nil, // Pickup_Weapon,
-		nil, // Use_Weapon,
+		use_Weapon,
 		nil, // Drop_Weapon,
 		nil, // Weapon_Machinegun,
 		"misc/w_pkup.wav",
@@ -597,7 +635,7 @@ var gameitemlist = []gitem_t{
 	{
 		"weapon_chaingun",
 		nil, // Pickup_Weapon,
-		nil, // Use_Weapon,
+		use_Weapon,
 		nil, // Drop_Weapon,
 		nil, // Weapon_Chaingun,
 		"misc/w_pkup.wav",
@@ -619,7 +657,7 @@ var gameitemlist = []gitem_t{
 	{
 		"ammo_grenades",
 		nil, // Pickup_Ammo,
-		nil, // Use_Weapon,
+		use_Weapon,
 		nil, // Drop_Ammo,
 		nil, // Weapon_Grenade,
 		"misc/am_pkup.wav",
@@ -641,7 +679,7 @@ var gameitemlist = []gitem_t{
 	{
 		"weapon_grenadelauncher",
 		nil, // Pickup_Weapon,
-		nil, // Use_Weapon,
+		use_Weapon,
 		nil, // Drop_Weapon,
 		nil, // Weapon_GrenadeLauncher,
 		"misc/w_pkup.wav",
@@ -663,7 +701,7 @@ var gameitemlist = []gitem_t{
 	{
 		"weapon_rocketlauncher",
 		nil, // Pickup_Weapon,
-		nil, // Use_Weapon,
+		use_Weapon,
 		nil, // Drop_Weapon,
 		nil, // Weapon_RocketLauncher,
 		"misc/w_pkup.wav",
@@ -685,7 +723,7 @@ var gameitemlist = []gitem_t{
 	{
 		"weapon_hyperblaster",
 		nil, // Pickup_Weapon,
-		nil, // Use_Weapon,
+		use_Weapon,
 		nil, // Drop_Weapon,
 		nil, // Weapon_HyperBlaster,
 		"misc/w_pkup.wav",
@@ -707,7 +745,7 @@ var gameitemlist = []gitem_t{
 	{
 		"weapon_railgun",
 		nil, // Pickup_Weapon,
-		nil, // Use_Weapon,
+		use_Weapon,
 		nil, // Drop_Weapon,
 		nil, // Weapon_Railgun,
 		"misc/w_pkup.wav",
@@ -729,7 +767,7 @@ var gameitemlist = []gitem_t{
 	{
 		"weapon_bfg",
 		nil, // Pickup_Weapon,
-		nil, // Use_Weapon,
+		use_Weapon,
 		nil, // Drop_Weapon,
 		nil, // Weapon_BFG,
 		"misc/w_pkup.wav",
@@ -1265,7 +1303,7 @@ var gameitemlist = []gitem_t{
 
 	{
 		"",
-		nil, // Pickup_Health,
+		Pickup_Health,
 		nil,
 		nil,
 		nil,

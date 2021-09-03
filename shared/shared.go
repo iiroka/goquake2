@@ -303,12 +303,10 @@ type Pmove_t struct {
 	Waterlevel   int
 
 	/* callbacks to test the world */
-	TraceArg interface{}
-	Trace    func(start, mins, maxs, end []float32, a interface{}) Trace_t
-	// trace_t (*trace)(vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end);
+	TraceArg      interface{}
+	Trace         func(start, mins, maxs, end []float32, a interface{}) Trace_t
 	PCArg         interface{}
 	Pointcontents func(point []float32, a interface{}) int
-	// int (*pointcontents)(vec3_t point);
 }
 
 const (

@@ -278,7 +278,7 @@ func (G *qGame) spMonsterSoldierX(self *edict_t) {
 	// self->monsterinfo.dodge = soldier_dodge;
 	// self->monsterinfo.attack = soldier_attack;
 	// self->monsterinfo.melee = NULL;
-	// self->monsterinfo.sight = soldier_sight;
+	// self.monsterinfo.sight = soldier_sight
 
 	G.gi.Linkentity(self)
 

@@ -25,6 +25,8 @@
  */
 package client
 
+import "strings"
+
 const QMF_LEFT_JUSTIFY uint = 0x00000001
 const QMF_GRAYED uint = 0x00000002
 const QMF_NUMBERSONLY uint = 0x00000004
@@ -53,7 +55,9 @@ type menuitem_t interface {
 	getFlags() uint
 	getCursorOffset() int
 	doEnter() bool
+	DoSlide(dir int)
 	isField() bool
+	listItems() int
 }
 
 type menucommon_t struct {
@@ -96,6 +100,16 @@ func (T *menucommon_t) isField() bool {
 	return false
 }
 
+func (T *menucommon_t) listItems() int {
+	return 0
+}
+
+func (T *menucommon_t) doEnter() bool {
+	return false
+}
+
+func (T *menucommon_t) DoSlide(dir int) {}
+
 type menufield_t struct {
 	menucommon_t
 
@@ -112,6 +126,12 @@ func (T *menufield_t) isField() bool {
 
 type menuaction_t struct {
 	menucommon_t
+}
+
+type menulist_t struct {
+	menucommon_t
+	curvalue  int
+	itemnames []string
 }
 
 func (T *menuframework_t) addItem(item menuitem_t) {
@@ -179,6 +199,13 @@ func (T *menuframework_t) adjustCursor(dir int) {
 		// 			 m->cursor = m->nitems - 1;
 		// 		 }
 		// 	 }
+	}
+}
+
+func (T *menuframework_t) SlideItem(dir int) {
+	item := T.itemAtCursor()
+	if item != nil {
+		item.DoSlide(dir)
 	}
 }
 
@@ -251,17 +278,6 @@ func (T *menuframework_t) selectItem() bool {
 
 	if item != nil {
 		return item.doEnter()
-		// switch (item->type) {
-		// 	case MTYPE_FIELD:
-		// 		return Field_DoEnter((menufield_s *)item);
-		// 	case MTYPE_ACTION:
-		// 		Action_DoEnter((menuaction_s *)item);
-		// 		return true;
-		// 	case MTYPE_LIST:
-		// 		return false;
-		// 	case MTYPE_SPINCONTROL:
-		// 		return false;
-		// }
 	}
 
 	return false
@@ -278,20 +294,13 @@ func (T *menuframework_t) itemAtCursor() menuitem_t {
 func (T *menuframework_t) tallySlots() int {
 	total := 0
 
-	for _ = range T.items {
-		// if list, ok := T.items[i].(*menulist_t); ok {
-		// if (((menucommon_s *)menu->items[i])->type == MTYPE_LIST) {
-		// 	int nitems = 0;
-		// 	const char **n = ((menulist_s *)menu->items[i])->itemnames;
-
-		// 	while (*n) {
-		// 		nitems++, n++;
-		// 	}
-
-		// 	total += nitems;
-		// } else {
-		total++
-		// }
+	for _, item := range T.items {
+		nitems := item.listItems()
+		if nitems > 0 {
+			total += nitems
+		} else {
+			total++
+		}
 	}
 
 	return total
@@ -340,33 +349,25 @@ func (T *menufield_t) draw() {
 	Q.menuDrawString(int(float32(T.x+T.parent.x+24)*scale),
 		T.y+T.parent.y, tempbuffer)
 
-	// if (Menu_ItemAtCursor(f->generic.parent) == f)
-	// {
-	// 	int offset;
+	if T.parent.itemAtCursor() == T {
+		offset := 0
 
-	// 	if (f->visible_offset)
-	// 	{
-	// 		offset = f->visible_length;
-	// 	}
+		if T.visible_offset != 0 {
+			offset = T.visible_length
+		} else {
+			offset = T.cursor
+		}
 
-	// 	else
-	// 	{
-	// 		offset = f->cursor;
-	// 	}
-
-	// 	if (((int)(Sys_Milliseconds() / 250)) & 1)
-	// 	{
-	// 		Draw_CharScaled(
-	// 			f->generic.x + f->generic.parent->x + 24 * scale + (offset * 8 * scale),
-	// 			(f->generic.y + f->generic.parent->y) * scale, 11, scale);
-	// 	}
-	// 	else
-	// 	{
-	// 		Draw_CharScaled(
-	// 			f->generic.x + f->generic.parent->x + 24 * scale + (offset * 8 * scale),
-	// 			(f->generic.y + f->generic.parent->y) * scale, ' ', scale);
-	// 	}
-	// }
+		if ((Q.common.Sys_Milliseconds() / 250) & 1) != 0 {
+			Q.Draw_CharScaled(
+				int(float32(T.x+T.parent.x+24)*scale+(float32(offset)*8*scale)),
+				int(float32(T.y+T.parent.y)*scale), 11, scale)
+		} else {
+			Q.Draw_CharScaled(
+				int(float32(T.x+T.parent.x+24)*scale+(float32(offset)*8*scale)),
+				int(float32(T.y+T.parent.y)*scale), 32, scale)
+		}
+	}
 }
 
 func (T *menuaction_t) draw() {
@@ -383,16 +384,16 @@ func (T *menuaction_t) draw() {
 		}
 	} else {
 		if (T.flags & QMF_GRAYED) != 0 {
-			// 		Menu_DrawStringR2LDark(a->generic.x + a->generic.parent->x + (LCOLUMN_OFFSET * scale),
-			// 				a->generic.y + a->generic.parent->y, a->generic.name);
+			Q.menuDrawStringR2LDark(T.x+T.parent.x+int(LCOLUMN_OFFSET*scale),
+				T.y+T.parent.y, T.name)
 		} else {
-			// 		Menu_DrawStringR2L(a->generic.x + a->generic.parent->x + (LCOLUMN_OFFSET * scale),
-			// 				a->generic.y + a->generic.parent->y, a->generic.name);
+			Q.menuDrawStringR2L(T.x+T.parent.x+int(LCOLUMN_OFFSET*scale),
+				T.y+T.parent.y, T.name)
 		}
 	}
 
-	// if (a->generic.ownerdraw) {
-	// 	a->generic.ownerdraw(a);
+	// if (T.ownerdraw) {
+	// 	T.ownerdraw(T);
 	// }
 }
 
@@ -401,6 +402,46 @@ func (T *menuaction_t) doEnter() bool {
 		T.callback(&T.menucommon_t)
 	}
 	return true
+}
+
+func (T *menulist_t) draw() {
+	// char buffer[100];
+	Q := T.parent.owner
+	scale := Q.scrGetMenuScale()
+
+	if len(T.name) > 0 {
+		Q.menuDrawStringR2LDark(T.x+T.parent.x+int(LCOLUMN_OFFSET*scale), T.y+T.parent.y,
+			T.name)
+	}
+
+	if !strings.Contains(T.itemnames[T.curvalue], "\n") {
+		Q.menuDrawString(int(RCOLUMN_OFFSET*scale)+T.x+T.parent.x,
+			T.y+T.parent.y, T.itemnames[T.curvalue])
+	} else {
+		// 	strcpy(buffer, s->itemnames[s->curvalue]);
+		// 	*strchr(buffer, '\n') = 0;
+		// 	Menu_DrawString(RCOLUMN_OFFSET * scale + s->generic.x +
+		// 		   	s->generic.parent->x, s->generic.y +
+		// 			s->generic.parent->y, buffer);
+		// 	strcpy(buffer, strchr(s->itemnames[s->curvalue], '\n') + 1);
+		// 	Menu_DrawString(RCOLUMN_OFFSET * scale + s->generic.x +
+		// 			s->generic.parent->x, s->generic.y +
+		// 			s->generic.parent->y + 10, buffer);
+	}
+}
+
+func (T *menulist_t) DoSlide(dir int) {
+	T.curvalue += dir
+
+	if T.curvalue < 0 {
+		T.curvalue = 0
+	} else if T.curvalue >= len(T.itemnames) {
+		T.curvalue--
+	}
+
+	if T.callback != nil {
+		T.callback(&T.menucommon_t)
+	}
 }
 
 func (T *qClient) menuDrawString(x, y int, str string) {

@@ -349,9 +349,9 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 	resp := client_respawn_t{}
 	/* deathmatch wipes most client data every spawn */
 	if G.deathmatch.Bool() {
-		// 	 resp = client->resp;
+		resp.copy(client.resp)
 		userinfo := string(client.pers.userinfo)
-		// 	 InitClientPersistant(client);
+		G.initClientPersistant(client)
 		G.clientUserinfoChanged(ent, userinfo)
 	}
 	//  else if (coop->value)
@@ -1152,7 +1152,7 @@ func (G *qGame) clientBeginServerFrame(ent *edict_t) {
 	// 	 return;
 	//  }
 
-	//  /* run weapon animations if it hasn't been done by a ucmd_t */
+	/* run weapon animations if it hasn't been done by a ucmd_t */
 	if !client.weapon_thunk && !client.resp.spectator {
 		G.thinkWeapon(ent)
 	} else {
