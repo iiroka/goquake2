@@ -58,15 +58,14 @@ func (G *qGameImp) Configstring(num int, str string) error {
 	/* change the string in sv */
 	G.T.sv.configstrings[num] = str
 
-	// if sv.state != ss_loading {
-	// 	/* send the update to everyone */
-	// 	SZ_Clear(&sv.multicast)
-	// 	MSG_WriteChar(&sv.multicast, svc_configstring)
-	// 	MSG_WriteShort(&sv.multicast, index)
-	// 	MSG_WriteString(&sv.multicast, val)
-
-	// 	SV_Multicast(vec3_origin, MULTICAST_ALL_R)
-	// }
+	if G.T.sv.state != ss_loading {
+		/* send the update to everyone */
+		G.T.sv.multicast.Clear()
+		G.T.sv.multicast.WriteChar(shared.SvcConfigstring)
+		G.T.sv.multicast.WriteShort(num)
+		G.T.sv.multicast.WriteString(str)
+		G.T.svMulticast([]float32{0, 0, 0}, shared.MULTICAST_ALL_R)
+	}
 	return nil
 }
 
@@ -116,7 +115,7 @@ func (G *qGameImp) Setmodel(ent shared.Edict_s, name string) error {
 	}
 
 	i := G.T.svFindIndex(name, shared.CS_MODELS, shared.MAX_MODELS, true)
-
+	println("Setmodel", name, i)
 	ent.S().Modelindex = i
 
 	/* if it is an inline model, get

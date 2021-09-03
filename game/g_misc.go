@@ -27,6 +27,72 @@ package game
 
 import "goquake2/shared"
 
+/* ===================================================== */
+
+/*
+ * QUAKED path_corner (.5 .3 0) (-8 -8 -8) (8 8 8) TELEPORT
+ * Target: next path corner
+ * Pathtarget: gets used when an entity that has
+ *             this path_corner targeted touches it
+ */
+func path_corner_touch(self, other *edict_t, plane *shared.Cplane_t,
+	surf *shared.Csurface_t, G *qGame) {
+
+	if self == nil || other == nil || G == nil {
+		return
+	}
+
+	if other.movetarget != self {
+		return
+	}
+
+	if other.enemy != nil {
+		return
+	}
+
+	if len(self.Pathtarget) > 0 {
+		savetarget := self.Target
+		self.Target = self.Pathtarget
+		G.gUseTargets(self, other)
+		self.Target = savetarget
+	}
+
+	var next *edict_t
+	if len(self.Target) > 0 {
+		next = G.gPickTarget(self.Target)
+	} else {
+		next = nil
+	}
+
+	if (next != nil) && (next.Spawnflags&1) != 0 {
+		v := make([]float32, 3)
+		copy(v, next.s.Origin[:])
+		v[2] += next.mins[2]
+		v[2] -= other.mins[2]
+		copy(other.s.Origin[:], v)
+		next = G.gPickTarget(next.Target)
+		other.s.Event = shared.EV_OTHER_TELEPORT
+	}
+
+	other.goalentity = next
+	other.movetarget = next
+
+	if self.Wait != 0 {
+		other.monsterinfo.pausetime = G.level.time + self.Wait
+		other.monsterinfo.stand(other, G)
+		return
+	}
+
+	if other.movetarget == nil {
+		other.monsterinfo.pausetime = G.level.time + 100000000
+		other.monsterinfo.stand(other, G)
+	} else {
+		v := make([]float32, 3)
+		shared.VectorSubtract(other.goalentity.s.Origin[:], other.s.Origin[:], v)
+		other.ideal_yaw = vectoyaw(v)
+	}
+}
+
 func spPathCorner(self *edict_t, G *qGame) error {
 	if self == nil || G == nil {
 		return nil
@@ -40,7 +106,7 @@ func spPathCorner(self *edict_t, G *qGame) error {
 	}
 
 	self.solid = shared.SOLID_TRIGGER
-	// self.touch = path_corner_touch
+	self.touch = path_corner_touch
 	self.mins = [3]float32{-8, -8, -8}
 	self.maxs = [3]float32{8, 8, 8}
 	self.svflags |= shared.SVF_NOCLIENT
@@ -57,81 +123,65 @@ func spPathCorner(self *edict_t, G *qGame) error {
  * when first activated before going after the activator.  If
  * hold is selected, it will stay here.
  */
-//  void
-//  point_combat_touch(edict_t *self, edict_t *other, cplane_t *plane /* unused */,
-// 		 csurface_t *surf /* unused */)
-//  {
-// 	 edict_t *activator;
+func point_combat_touch(self, other *edict_t, plane *shared.Cplane_t,
+	surf *shared.Csurface_t, G *qGame) {
 
-// 	 if (!self || !other)
-// 	 {
-// 		 return;
-// 	 }
+	if self == nil || other == nil || G == nil {
+		return
+	}
 
-// 	 if (other->movetarget != self)
-// 	 {
-// 		 return;
-// 	 }
+	if other.movetarget != self {
+		return
+	}
 
-// 	 if (self->target)
-// 	 {
-// 		 other->target = self->target;
-// 		 other->goalentity = other->movetarget = G_PickTarget(other->target);
+	if len(self.Target) > 0 {
+		other.Target = self.Target
+		other.movetarget = G.gPickTarget(other.Target)
+		other.goalentity = other.movetarget
 
-// 		 if (!other->goalentity)
-// 		 {
-// 			 gi.dprintf("%s at %s target %s does not exist\n",
-// 					 self->classname,
-// 					 vtos(self->s.origin),
-// 					 self->target);
-// 			 other->movetarget = self;
-// 		 }
+		// 		 if (!other->goalentity)
+		// 		 {
+		// 			 gi.dprintf("%s at %s target %s does not exist\n",
+		// 					 self->classname,
+		// 					 vtos(self->s.origin),
+		// 					 self->target);
+		// 			 other->movetarget = self;
+		// 		 }
 
-// 		 self->target = NULL;
-// 	 }
-// 	 else if ((self->spawnflags & 1) && !(other->flags & (FL_SWIM | FL_FLY)))
-// 	 {
-// 		 other->monsterinfo.pausetime = level.time + 100000000;
-// 		 other->monsterinfo.aiflags |= AI_STAND_GROUND;
-// 		 other->monsterinfo.stand(other);
-// 	 }
+		self.Target = ""
+	} else if (self.Spawnflags&1) != 0 && (other.flags&(FL_SWIM|FL_FLY)) == 0 {
+		other.monsterinfo.pausetime = G.level.time + 100000000
+		other.monsterinfo.aiflags |= AI_STAND_GROUND
+		other.monsterinfo.stand(other, G)
+	}
 
-// 	 if (other->movetarget == self)
-// 	 {
-// 		 other->target = NULL;
-// 		 other->movetarget = NULL;
-// 		 other->goalentity = other->enemy;
-// 		 other->monsterinfo.aiflags &= ~AI_COMBAT_POINT;
-// 	 }
+	if other.movetarget == self {
+		other.Target = ""
+		other.movetarget = nil
+		other.goalentity = other.enemy
+		other.monsterinfo.aiflags &^= AI_COMBAT_POINT
+	}
 
-// 	 if (self->pathtarget)
-// 	 {
-// 		 char *savetarget;
+	if len(self.Pathtarget) > 0 {
 
-// 		 savetarget = self->target;
-// 		 self->target = self->pathtarget;
+		savetarget := self.Target
+		self.Target = self.Pathtarget
 
-// 		 if (other->enemy && other->enemy->client)
-// 		 {
-// 			 activator = other->enemy;
-// 		 }
-// 		 else if (other->oldenemy && other->oldenemy->client)
-// 		 {
-// 			 activator = other->oldenemy;
-// 		 }
-// 		 else if (other->activator && other->activator->client)
-// 		 {
-// 			 activator = other->activator;
-// 		 }
-// 		 else
-// 		 {
-// 			 activator = other;
-// 		 }
+		var activator *edict_t
+		if other.enemy != nil && other.enemy.client != nil {
+			activator = other.enemy
+		} else if other.oldenemy != nil && other.oldenemy.client != nil {
+			activator = other.oldenemy
+		} else if other.activator != nil && other.activator.client != nil {
+			activator = other.activator
+		} else {
+			activator = other
+		}
 
-// 		 G_UseTargets(self, activator);
-// 		 self->target = savetarget;
-// 	 }
-//  }
+		G.gUseTargets(self, activator)
+		self.Target = savetarget
+	}
+}
 
 func spPointCombat(self *edict_t, G *qGame) error {
 	if self == nil || G == nil {
@@ -144,7 +194,7 @@ func spPointCombat(self *edict_t, G *qGame) error {
 	}
 
 	self.solid = shared.SOLID_TRIGGER
-	// self.touch = point_combat_touch
+	self.touch = point_combat_touch
 	self.mins = [3]float32{-8, -8, -16}
 	self.maxs = [3]float32{8, 8, 16}
 	self.svflags = shared.SVF_NOCLIENT
@@ -174,5 +224,23 @@ func spLight(self *edict_t, G *qGame) error {
 			return G.gi.Configstring(shared.CS_LIGHTS+self.Style, "m")
 		}
 	}
+	return nil
+}
+
+/*
+ * QUAKED misc_teleporter_dest (1 0 0) (-32 -32 -24) (32 32 -16)
+ * Point teleporters at these.
+ */
+func spMiscTeleporterDest(ent *edict_t, G *qGame) error {
+	if ent == nil || G == nil {
+		return nil
+	}
+
+	G.gi.Setmodel(ent, "models/objects/dmspot/tris.md2")
+	ent.s.Skinnum = 0
+	ent.solid = shared.SOLID_BBOX
+	copy(ent.mins[:], []float32{-32, -32, -24})
+	copy(ent.maxs[:], []float32{32, 32, -16})
+	G.gi.Linkentity(ent)
 	return nil
 }

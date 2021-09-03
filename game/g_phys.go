@@ -25,7 +25,9 @@
  */
 package game
 
-import "goquake2/shared"
+import (
+	"goquake2/shared"
+)
 
 func (G *qGame) svCheckVelocity(ent *edict_t) {
 	if ent == nil {
@@ -138,6 +140,265 @@ func (G *qGame) svPushEntity(ent *edict_t, push []float32) shared.Trace_t {
 	// 	 }
 
 	return trace
+}
+
+type pushed_t struct {
+	ent      *edict_t
+	origin   [3]float32
+	angles   [3]float32
+	deltayaw float32
+}
+
+/*
+ * Objects need to be moved back on a failed push,
+ * otherwise riders would continue to slide.
+ */
+func (G *qGame) svPush(pusher *edict_t, move, amove []float32) bool {
+	//  int i, e;
+	//  edict_t *check, *block;
+	//  pushed_t *p;
+	//  vec3_t org, org2, move2, forward, right, up;
+	//  vec3_t realmins, realmaxs;
+
+	if pusher == nil {
+		return false
+	}
+
+	/* clamp the move to 1/8 units, so the position will
+	be accurate for client side prediction */
+	for i := 0; i < 3; i++ {
+		temp := move[i] * 8.0
+
+		if temp > 0.0 {
+			temp += 0.5
+		} else {
+			temp -= 0.5
+		}
+
+		move[i] = 0.125 * float32(int(temp))
+	}
+
+	/* we need this for pushing things later */
+	org := make([]float32, 3)
+	shared.VectorSubtract([]float32{0, 0, 0}, amove, org)
+	forward := make([]float32, 3)
+	right := make([]float32, 3)
+	up := make([]float32, 3)
+	shared.AngleVectors(org, forward, right, up)
+
+	/* save the pusher's original position */
+	G.pushed[G.pushed_i].ent = pusher
+	copy(G.pushed[G.pushed_i].origin[:], pusher.s.Origin[:])
+	copy(G.pushed[G.pushed_i].angles[:], pusher.s.Angles[:])
+
+	if pusher.client != nil {
+		G.pushed[G.pushed_i].deltayaw = float32(pusher.client.ps.Pmove.Delta_angles[shared.YAW])
+	}
+
+	G.pushed_i++
+
+	/* move the pusher to it's final position */
+	shared.VectorAdd(pusher.s.Origin[:], move, pusher.s.Origin[:])
+	shared.VectorAdd(pusher.s.Angles[:], amove, pusher.s.Angles[:])
+	G.gi.Linkentity(pusher)
+
+	/* Create a real bounding box for
+	rotating brush models. */
+	//  RealBoundingBox(pusher,realmins,realmaxs);
+
+	/* see if any solid entities
+	are inside the final position */
+	//  check = g_edicts + 1;
+
+	for e := 1; e < G.num_edicts; e++ {
+		check := &G.g_edicts[e]
+		if !check.inuse {
+			continue
+		}
+
+		if (check.movetype == MOVETYPE_PUSH) ||
+			(check.movetype == MOVETYPE_STOP) ||
+			(check.movetype == MOVETYPE_NONE) ||
+			(check.movetype == MOVETYPE_NOCLIP) {
+			continue
+		}
+
+		if check.area.Prev == nil {
+			continue /* not linked in anywhere */
+		}
+
+		/* if the entity is standing on the pusher,
+		it will definitely be moved */
+		// 	 if (check->groundentity != pusher)
+		// 	 {
+		// 		 /* see if the ent needs to be tested */
+		// 		 if ((check->absmin[0] >= realmaxs[0]) ||
+		// 			 (check->absmin[1] >= realmaxs[1]) ||
+		// 			 (check->absmin[2] >= realmaxs[2]) ||
+		// 			 (check->absmax[0] <= realmins[0]) ||
+		// 			 (check->absmax[1] <= realmins[1]) ||
+		// 			 (check->absmax[2] <= realmins[2]))
+		// 		 {
+		// 			 continue;
+		// 		 }
+
+		// 		 /* see if the ent's bbox is inside
+		// 			the pusher's final position */
+		// 		 if (!SV_TestEntityPosition(check))
+		// 		 {
+		// 			 continue;
+		// 		 }
+		// 	 }
+
+		// 	 if ((pusher->movetype == MOVETYPE_PUSH) ||
+		// 		 (check->groundentity == pusher))
+		// 	 {
+		// 		 /* move this entity */
+		// 		 pushed_p->ent = check;
+		// 		 VectorCopy(check->s.origin, pushed_p->origin);
+		// 		 VectorCopy(check->s.angles, pushed_p->angles);
+		// 		 pushed_p++;
+
+		// 		 /* try moving the contacted entity */
+		// 		 VectorAdd(check->s.origin, move, check->s.origin);
+
+		// 		 if (check->client)
+		// 		 {
+		// 			 check->client->ps.pmove.delta_angles[YAW] += amove[YAW];
+		// 		 }
+
+		// 		 /* figure movement due to the pusher's amove */
+		// 		 VectorSubtract(check->s.origin, pusher->s.origin, org);
+		// 		 org2[0] = DotProduct(org, forward);
+		// 		 org2[1] = -DotProduct(org, right);
+		// 		 org2[2] = DotProduct(org, up);
+		// 		 VectorSubtract(org2, org, move2);
+		// 		 VectorAdd(check->s.origin, move2, check->s.origin);
+
+		// 		 /* may have pushed them off an edge */
+		// 		 if (check->groundentity != pusher)
+		// 		 {
+		// 			 check->groundentity = NULL;
+		// 		 }
+
+		// 		 block = SV_TestEntityPosition(check);
+
+		// 		 if (!block)
+
+		// 		 {   /* pushed ok */
+		// 			 gi.linkentity(check);
+		// 			 continue;
+		// 		 }
+
+		// 		 /* if it is ok to leave in the old position, do it
+		// 			this is only relevent for riding entities, not
+		// 			pushed */
+		// 		 VectorSubtract(check->s.origin, move, check->s.origin);
+		// 		 block = SV_TestEntityPosition(check);
+
+		// 		 if (!block)
+		// 		 {
+		// 			 pushed_p--;
+		// 			 continue;
+		// 		 }
+		// 	 }
+
+		/* save off the obstacle so we can
+		call the block function */
+		G.obstacle = check
+
+		// 	 /* move back any entities we already moved
+		// 		go backwards, so if the same entity was pushed
+		// 		twice, it goes back to the original position */
+		// 	 for (p = pushed_p - 1; p >= pushed; p--)
+		// 	 {
+		// 		 VectorCopy(p->origin, p->ent->s.origin);
+		// 		 VectorCopy(p->angles, p->ent->s.angles);
+
+		// 		 if (p->ent->client)
+		// 		 {
+		// 			 p->ent->client->ps.pmove.delta_angles[YAW] = p->deltayaw;
+		// 		 }
+
+		// 		 gi.linkentity(p->ent);
+		// 	 }
+
+		return false
+	}
+
+	//  /* see if anything we moved has touched a trigger */
+	//  for (p = pushed_p - 1; p >= pushed; p--)
+	//  {
+	// 	 G_TouchTriggers(p->ent);
+	//  }
+
+	return true
+}
+
+/*
+ * Bmodel objects don't interact with each
+ * other, but push all box objects
+ */
+func (G *qGame) svPhysics_Pusher(ent *edict_t) {
+
+	if ent == nil {
+		return
+	}
+
+	/* if not a team captain, so movement
+	will be handled elsewhere */
+	if (ent.flags & FL_TEAMSLAVE) != 0 {
+		return
+	}
+
+	/* make sure all team slaves can move before commiting
+	any moves or calling any think functions if the move
+	is blocked, all moved objects will be backed out */
+	G.pushed_i = 0
+
+	var part *edict_t
+	for part = ent; part != nil; part = part.teamchain {
+		if part.velocity[0] != 0 || part.velocity[1] != 0 || part.velocity[2] != 0 ||
+			part.avelocity[0] != 0 || part.avelocity[1] != 0 || part.avelocity[2] != 0 {
+			/* object is moving */
+			move := make([]float32, 3)
+			amove := make([]float32, 3)
+			shared.VectorScale(part.velocity[:], FRAMETIME, move)
+			shared.VectorScale(part.avelocity[:], FRAMETIME, amove)
+
+			if !G.svPush(part, move, amove) {
+				break /* move was blocked */
+			}
+		}
+	}
+
+	//  if (pushed_p > &pushed[MAX_EDICTS -1 ])
+	//  {
+	// 	 gi.error("pushed_p > &pushed[MAX_EDICTS - 1], memory corrupted");
+	//  }
+
+	if part != nil {
+		/* the move failed, bump all nextthink
+		times and back out moves */
+		for mv := ent; mv != nil; mv = mv.teamchain {
+			if mv.nextthink > 0 {
+				mv.nextthink += FRAMETIME
+			}
+		}
+
+		// 	 /* if the pusher has a "blocked" function, call it
+		// 		otherwise, just stay in place until the obstacle
+		// 		is gone */
+		// 	 if (part->blocked)
+		// 	 {
+		// 		 part->blocked(part, obstacle);
+		// 	 }
+	} else {
+		/* the move succeeded, so call all think functions */
+		for part := ent; part != nil; part = part.teamchain {
+			G.svRunThink(part)
+		}
+	}
 }
 
 /* ================================================================== */
@@ -437,10 +698,9 @@ func (G *qGame) runEntity(ent *edict_t) error {
 	// }
 
 	switch ent.movetype {
-	// case MOVETYPE_PUSH:
-	// 	case MOVETYPE_STOP:
-	// 		SV_Physics_Pusher(ent);
-	// 		break;
+	case MOVETYPE_PUSH,
+		MOVETYPE_STOP:
+		G.svPhysics_Pusher(ent)
 	case MOVETYPE_NONE:
 		G.svPhysics_None(ent)
 		// 	case MOVETYPE_NOCLIP:

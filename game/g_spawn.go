@@ -34,19 +34,24 @@ import (
 )
 
 var spawns = map[string]func(ent *edict_t, G *qGame) error{
-	"item_health":       spItemHealth,
-	"item_health_small": spItemHealthSmall,
-	"item_health_large": spItemHealthLarge,
-	"item_health_mega":  spItemHealthMega,
-	"info_player_start": spInfoPlayerStart,
-	"func_timer":        spFuncTimer,
-	"trigger_relay":     spTriggerRelay,
-	"target_speaker":    spTargetSpeaker,
-	"worldspawn":        spWorldspawn,
-	"light":             spLight,
-	"point_combat":      spPointCombat,
-	"path_corner":       spPathCorner,
-	"monster_soldier":   spMonsterSoldier,
+	"item_health":            spItemHealth,
+	"item_health_small":      spItemHealthSmall,
+	"item_health_large":      spItemHealthLarge,
+	"item_health_mega":       spItemHealthMega,
+	"info_player_start":      spInfoPlayerStart,
+	"info_player_deathmatch": spInfoPlayerDeathmatch,
+	"func_door":              spFuncDoor,
+	"func_timer":             spFuncTimer,
+	"trigger_once":           spTriggerOnce,
+	"trigger_multiple":       spTriggerMultiple,
+	"trigger_relay":          spTriggerRelay,
+	"target_speaker":         spTargetSpeaker,
+	"worldspawn":             spWorldspawn,
+	"light":                  spLight,
+	"point_combat":           spPointCombat,
+	"path_corner":            spPathCorner,
+	"misc_teleporter_dest":   spMiscTeleporterDest,
+	"monster_soldier":        spMonsterSoldier,
 }
 
 /*
@@ -54,9 +59,6 @@ var spawns = map[string]func(ent *edict_t, G *qGame) error{
  * the entity and calls it
  */
 func (G *qGame) edCallSpawn(ent *edict_t) error {
-	//  spawn_t *s;
-	//  gitem_t *item;
-	//  int i;
 
 	if ent == nil {
 		return nil
@@ -69,20 +71,17 @@ func (G *qGame) edCallSpawn(ent *edict_t) error {
 	}
 
 	/* check item spawn functions */
-	//  for (i = 0, item = itemlist; i < game.num_items; i++, item++)
-	//  {
-	// 	 if (!item->classname)
-	// 	 {
-	// 		 continue;
-	// 	 }
+	for i, item := range gameitemlist {
+		if len(item.classname) == 0 {
+			continue
+		}
 
-	// 	 if (!strcmp(item->classname, ent->classname))
-	// 	 {
-	// 		 /* found it */
-	// 		 SpawnItem(ent, item);
-	// 		 return;
-	// 	 }
-	//  }
+		if item.classname == ent.Classname {
+			/* found it */
+			G.spawnItem(ent, &gameitemlist[i])
+			return nil
+		}
+	}
 
 	/* check normal spawn functions */
 	if s, ok := spawns[ent.Classname]; ok {
@@ -200,9 +199,7 @@ func (G *qGame) edParseEdict(data string, index int, ent *edict_t) (int, error) 
 	}
 
 	if !init {
-		index := ent.index
-		G.g_edicts[index] = edict_t{}
-		G.g_edicts[index].index = index
+		ent.copy(edict_t{})
 	}
 
 	return index, nil
@@ -538,23 +535,23 @@ func spWorldspawn(ent *edict_t, G *qGame) error {
 		return nil
 	}
 
-	// ent.movetype = MOVETYPE_PUSH
+	ent.movetype = MOVETYPE_PUSH
 	ent.solid = shared.SOLID_BSP
 	ent.inuse = true     /* since the world doesn't use G_Spawn() */
 	ent.s.Modelindex = 1 /* world model is always index 1 */
 
 	/* --------------- */
 
-	//  /* reserve some spots for dead
-	// 	player bodies for coop / deathmatch */
+	/* reserve some spots for dead
+	player bodies for coop / deathmatch */
 	//  InitBodyQue();
 
 	/* set configstrings for items */
 	G.setItemNames()
 
-	//  if (G.st.Nextmap) {
-	// 	 strcpy(level.nextmap, st.nextmap);
-	//  }
+	if len(G.st.Nextmap) > 0 {
+		G.level.nextmap = string(G.st.Nextmap)
+	}
 
 	//  /* make some data visible to the server */
 	//  if (ent->message && ent->message[0]) {

@@ -254,6 +254,25 @@ func vtos(v []float32) string {
 	return fmt.Sprintf("(%v %v %v)", int(v[0]), int(v[1]), int(v[2]))
 }
 
+var VEC_UP = []float32{0, -1, 0}
+var MOVEDIR_UP = []float32{0, 0, 1}
+var VEC_DOWN = []float32{0, -2, 0}
+var MOVEDIR_DOWN = []float32{0, 0, -1}
+
+func gSetMovedir(angles, movedir []float32) {
+	if shared.VectorCompare(angles, VEC_UP) != 0 {
+		copy(movedir, MOVEDIR_UP)
+	} else if shared.VectorCompare(angles, VEC_DOWN) != 0 {
+		copy(movedir, MOVEDIR_DOWN)
+	} else {
+		shared.AngleVectors(angles, movedir, nil, nil)
+	}
+
+	angles[0] = 0
+	angles[1] = 0
+	angles[2] = 0
+}
+
 func vectoyaw(vec []float32) float32 {
 
 	var yaw float32 = 0
@@ -292,10 +311,6 @@ func G_InitEdict(e *edict_t, index int) {
  * cause interpolated angles and bad trails.
  */
 func (G *qGame) gSpawn() (*edict_t, error) {
-	//  int i;
-	//  edict_t *e;
-
-	//  e = &g_edicts[(int)maxclients->value + 1];
 
 	for i := G.maxclients.Int() + 1; i < G.num_edicts; i++ {
 		e := &G.g_edicts[i]
@@ -319,26 +334,29 @@ func (G *qGame) gSpawn() (*edict_t, error) {
 	return e, nil
 }
 
+func gFreeEdictFunc(ed *edict_t, G *qGame) {
+	G.gFreeEdict(ed)
+}
+
 /*
  * Marks the edict as free
  */
 func (G *qGame) gFreeEdict(ed *edict_t) {
 	G.gi.Unlinkentity(ed) /* unlink from world */
 
-	//  if (deathmatch.value || coop.value) {
-	// 	 if ((ed - g_edicts) <= (maxclients->value + BODY_QUEUE_SIZE))
-	// 	 {
-	// 		 return;
-	// 	 }
-	//  }
-	//  else
-	//  {
-	if ed.index <= G.maxclients.Int() {
-		return
+	if G.deathmatch.Bool() || G.coop.Bool() {
+		if ed.index <= (G.maxclients.Int() + BODY_QUEUE_SIZE) {
+			return
+		}
+	} else {
+		if ed.index <= G.maxclients.Int() {
+			return
+		}
 	}
-	//  }
 
-	//  memset(ed, 0, sizeof(*ed));
+	index := ed.index
+	ed.copy(edict_t{})
+	ed.index = index
 	ed.Classname = "freed"
 	ed.freetime = G.level.time
 	ed.inuse = false

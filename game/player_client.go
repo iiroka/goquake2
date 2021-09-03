@@ -660,6 +660,23 @@ func spInfoPlayerStart(self *edict_t, G *qGame) error {
 	return nil
 }
 
+/*
+ * QUAKED info_player_deathmatch (1 0 1) (-16 -16 -24) (16 16 32)
+ * potential spawning position for deathmatch games
+ */
+func spInfoPlayerDeathmatch(self *edict_t, G *qGame) error {
+	if self == nil || G == nil {
+		return nil
+	}
+
+	if !G.deathmatch.Bool() {
+		G.gFreeEdict(self)
+		return nil
+	}
+
+	return spMiscTeleporterDest(self, G)
+}
+
 func (G *qGame) initClientResp(client *gclient_t) {
 	if client == nil {
 		return

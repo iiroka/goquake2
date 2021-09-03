@@ -337,6 +337,35 @@ type monsterinfo_t struct {
 	// int power_armor_power;
 }
 
+func (G *monsterinfo_t) copy(other monsterinfo_t) {
+	G.currentmove = other.currentmove
+	G.aiflags = other.aiflags
+	G.nextframe = other.nextframe
+	G.scale = other.scale
+	G.stand = other.stand
+	G.idle = other.idle
+	G.search = other.search
+	G.walk = other.walk
+	// void (*run)(edict_t *self);
+	// void (*dodge)(edict_t *self, edict_t *other, float eta);
+	// void (*attack)(edict_t *self);
+	// void (*melee)(edict_t *self);
+	// void (*sight)(edict_t *self, edict_t *other);
+	// qboolean (*checkattack)(edict_t *self);
+	G.pausetime = other.pausetime
+	// float attack_finished;
+	// vec3_t saved_goal;
+	// float search_time;
+	// float trail_time;
+	// vec3_t last_sighting;
+	// int attack_state;
+	// int lefty;
+	G.idle_time = other.idle_time
+	G.linkcount = other.linkcount
+	// int power_armor_type;
+	// int power_armor_power;
+}
+
 const (
 	/* Easier handling of AI skill levels */
 	SKILL_EASY     = 0
@@ -655,8 +684,9 @@ type edict_t struct {
 	// edict_t *target_ent;
 
 	Speed, Accel, Decel float32
-	// vec3_t movedir;
-	// vec3_t pos1, pos2;
+	movedir             [3]float32
+	pos1                [3]float32
+	pos2                [3]float32
 
 	velocity  [3]float32
 	avelocity [3]float32
@@ -710,7 +740,7 @@ type edict_t struct {
 	activator              *edict_t
 	groundentity           *edict_t
 	groundentity_linkcount int
-	// edict_t *teamchain;
+	teamchain              *edict_t
 	// edict_t *teammaster;
 
 	// edict_t *mynoise; /* can go in client only */
@@ -838,6 +868,122 @@ func (G *edict_t) Owner() shared.Edict_s {
 	return G.owner
 }
 
+func (G *edict_t) copy(other edict_t) {
+	G.s.Copy(other.s)
+	G.client = other.client
+	G.inuse = other.inuse
+	G.linkcount = other.linkcount
+	G.area.Next = other.area.Next
+	G.area.Prev = other.area.Prev
+	G.area.Self = other.area.Self
+	G.num_clusters = other.num_clusters
+	for i := range G.clusternums {
+		G.clusternums[i] = other.clusternums[i]
+	}
+	G.headnode = other.headnode
+	G.areanum = other.areanum
+	G.areanum2 = other.areanum2
+	G.svflags = other.svflags
+	G.solid = other.solid
+	// int clipmask;
+	G.owner = other.owner
+	G.movetype = other.movetype
+	G.flags = other.flags
+	G.Model = other.Model
+	G.freetime = other.freetime
+	G.Message = other.Message
+	G.Classname = other.Classname
+	G.Spawnflags = other.Spawnflags
+	G.ftimestamp = other.ftimestamp
+	G.Target = other.Target
+	G.Targetname = other.Targetname
+	G.Killtarget = other.Killtarget
+	G.Team = other.Team
+	G.Pathtarget = other.Pathtarget
+	G.Deathtarget = other.Deathtarget
+	G.Combattarget = other.Combattarget
+	// edict_t *target_ent;
+	G.Speed = other.Speed
+	G.Accel = other.Accel
+	G.Decel = other.Decel
+	G.Mass = other.Mass
+	// float air_finished;
+	G.gravity = other.gravity
+	G.goalentity = other.goalentity
+	G.movetarget = other.movetarget
+	G.yaw_speed = other.yaw_speed
+	G.ideal_yaw = other.ideal_yaw
+	G.nextthink = other.nextthink
+	G.prethink = other.prethink
+	G.think = other.think
+	// void (*blocked)(edict_t *self, edict_t *other);
+	G.touch = other.touch
+	G.use = other.use
+	// void (*pain)(edict_t *self, edict_t *other, float kick, int damage);
+	// void (*die)(edict_t *self, edict_t *inflictor, edict_t *attacker,
+	// 		int damage, vec3_t point);
+	G.touch_debounce_time = other.touch_debounce_time
+	// float pain_debounce_time;
+	// float damage_debounce_time;
+	// float fly_sound_debounce_time;	/* now also used by insane marines to store pain sound timeout */
+	// float last_move_time;
+	G.Health = other.Health
+	G.max_health = other.max_health
+	G.gib_health = other.gib_health
+	G.deadflag = other.deadflag
+	// float show_hostile;
+	// float powerarmor_time;
+	G.Map = other.Map
+	G.viewheight = other.viewheight
+	// int takedamage;
+	G.Dmg = other.Dmg
+	// int radius_dmg;
+	// float dmg_radius;
+	G.Sounds = other.Sounds
+	G.count = other.count
+	G.chain = other.chain
+	G.enemy = other.enemy
+	G.oldenemy = other.oldenemy
+	G.activator = other.activator
+	G.groundentity = other.groundentity
+	G.groundentity_linkcount = other.groundentity_linkcount
+	G.teamchain = other.teamchain
+	// edict_t *teammaster;
+	// edict_t *mynoise; /* can go in client only */
+	// edict_t *mynoise2;
+	G.noise_index = other.noise_index
+	G.noise_index2 = other.noise_index2
+	G.Volume = other.Volume
+	G.Attenuation = other.Attenuation
+	G.Wait = other.Wait
+	G.Delay = other.Delay
+	G.Random = other.Random
+	// float last_sound_time;
+	G.watertype = other.watertype
+	G.waterlevel = other.waterlevel
+	// vec3_t move_origin;
+	// vec3_t move_angles;
+	// int light_level;
+	G.Style = other.Style
+	G.item = other.item
+	// moveinfo_t moveinfo;
+	G.monsterinfo.copy(other.monsterinfo)
+
+	for i := range G.pos1 {
+		G.mins[i] = other.mins[i]
+		G.maxs[i] = other.maxs[i]
+		G.absmin[i] = other.absmin[i]
+		G.absmax[i] = other.absmax[i]
+		G.size[i] = other.size[i]
+		G.movedir[i] = other.movedir[i]
+		G.pos1[i] = other.pos1[i]
+		G.pos2[i] = other.pos2[i]
+		G.velocity[i] = other.velocity[i]
+		G.avelocity[i] = other.avelocity[i]
+	}
+
+}
+
 /* item spawnflags */
 const ITEM_TRIGGER_SPAWN = 0x00000001
 const ITEM_NO_TOUCH = 0x00000002
@@ -943,6 +1089,10 @@ type qGame struct {
 	player_view_bobmove    float32
 	player_view_bobcycle   int
 	player_view_bobfracsin float32
+
+	pushed   [shared.MAX_EDICTS]pushed_t
+	pushed_i int
+	obstacle *edict_t
 }
 
 func QGameCreate(gi shared.Game_import_t) shared.Game_export_t {

@@ -329,8 +329,6 @@ func (T *qServer) svLinkEdict(ent shared.Edict_s) {
 }
 
 func (T *qServer) svAreaEdicts_r(node *areanode_t) {
-	// link_t *l, *next, *start;
-	// edict_t *check;
 
 	/* touch linked edicts */
 	var start *shared.Link_t
@@ -446,7 +444,7 @@ func (T *qServer) svHullForEntity(ent shared.Edict_s) int {
 		model := T.sv.models[ent.S().Modelindex]
 
 		if model == nil {
-			log.Fatal("MOVETYPE_PUSH with a non bsp model")
+			log.Fatal("MOVETYPE_PUSH with a non bsp model ", ent.S().Modelindex)
 		}
 
 		return model.Headnode
@@ -457,11 +455,6 @@ func (T *qServer) svHullForEntity(ent shared.Edict_s) int {
 }
 
 func (T *qServer) svClipMoveToEntities(clip *moveclip_t) {
-	// int i, num;
-	// edict_t *touchlist[MAX_EDICTS], *touch;
-	// trace_t trace;
-	// int headnode;
-	// float *angles;
 
 	var touchlist [shared.MAX_EDICTS]shared.Edict_s
 	num := T.svAreaEdicts(clip.boxmins[:], clip.boxmaxs[:], touchlist[:], shared.MAX_EDICTS, shared.AREA_SOLID)

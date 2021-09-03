@@ -1196,6 +1196,14 @@ func BoxOnPlaneSide(emins, emaxs []float32, p *Cplane_t) int {
 	return sides
 }
 
+func VectorCompare(v1, v2 []float32) int {
+	if (v1[0] != v2[0]) || (v1[1] != v2[1]) || (v1[2] != v2[2]) {
+		return 0
+	}
+
+	return 1
+}
+
 func VectorNormalize(v []float32) float32 {
 
 	dlength := float64(v[0])*float64(v[0]) + float64(v[1])*float64(v[1]) + float64(v[2])*float64(v[2])
@@ -1430,6 +1438,7 @@ type QCommon interface {
 	CMLeafCluster(leafnum int) int
 	CMLeafArea(leafnum int) int
 	CMNumClusters() int
+	CMNumInlineModels() int
 	CMWriteAreaBits(buffer []byte, area int) int
 	CMClusterPVS(cluster int) []byte
 	CMClusterPHS(cluster int) []byte

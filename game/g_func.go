@@ -27,6 +27,49 @@ package game
 
 import "goquake2/shared"
 
+func think_SpawnDoorTrigger(ent *edict_t, G *qGame) {
+	// edict_t *other;
+	// vec3_t mins, maxs;
+
+	if ent == nil || G == nil {
+		return
+	}
+
+	if (ent.flags & FL_TEAMSLAVE) != 0 {
+		return /* only the team leader spawns a trigger */
+	}
+
+	// VectorCopy(ent->absmin, mins);
+	// VectorCopy(ent->absmax, maxs);
+
+	// for (other = ent->teamchain; other; other = other->teamchain)
+	// {
+	// 	AddPointToBounds(other->absmin, mins, maxs);
+	// 	AddPointToBounds(other->absmax, mins, maxs);
+	// }
+
+	// /* expand */
+	// mins[0] -= 60;
+	// mins[1] -= 60;
+	// maxs[0] += 60;
+	// maxs[1] += 60;
+
+	// other, _ := G.gSpawn()
+	// VectorCopy(mins, other->mins);
+	// VectorCopy(maxs, other->maxs);
+	// other.owner = ent
+	// other.solid = shared.SOLID_TRIGGER
+	// other.movetype = MOVETYPE_NONE
+	// other->touch = Touch_DoorTrigger;
+	// G.gi.Linkentity(other)
+
+	// if (ent.Spawnflags & DOOR_START_OPEN) != 0 {
+	// 	door_use_areaportals(ent, true);
+	// }
+
+	// Think_CalcMoveSpeed(ent);
+}
+
 /*
  * =========================================================
  *
@@ -60,6 +103,130 @@ import "goquake2/shared"
  *
  * =========================================================
  */
+
+func spFuncDoor(ent *edict_t, G *qGame) error {
+
+	if ent == nil || G == nil {
+		return nil
+	}
+
+	// if (ent.sounds != 1)
+	// {
+	// 	ent->moveinfo.sound_start = gi.soundindex("doors/dr1_strt.wav");
+	// 	ent->moveinfo.sound_middle = gi.soundindex("doors/dr1_mid.wav");
+	// 	ent->moveinfo.sound_end = gi.soundindex("doors/dr1_end.wav");
+	// }
+
+	// G_SetMovedir(ent->s.angles, ent->movedir);
+	println("spFuncDoor", ent.Model)
+	ent.movetype = MOVETYPE_PUSH
+	ent.solid = shared.SOLID_BSP
+	G.gi.Setmodel(ent, ent.Model)
+
+	// ent->blocked = door_blocked;
+	// ent->use = door_use;
+
+	if ent.Speed == 0 {
+		ent.Speed = 100
+	}
+
+	// if (deathmatch->value)
+	// {
+	// 	ent->speed *= 2;
+	// }
+
+	if ent.Accel == 0 {
+		ent.Accel = ent.Speed
+	}
+
+	if ent.Decel == 0 {
+		ent.Decel = ent.Speed
+	}
+
+	if ent.Wait == 0 {
+		ent.Wait = 3
+	}
+
+	if G.st.Lip == 0 {
+		G.st.Lip = 8
+	}
+
+	if ent.Dmg == 0 {
+		ent.Dmg = 2
+	}
+
+	/* calculate second position */
+	copy(ent.pos1[:], ent.s.Origin[:])
+	// abs_movedir[0] = fabs(ent->movedir[0]);
+	// abs_movedir[1] = fabs(ent->movedir[1]);
+	// abs_movedir[2] = fabs(ent->movedir[2]);
+	// ent->moveinfo.distance = abs_movedir[0] * ent->size[0] + abs_movedir[1] *
+	// 						 ent->size[1] + abs_movedir[2] * ent->size[2] -
+	// 						 st.lip;
+	// VectorMA(ent->pos1, ent->moveinfo.distance, ent->movedir, ent->pos2);
+
+	// /* if it starts open, switch the positions */
+	// if (ent->spawnflags & DOOR_START_OPEN) != 0 {
+	// 	VectorCopy(ent->pos2, ent->s.origin);
+	// 	VectorCopy(ent->pos1, ent->pos2);
+	// 	VectorCopy(ent->s.origin, ent->pos1);
+	// }
+
+	// ent.moveinfo.state = STATE_BOTTOM;
+
+	// if (ent->health != 0) {
+	// 	ent->takedamage = DAMAGE_YES;
+	// 	ent->die = door_killed;
+	// 	ent->max_health = ent->health;
+	// } else if (ent->targetname && ent->message) {
+	// 	gi.soundindex("misc/talk.wav");
+	// 	ent->touch = door_touch;
+	// }
+
+	// ent->moveinfo.speed = ent->speed;
+	// ent->moveinfo.accel = ent->accel;
+	// ent->moveinfo.decel = ent->decel;
+	// ent->moveinfo.wait = ent->wait;
+	// VectorCopy(ent->pos1, ent->moveinfo.start_origin);
+	// VectorCopy(ent->s.angles, ent->moveinfo.start_angles);
+	// VectorCopy(ent->pos2, ent->moveinfo.end_origin);
+	// VectorCopy(ent->s.angles, ent->moveinfo.end_angles);
+
+	// if (ent->spawnflags & 16) != 0 {
+	// 	ent->s.effects |= EF_ANIM_ALL;
+	// }
+
+	// if (ent->spawnflags & 64) != 0 {
+	// 	ent->s.effects |= EF_ANIM_ALLFAST;
+	// }
+
+	// /* to simplify logic elsewhere, make non-teamed doors into a team of one */
+	// if (!ent->team)
+	// {
+	// 	ent->teammaster = ent;
+	// }
+
+	G.gi.Linkentity(ent)
+
+	ent.nextthink = G.level.time + FRAMETIME
+
+	// if (ent->health || ent->targetname)
+	// {
+	// 	ent->think = Think_CalcMoveSpeed;
+	// }
+	// else
+	// {
+	ent.think = think_SpawnDoorTrigger
+	// }
+
+	// /* Map quirk for waste3 (to make that secret armor behind
+	//  * the secret wall - this func_door - count, #182) */
+	// if (Q_stricmp(level.mapname, "waste3") == 0 && Q_stricmp(ent->model, "*12") == 0)
+	// {
+	// 	ent->target = "t117";
+	// }
+	return nil
+}
 
 /* ==================================================================== */
 

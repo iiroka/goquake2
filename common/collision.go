@@ -1462,6 +1462,10 @@ func (T *qCommon) CMNumClusters() int {
 	return T.collision.numclusters
 }
 
+func (T *qCommon) CMNumInlineModels() int {
+	return T.collision.numcmodels
+}
+
 func (T *qCommon) CMEntityString() string {
 	return T.collision.map_entitystring
 }

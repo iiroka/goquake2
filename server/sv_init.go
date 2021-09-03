@@ -62,10 +62,10 @@ func (T *qServer) svFindIndex(name string, start, max int, create bool) int {
 
 	if T.sv.state != ss_loading {
 		/* send the update to everyone */
-		// MSG_WriteChar(&sv.multicast, svc_configstring)
-		// MSG_WriteShort(&sv.multicast, start+i)
-		// MSG_WriteString(&sv.multicast, name)
-		// SV_Multicast(vec3_origin, MULTICAST_ALL_R)
+		T.sv.multicast.WriteChar(shared.SvcConfigstring)
+		T.sv.multicast.WriteShort(start + index)
+		T.sv.multicast.WriteString(name)
+		T.svMulticast([]float32{0, 0, 0}, shared.MULTICAST_ALL_R)
 	}
 
 	return index
@@ -175,13 +175,10 @@ func (T *qServer) spawnServer(server, spawnpoint string, serverstate server_stat
 	/* clear physics interaction links */
 	T.svClearWorld()
 
-	//  for (i = 1; i < CM_NumInlineModels(); i++)
-	//  {
-	// 	 Com_sprintf(sv.configstrings[CS_MODELS + 1 + i],
-	// 			 sizeof(sv.configstrings[CS_MODELS + 1 + i]),
-	// 			 "*%i", i);
-	// 	 sv.models[i + 1] = CM_InlineModel(sv.configstrings[CS_MODELS + 1 + i]);
-	//  }
+	for i := 1; i < T.common.CMNumInlineModels(); i++ {
+		T.sv.configstrings[shared.CS_MODELS+1+i] = fmt.Sprintf("*%v", i)
+		T.sv.models[i+1], err = T.common.CMInlineModel(T.sv.configstrings[shared.CS_MODELS+1+i])
+	}
 
 	/* spawn the rest of the entities on the map */
 	T.sv.state = ss_loading
@@ -246,7 +243,6 @@ func (T *qServer) initGame() error {
 
 	T.svs.initialized = true
 
-	println("SinglePlayer", T.common.Cvar_Get("singleplayer", "", 0).String)
 	if T.common.Cvar_VariableBool("singleplayer") {
 		T.common.Cvar_FullSet("coop", "0", shared.CVAR_SERVERINFO|shared.CVAR_LATCH)
 		T.common.Cvar_FullSet("deathmatch", "0", shared.CVAR_SERVERINFO|shared.CVAR_LATCH)
@@ -325,7 +321,7 @@ func (T *qServer) initGame() error {
 		ent := T.ge.Edict(i + 1)
 		ent.S().Number = i + 1
 		T.svs.clients[i].edict = ent
-		// memset(&svs.clients[i].lastcmd, 0, sizeof(svs.clients[i].lastcmd))
+		T.svs.clients[i].lastcmd.Copy(shared.Usercmd_t{})
 	}
 	return nil
 }
