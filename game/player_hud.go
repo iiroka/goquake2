@@ -53,7 +53,7 @@ func (G *qGame) gSetStats(ent *edict_t) {
 			int16(ent.client.pers.inventory[ent.client.ammo_index])
 	}
 
-	// /* armor */
+	/* armor */
 	// power_armor_type = PowerArmorType(ent);
 
 	// if (power_armor_type)
@@ -70,7 +70,7 @@ func (G *qGame) gSetStats(ent *edict_t) {
 	// 	}
 	// }
 
-	// index = ArmorIndex(ent);
+	index := G.armorIndex(ent)
 
 	// if (power_armor_type && (!index || (level.framenum & 8)))
 	// {
@@ -78,17 +78,15 @@ func (G *qGame) gSetStats(ent *edict_t) {
 	// 	ent->client->ps.stats[STAT_ARMOR_ICON] = gi.imageindex("i_powershield");
 	// 	ent->client->ps.stats[STAT_ARMOR] = cells;
 	// }
-	// else if (index)
-	// {
-	// 	item = GetItemByIndex(index);
-	// 	ent->client->ps.stats[STAT_ARMOR_ICON] = gi.imageindex(item->icon);
-	// 	ent->client->ps.stats[STAT_ARMOR] = ent->client->pers.inventory[index];
-	// }
 	// else
-	// {
-	ent.client.ps.Stats[shared.STAT_ARMOR_ICON] = 0
-	ent.client.ps.Stats[shared.STAT_ARMOR] = 0
-	// }
+	if index != 0 {
+		item := getItemByIndex(index)
+		ent.client.ps.Stats[shared.STAT_ARMOR_ICON] = int16(G.gi.Imageindex(item.icon))
+		ent.client.ps.Stats[shared.STAT_ARMOR] = int16(ent.client.pers.inventory[index])
+	} else {
+		ent.client.ps.Stats[shared.STAT_ARMOR_ICON] = 0
+		ent.client.ps.Stats[shared.STAT_ARMOR] = 0
+	}
 
 	// /* pickup message */
 	// if (level.time > ent->client->pickup_msg_time)
@@ -140,49 +138,41 @@ func (G *qGame) gSetStats(ent *edict_t) {
 	// 		gi.imageindex(itemlist[ent->client->pers.selected_item].icon);
 	// }
 
-	// ent->client->ps.stats[STAT_SELECTED_ITEM] = ent->client->pers.selected_item;
+	ent.client.ps.Stats[shared.STAT_SELECTED_ITEM] = int16(ent.client.pers.selected_item)
 
 	/* layouts */
 	ent.client.ps.Stats[shared.STAT_LAYOUTS] = 0
 
-	// if (deathmatch->value)
-	// {
-	// 	if ((ent->client->pers.health <= 0) || level.intermissiontime ||
-	// 		ent->client->showscores)
-	// 	{
-	// 		ent->client->ps.stats[STAT_LAYOUTS] |= 1;
-	// 	}
+	if G.deathmatch.Bool() {
+		// 	if ((ent->client->pers.health <= 0) || level.intermissiontime ||
+		// 		ent->client->showscores)
+		// 	{
+		// 		ent->client->ps.stats[STAT_LAYOUTS] |= 1;
+		// 	}
 
-	// 	if (ent->client->showinventory && (ent->client->pers.health > 0))
-	// 	{
-	// 		ent->client->ps.stats[STAT_LAYOUTS] |= 2;
-	// 	}
-	// }
-	// else
-	// {
-	// 	if (ent->client->showscores || ent->client->showhelp)
-	// 	{
-	// 		ent->client->ps.stats[STAT_LAYOUTS] |= 1;
-	// 	}
+		// 	if (ent->client->showinventory && (ent->client->pers.health > 0))
+		// 	{
+		// 		ent->client->ps.stats[STAT_LAYOUTS] |= 2;
+		// 	}
+	} else {
+		if ent.client.showscores || ent.client.showhelp {
+			ent.client.ps.Stats[shared.STAT_LAYOUTS] |= 1
+		}
 
-	// 	if (ent->client->showinventory && (ent->client->pers.health > 0))
-	// 	{
-	// 		ent->client->ps.stats[STAT_LAYOUTS] |= 2;
-	// 	}
-	// }
+		if ent.client.showinventory && (ent.client.pers.health > 0) {
+			ent.client.ps.Stats[shared.STAT_LAYOUTS] |= 2
+		}
+	}
 
 	/* frags */
 	ent.client.ps.Stats[shared.STAT_FRAGS] = int16(ent.client.resp.score)
 
-	// /* help icon / current weapon if not shown */
-	// if (ent->client->pers.helpchanged && (level.framenum & 8))
-	// {
+	/* help icon / current weapon if not shown */
+	// if ent.client.pers.helpchanged && (G.level.framenum&8) != 0 {
 	// 	ent->client->ps.stats[STAT_HELPICON] = gi.imageindex("i_help");
-	// }
-	// else if (((ent->client->pers.hand == CENTER_HANDED) ||
-	// 		  (ent->client->ps.fov > 91)) &&
-	// 		 ent->client->pers.weapon)
-	// {
+	// } else if ((ent.client.pers.hand == CENTER_HANDED) ||
+	// 	(ent.client.ps.Fov > 91)) &&
+	// 	ent.client.pers.weapon {
 	// 	cvar_t *gun;
 	// 	gun = gi.cvar("cl_gun", "2", 0);
 
@@ -195,10 +185,8 @@ func (G *qGame) gSetStats(ent *edict_t) {
 	// 	{
 	// 		ent->client->ps.stats[STAT_HELPICON] = 0;
 	// 	}
-	// }
-	// else
-	// {
-	// 	ent->client->ps.stats[STAT_HELPICON] = 0;
+	// } else {
+	ent.client.ps.Stats[shared.STAT_HELPICON] = 0
 	// }
 
 	ent.client.ps.Stats[shared.STAT_SPECTATOR] = 0

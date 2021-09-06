@@ -390,7 +390,7 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 	/* clear entity values */
 	ent.groundentity = nil
 	ent.client = &G.game.clients[index]
-	//  ent->takedamage = DAMAGE_AIM;
+	ent.takedamage = DAMAGE_AIM
 	ent.movetype = MOVETYPE_WALK
 	ent.viewheight = 22
 	ent.inuse = true
@@ -399,7 +399,7 @@ func (G *qGame) putClientInServer(ent *edict_t) error {
 	ent.solid = shared.SOLID_BBOX
 	ent.deadflag = DEAD_NO
 	//  ent->air_finished = level.time + 12;
-	// ent.clipmask = MASK_PLAYERSOLID
+	ent.clipmask = shared.MASK_PLAYERSOLID
 	ent.Model = "players/male/tris.md2"
 	//  ent->pain = player_pain;
 	//  ent->die = player_die;
@@ -1054,7 +1054,7 @@ func (G *qGame) ClientThink(sent shared.Edict_s, ucmd *shared.Usercmd_t) {
 		if ent.deadflag != 0 {
 			client.ps.Viewangles[shared.ROLL] = 40
 			client.ps.Viewangles[shared.PITCH] = -15
-			// client.ps.Viewangles[shared.YAW] = client.killer_yaw
+			client.ps.Viewangles[shared.YAW] = client.killer_yaw
 		} else {
 			copy(client.v_angle[:], pm.Viewangles[:])
 			copy(client.ps.Viewangles[:], pm.Viewangles[:])

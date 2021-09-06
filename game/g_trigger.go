@@ -111,7 +111,6 @@ func touch_Multi(self, other *edict_t, plane *shared.Cplane_t, surf *shared.Csur
 	}
 
 	if shared.VectorCompare(self.movedir[:], []float32{0, 0, 0}) == 0 {
-		// vec3_t forward;
 
 		forward := make([]float32, 3)
 		shared.AngleVectors(other.s.Angles[:], forward, nil, nil)
@@ -233,5 +232,24 @@ func spTriggerRelay(self *edict_t, G *qGame) error {
 	}
 
 	self.use = trigger_relay_use
+	return nil
+}
+
+/*
+ * QUAKED trigger_always (.5 .5 .5) (-8 -8 -8) (8 8 8)
+ * This trigger will always fire. It is activated by the world.
+ */
+func spTriggerAlways(ent *edict_t, G *qGame) error {
+	if ent == nil || G == nil {
+		return nil
+	}
+
+	/* we must have some delay to make
+	sure our use targets are present */
+	if ent.Delay < 0.2 {
+		ent.Delay = 0.2
+	}
+
+	G.gUseTargets(ent, ent)
 	return nil
 }

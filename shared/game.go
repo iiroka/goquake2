@@ -136,8 +136,8 @@ type Game_import_t interface {
 	// /* collision detection */
 	Trace(start, mins, maxs, end []float32, passent Edict_s, contentmask int) Trace_t
 	Pointcontents(point []float32) int
-	// qboolean (*inPVS)(vec3_t p1, vec3_t p2);
-	// qboolean (*inPHS)(vec3_t p1, vec3_t p2);
+	InPVS(p1, p2 []float32) bool
+	InPHS(p1, p2 []float32) bool
 	// void (*SetAreaPortalState)(int portalnum, qboolean open);
 	// qboolean (*AreasConnected)(int area1, int area2);
 

@@ -42,6 +42,7 @@ var spawns = map[string]func(ent *edict_t, G *qGame) error{
 	"info_player_deathmatch": spInfoPlayerDeathmatch,
 	"func_door":              spFuncDoor,
 	"func_timer":             spFuncTimer,
+	"trigger_always":         spTriggerAlways,
 	"trigger_once":           spTriggerOnce,
 	"trigger_multiple":       spTriggerMultiple,
 	"trigger_relay":          spTriggerRelay,

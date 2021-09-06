@@ -70,7 +70,7 @@ func (G *qGame) svCalcViewOffset(ent *edict_t) {
 
 		ent.client.ps.Viewangles[shared.ROLL] = 40
 		ent.client.ps.Viewangles[shared.PITCH] = -15
-		// ent.client.ps.Viewangles[shared.YAW] = ent.client.killer_yaw
+		ent.client.ps.Viewangles[shared.YAW] = ent.client.killer_yaw
 	} else {
 		/* add angles based on weapon kick */
 		copy(angles, ent.client.kick_angles[:])

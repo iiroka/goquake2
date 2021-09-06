@@ -581,7 +581,7 @@ func (T *qCommon) clipBoxToBrush(mins, maxs, p1, p2 []float32, trace *shared.Tra
 
 			trace.Fraction = enterfrac
 			trace.Plane = *clipplane
-			trace.Surface = &(leadside.surface.C)
+			trace.Surface = &leadside.surface.C
 			trace.Contents = brush.contents
 		}
 	}

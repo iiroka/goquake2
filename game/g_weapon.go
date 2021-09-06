@@ -27,6 +27,68 @@ package game
 
 import "goquake2/shared"
 
+/*
+ * Fires a single blaster bolt.
+ * Used by the blaster and hyper blaster.
+ */
+func blaster_touch(self, other *edict_t, plane *shared.Cplane_t, surf *shared.Csurface_t, G *qGame) {
+	//  int mod;
+
+	if self == nil || G == nil {
+		return
+	}
+
+	if other == nil { /* plane and surf can be NULL */
+		G.gFreeEdict(self)
+		return
+	}
+
+	if other == self.owner {
+		return
+	}
+
+	if surf != nil && (surf.Flags&shared.SURF_SKY) != 0 {
+		G.gFreeEdict(self)
+		return
+	}
+
+	if self.owner != nil && self.owner.client != nil {
+		G.playerNoise(self.owner, self.s.Origin[:], PNOISE_IMPACT)
+	}
+
+	if other.takedamage != 0 {
+		mod := MOD_BLASTER
+		if (self.Spawnflags & 1) != 0 {
+			mod = MOD_HYPERBLASTER
+		}
+
+		if plane != nil {
+			G.tDamage(other, self, self.owner, self.velocity[:], self.s.Origin[:],
+				plane.Normal[:], self.Dmg, 1, DAMAGE_ENERGY, mod)
+		} else {
+			G.tDamage(other, self, self.owner, self.velocity[:], self.s.Origin[:],
+				[]float32{0, 0, 0}, self.Dmg, 1, DAMAGE_ENERGY, mod)
+		}
+	} else {
+		// 	 gi.WriteByte(svc_temp_entity);
+		// 	 gi.WriteByte(TE_BLASTER);
+		// 	 gi.WritePosition(self->s.origin);
+
+		// 	 if (!plane)
+		// 	 {
+		// 		 gi.WriteDir(vec3_origin);
+		// 	 }
+		// 	 else
+		// 	 {
+		// 		 gi.WriteDir(plane->normal);
+		// 	 }
+
+		// 	 gi.multicast(self->s.origin, MULTICAST_PVS);
+	}
+
+	G.gFreeEdict(self)
+}
+
 func (G *qGame) fire_blaster(self *edict_t, start, dir []float32, damage,
 	speed, effect int, hyper bool) {
 	// 	edict_t *bolt;
@@ -51,7 +113,7 @@ func (G *qGame) fire_blaster(self *edict_t, start, dir []float32, damage,
 	vectoangles(dir, bolt.s.Angles[:])
 	shared.VectorScale(dir, float32(speed), bolt.velocity[:])
 	bolt.movetype = MOVETYPE_FLYMISSILE
-	// bolt.clipmask = MASK_SHOT
+	bolt.clipmask = shared.MASK_SHOT
 	bolt.solid = shared.SOLID_BBOX
 	bolt.s.Effects |= uint(effect)
 	bolt.s.Renderfx |= shared.RF_NOSHADOW
@@ -62,7 +124,7 @@ func (G *qGame) fire_blaster(self *edict_t, start, dir []float32, damage,
 	bolt.s.Modelindex = G.gi.Modelindex("models/objects/laser/tris.md2")
 	// 	bolt->s.sound = gi.soundindex("misc/lasfly.wav");
 	bolt.owner = self
-	// 	bolt->touch = blaster_touch;
+	bolt.touch = blaster_touch
 	bolt.nextthink = G.level.time + 2
 	bolt.think = gFreeEdictFunc
 	bolt.Dmg = damage

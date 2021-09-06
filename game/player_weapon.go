@@ -67,6 +67,80 @@ func (G *qGame) projectSource(ent *edict_t, distance,
 }
 
 /*
+ * Each player can have two noise objects associated with it:
+ * a personal noise (jumping, pain, weapon firing), and a weapon
+ * target noise (bullet wall impacts)
+ *
+ * Monsters that don't directly see the player can move
+ * to a noise in hopes of seeing the player from there.
+ */
+func (G *qGame) playerNoise(who *edict_t, where []float32, ntype int) {
+	//  edict_t *noise;
+
+	if who == nil {
+		return
+	}
+
+	if ntype == PNOISE_WEAPON {
+		// 	 if (who->client->silencer_shots) {
+		// 		 who->client->silencer_shots--;
+		// 		 return;
+		// 	 }
+	}
+
+	//  if (deathmatch->value) {
+	// 	 return;
+	//  }
+
+	if (who.flags & FL_NOTARGET) != 0 {
+		return
+	}
+
+	var noise *edict_t
+	if who.mynoise == nil {
+		noise, _ = G.gSpawn()
+		noise.Classname = "player_noise"
+		copy(noise.mins[:], []float32{-8, -8, -8})
+		copy(noise.maxs[:], []float32{8, 8, 8})
+		noise.owner = who
+		noise.svflags = shared.SVF_NOCLIENT
+		who.mynoise = noise
+
+		noise, _ = G.gSpawn()
+		noise.Classname = "player_noise"
+		copy(noise.mins[:], []float32{-8, -8, -8})
+		copy(noise.maxs[:], []float32{8, 8, 8})
+		noise.owner = who
+		noise.svflags = shared.SVF_NOCLIENT
+		who.mynoise2 = noise
+	}
+
+	if (ntype == PNOISE_SELF) || (ntype == PNOISE_WEAPON) {
+		if G.level.framenum <= (G.level.sound_entity_framenum + 3) {
+			return
+		}
+
+		noise = who.mynoise
+		G.level.sound_entity = noise
+		G.level.sound_entity_framenum = G.level.framenum
+	} else {
+		if G.level.framenum <= (G.level.sound2_entity_framenum + 3) {
+			return
+		}
+
+		noise = who.mynoise2
+		G.level.sound2_entity = noise
+		G.level.sound2_entity_framenum = G.level.framenum
+	}
+
+	copy(noise.s.Origin[:], where)
+	shared.VectorSubtract(where, noise.maxs[:], noise.absmin[:])
+	shared.VectorAdd(where, noise.maxs[:], noise.absmax[:])
+	// noise.last_sound_time = G.level.time
+	G.gi.Linkentity(noise)
+}
+
+/*
  * The old weapon has been dropped all
  * the way, so make the new one current
  */
@@ -388,7 +462,7 @@ func (G *qGame) blaster_Fire(ent *edict_t, g_offset []float32, damage int,
 
 	// gi.multicast(ent->s.origin, MULTICAST_PVS);
 
-	// PlayerNoise(ent, start, PNOISE_WEAPON);
+	G.playerNoise(ent, start, PNOISE_WEAPON)
 }
 
 func weapon_Blaster_Fire(ent *edict_t, G *qGame) {

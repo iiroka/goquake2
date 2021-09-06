@@ -71,6 +71,27 @@ func (G *qGame) svRunThink(ent *edict_t) bool {
 	return false
 }
 
+/*
+ * Two entities have touched, so
+ * run their touch functions
+ */
+func (G *qGame) svImpact(e1 *edict_t, trace *shared.Trace_t) {
+
+	if e1 == nil || trace == nil {
+		return
+	}
+
+	e2 := trace.Ent.(*edict_t)
+
+	if e1.touch != nil && (e1.solid != shared.SOLID_NOT) {
+		e1.touch(e1, e2, &trace.Plane, trace.Surface, G)
+	}
+
+	if e2.touch != nil && (e2.solid != shared.SOLID_NOT) {
+		e2.touch(e2, e1, nil, nil, G)
+	}
+}
+
 /* ================================================================== */
 
 /* PUSHMOVE */
@@ -92,9 +113,9 @@ func (G *qGame) svPushEntity(ent *edict_t, push []float32) shared.Trace_t {
 		retry = false
 
 		mask := shared.MASK_SOLID
-		// if ent.clipmask {
-		// 	mask = ent.clipmask
-		// }
+		if ent.clipmask != 0 {
+			mask = ent.clipmask
+		}
 
 		trace = G.gi.Trace(start, ent.mins[:], ent.maxs[:], end, ent, mask)
 
@@ -122,22 +143,22 @@ func (G *qGame) svPushEntity(ent *edict_t, push []float32) shared.Trace_t {
 		}
 
 		if trace.Fraction != 1.0 {
-			// 		 SV_Impact(ent, &trace);
+			G.svImpact(ent, &trace)
 
-			// 		 /* if the pushed entity went away
-			// 			and the pusher is still there */
-			// 		 if (!trace.ent->inuse && ent->inuse) {
-			// 			 /* move the pusher back and try again */
-			// 			 VectorCopy(start, ent->s.origin);
-			// 			 gi.linkentity(ent);
-			// 			 retry = true
-			// 		 }
+			/* if the pushed entity went away
+			and the pusher is still there */
+			if !trace.Ent.(*edict_t).inuse && ent.inuse {
+				/* move the pusher back and try again */
+				copy(ent.s.Origin[:], start)
+				G.gi.Linkentity(ent)
+				retry = true
+			}
 		}
 	}
 
-	// 	 if (ent.inuse) {
-	// 		 G_TouchTriggers(ent);
-	// 	 }
+	if ent.inuse {
+		G.gTouchTriggers(ent)
+	}
 
 	return trace
 }
@@ -229,7 +250,7 @@ func (G *qGame) svPush(pusher *edict_t, move, amove []float32) bool {
 
 		/* if the entity is standing on the pusher,
 		it will definitely be moved */
-		// 	 if (check->groundentity != pusher)
+		// 	 if (check.groundentity != pusher)
 		// 	 {
 		// 		 /* see if the ent needs to be tested */
 		// 		 if ((check->absmin[0] >= realmaxs[0]) ||
@@ -466,10 +487,10 @@ func (G *qGame) svPhysics_Toss(ent *edict_t) {
 	G.svCheckVelocity(ent)
 
 	/* add gravity */
-	//  if ((ent.movetype != MOVETYPE_FLY) &&
-	// 	 (ent.movetype != MOVETYPE_FLYMISSILE)) {
-	// 	 SV_AddGravity(ent);
-	//  }
+	if (ent.movetype != MOVETYPE_FLY) &&
+		(ent.movetype != MOVETYPE_FLYMISSILE) {
+		// 	 SV_AddGravity(ent);
+	}
 
 	/* move angles */
 	shared.VectorMA(ent.s.Angles[:], FRAMETIME, ent.avelocity[:], ent.s.Angles[:])

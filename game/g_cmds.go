@@ -39,21 +39,25 @@ func (G *qGame) cmd_Use_f(ent *edict_t, args []string) {
 		return
 	}
 
-	//  s = gi.args();
-	//  it = FindItem(s);
+	s := ""
+	for i := 1; i < len(args); i++ {
+		s += args[i]
+		if i < len(args)-1 {
+			s += " "
+		}
+	}
+	it := G.findItem(s)
 	println("USE:", len(args), args[1])
 
-	//  if (!it)
-	//  {
-	// G.gi.Cprintf(ent, PRINT_HIGH, "unknown item: %s\n", s)
-	// 	 return;
-	//  }
+	if it == nil {
+		// G.gi.Cprintf(ent, PRINT_HIGH, "unknown item: %s\n", s)
+		return
+	}
 
-	//  if (!it->use)
-	//  {
-	// 	 gi.cprintf(ent, PRINT_HIGH, "Item is not usable.\n");
-	// 	 return;
-	//  }
+	if it.use == nil {
+		// 	 G.gi.Cprintf(ent, PRINT_HIGH, "Item is not usable.\n");
+		return
+	}
 
 	//  index = ITEM_INDEX(it);
 
@@ -63,7 +67,7 @@ func (G *qGame) cmd_Use_f(ent *edict_t, args []string) {
 	// 	 return;
 	//  }
 
-	//  it->use(ent, it);
+	it.use(ent, it, G)
 }
 
 func (G *qGame) ClientCommand(sent shared.Edict_s, args []string) {

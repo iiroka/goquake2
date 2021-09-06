@@ -34,6 +34,15 @@ var jacketarmor_info = gitem_armor_t{25, 50, .30, .00, ARMOR_JACKET}
 var combatarmor_info = gitem_armor_t{50, 100, .60, .30, ARMOR_COMBAT}
 var bodyarmor_info = gitem_armor_t{100, 200, .80, .60, ARMOR_BODY}
 
+/* ====================================================================== */
+
+func getItemByIndex(index int) *gitem_t {
+	if (index == 0) || (index >= len(gameitemlist)) {
+		return nil
+	}
+
+	return &gameitemlist[index]
+}
 func itemIndex(item *gitem_t) int {
 	for i, it := range gameitemlist {
 		if it.classname == item.classname {
@@ -90,11 +99,11 @@ func (G *qGame) setItemNames() {
 		G.gi.Configstring(shared.CS_ITEMS+i, it.pickup_name)
 	}
 
-	// jacket_armor_index = ITEM_INDEX(FindItem("Jacket Armor"))
-	// combat_armor_index = ITEM_INDEX(FindItem("Combat Armor"))
-	// body_armor_index = ITEM_INDEX(FindItem("Body Armor"))
-	// power_screen_index = ITEM_INDEX(FindItem("Power Screen"))
-	// power_shield_index = ITEM_INDEX(FindItem("Power Shield"))
+	G.jacket_armor_index = G.findItemIndex("Jacket Armor")
+	G.combat_armor_index = G.findItemIndex("Combat Armor")
+	G.body_armor_index = G.findItemIndex("Body Armor")
+	G.power_screen_index = G.findItemIndex("Power Screen")
+	G.power_shield_index = G.findItemIndex("Power Shield")
 }
 
 /* ====================================================================== */
@@ -389,20 +398,46 @@ func Pickup_Health(ent, other *edict_t, G *qGame) bool {
 		}
 	}
 
-	// if (ent.Style & HEALTH_TIMED) != 0 {
-	// 	ent.think = MegaHealth_think
-	// 	ent.nextthink = level.time + 5
-	// 	ent.owner = other
-	// 	ent.flags |= FL_RESPAWN
-	// 	ent.svflags |= SVF_NOCLIENT
-	// 	ent.solid = SOLID_NOT
-	// } else {
-	// 	if (ent.Spawnflags&DROPPED_ITEM) == 0 && G.deathmatch.Bool() {
-	// 		SetRespawn(ent, 30)
-	// 	}
-	// }
+	if (ent.Style & HEALTH_TIMED) != 0 {
+		// 	ent.think = MegaHealth_think
+		ent.nextthink = G.level.time + 5
+		ent.owner = other
+		ent.flags |= FL_RESPAWN
+		ent.svflags |= shared.SVF_NOCLIENT
+		ent.solid = shared.SOLID_NOT
+	} else {
+		// 	if (ent.Spawnflags&DROPPED_ITEM) == 0 && G.deathmatch.Bool() {
+		// 		SetRespawn(ent, 30)
+		// 	}
+	}
 
 	return true
+}
+
+/* ====================================================================== */
+
+func (G *qGame) armorIndex(ent *edict_t) int {
+	if ent == nil {
+		return 0
+	}
+
+	if ent.client == nil {
+		return 0
+	}
+
+	if ent.client.pers.inventory[G.jacket_armor_index] > 0 {
+		return G.jacket_armor_index
+	}
+
+	if ent.client.pers.inventory[G.combat_armor_index] > 0 {
+		return G.combat_armor_index
+	}
+
+	if ent.client.pers.inventory[G.body_armor_index] > 0 {
+		return G.body_armor_index
+	}
+
+	return 0
 }
 
 /* ====================================================================== */

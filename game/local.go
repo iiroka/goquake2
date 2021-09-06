@@ -66,6 +66,10 @@ const (
 	MELEE_DISTANCE  = 80
 	BODY_QUEUE_SIZE = 8
 
+	DAMAGE_NO  = 0
+	DAMAGE_YES = 1 /* will take damage if hit */
+	DAMAGE_AIM = 2 /* auto targeting recognizes this */
+
 	AMMO_BULLETS  = 0
 	AMMO_SHELLS   = 1
 	AMMO_ROCKETS  = 2
@@ -102,6 +106,12 @@ const (
 	AI_MEDIC             = 0x00002000
 	AI_RESURRECTING      = 0x00004000
 
+	/* monster attack state */
+	AS_STRAIGHT = 1
+	AS_SLIDING  = 2
+	AS_MELEE    = 3
+	AS_MISSILE  = 4
+
 	/* armor types */
 	ARMOR_NONE   = 0
 	ARMOR_JACKET = 1
@@ -117,6 +127,11 @@ const (
 	WEAPON_ACTIVATING weaponstate_t = 1
 	WEAPON_DROPPING   weaponstate_t = 2
 	WEAPON_FIRING     weaponstate_t = 3
+
+	/* noise types for PlayerNoise */
+	PNOISE_SELF   = 0
+	PNOISE_WEAPON = 1
+	PNOISE_IMPACT = 2
 )
 
 /* edict->movetype values */
@@ -243,12 +258,12 @@ type level_locals_t struct {
 
 	sight_client *edict_t /* changed once each frame for coop games */
 
-	sight_entity          *edict_t
-	sight_entity_framenum int
-	sound_entity          *edict_t
-	sound_entity_framenum int
-	//    edict_t *sound2_entity;
-	//    int sound2_entity_framenum;
+	sight_entity           *edict_t
+	sight_entity_framenum  int
+	sound_entity           *edict_t
+	sound_entity_framenum  int
+	sound2_entity          *edict_t
+	sound2_entity_framenum int
 
 	pic_health int
 
@@ -291,6 +306,58 @@ type spawn_temp_t struct {
 	//    float maxpitch;
 }
 
+type moveinfo_t struct {
+	/* fixed data */
+	start_origin [3]float32
+	start_angles [3]float32
+	end_origin   [3]float32
+	end_angles   [3]float32
+
+	sound_start  int
+	sound_middle int
+	sound_end    int
+
+	accel    float32
+	speed    float32
+	decel    float32
+	distance float32
+
+	wait float32
+
+	/* state data */
+	state              int
+	dir                [3]float32
+	current_speed      float32
+	move_speed         float32
+	next_speed         float32
+	remaining_distance float32
+	decel_distance     float32
+	endfunc            func(*edict_t, *qGame)
+}
+
+func (G *moveinfo_t) copy(other moveinfo_t) {
+	copy(G.start_origin[:], other.start_origin[:])
+	copy(G.start_angles[:], other.start_angles[:])
+	copy(G.end_origin[:], other.end_origin[:])
+	copy(G.end_angles[:], other.end_angles[:])
+	G.sound_start = other.sound_start
+	G.sound_middle = other.sound_middle
+	G.sound_end = other.sound_end
+	G.accel = other.accel
+	G.speed = other.speed
+	G.decel = other.decel
+	G.distance = other.distance
+	G.wait = other.wait
+	G.state = other.sound_start
+	copy(G.dir[:], other.dir[:])
+	G.current_speed = other.current_speed
+	G.move_speed = other.move_speed
+	G.next_speed = other.next_speed
+	G.remaining_distance = other.remaining_distance
+	G.decel_distance = other.decel_distance
+	G.endfunc = other.endfunc
+}
+
 type mframe_t struct {
 	aifunc    func(self *edict_t, dist float32, G *qGame)
 	dist      float32
@@ -314,21 +381,21 @@ type monsterinfo_t struct {
 	idle   func(self *edict_t, G *qGame)
 	search func(self *edict_t, G *qGame)
 	walk   func(self *edict_t, G *qGame)
-	// void (*run)(edict_t *self);
+	run    func(self *edict_t, G *qGame)
 	// void (*dodge)(edict_t *self, edict_t *other, float eta);
 	// void (*attack)(edict_t *self);
 	// void (*melee)(edict_t *self);
 	// void (*sight)(edict_t *self, edict_t *other);
-	// qboolean (*checkattack)(edict_t *self);
+	checkattack func(self *edict_t, G *qGame) bool
 
-	pausetime float32
-	// float attack_finished;
+	pausetime       float32
+	attack_finished float32
 
 	// vec3_t saved_goal;
 	// float search_time;
 	// float trail_time;
-	// vec3_t last_sighting;
-	// int attack_state;
+	last_sighting [3]float32
+	attack_state  int
 	// int lefty;
 	idle_time float32
 	linkcount int
@@ -346,19 +413,19 @@ func (G *monsterinfo_t) copy(other monsterinfo_t) {
 	G.idle = other.idle
 	G.search = other.search
 	G.walk = other.walk
-	// void (*run)(edict_t *self);
+	G.run = other.run
 	// void (*dodge)(edict_t *self, edict_t *other, float eta);
 	// void (*attack)(edict_t *self);
 	// void (*melee)(edict_t *self);
 	// void (*sight)(edict_t *self, edict_t *other);
-	// qboolean (*checkattack)(edict_t *self);
+	G.checkattack = other.checkattack
 	G.pausetime = other.pausetime
-	// float attack_finished;
+	G.attack_finished = other.attack_finished
 	// vec3_t saved_goal;
 	// float search_time;
 	// float trail_time;
-	// vec3_t last_sighting;
-	// int attack_state;
+	copy(G.last_sighting[:], other.last_sighting[:])
+	G.attack_state = other.attack_state
 	// int lefty;
 	G.idle_time = other.idle_time
 	G.linkcount = other.linkcount
@@ -367,11 +434,57 @@ func (G *monsterinfo_t) copy(other monsterinfo_t) {
 }
 
 const (
+	/* means of death */
+	MOD_UNKNOWN        = 0
+	MOD_BLASTER        = 1
+	MOD_SHOTGUN        = 2
+	MOD_SSHOTGUN       = 3
+	MOD_MACHINEGUN     = 4
+	MOD_CHAINGUN       = 5
+	MOD_GRENADE        = 6
+	MOD_G_SPLASH       = 7
+	MOD_ROCKET         = 8
+	MOD_R_SPLASH       = 9
+	MOD_HYPERBLASTER   = 10
+	MOD_RAILGUN        = 11
+	MOD_BFG_LASER      = 12
+	MOD_BFG_BLAST      = 13
+	MOD_BFG_EFFECT     = 14
+	MOD_HANDGRENADE    = 15
+	MOD_HG_SPLASH      = 16
+	MOD_WATER          = 17
+	MOD_SLIME          = 18
+	MOD_LAVA           = 19
+	MOD_CRUSH          = 20
+	MOD_TELEFRAG       = 21
+	MOD_FALLING        = 22
+	MOD_SUICIDE        = 23
+	MOD_HELD_GRENADE   = 24
+	MOD_EXPLOSIVE      = 25
+	MOD_BARREL         = 26
+	MOD_BOMB           = 27
+	MOD_EXIT           = 28
+	MOD_SPLASH         = 29
+	MOD_TARGET_LASER   = 30
+	MOD_TRIGGER_HURT   = 31
+	MOD_HIT            = 32
+	MOD_TARGET_BLASTER = 33
+	MOD_FRIENDLY_FIRE  = 0x8000000
+
 	/* Easier handling of AI skill levels */
 	SKILL_EASY     = 0
 	SKILL_MEDIUM   = 1
 	SKILL_HARD     = 2
 	SKILL_HARDPLUS = 3
+
+	/* damage flags */
+	DAMAGE_RADIUS        = 0x00000001 /* damage was indirect */
+	DAMAGE_NO_ARMOR      = 0x00000002 /* armour does not protect from this damage */
+	DAMAGE_ENERGY        = 0x00000004 /* damage is from an energy based weapon */
+	DAMAGE_NO_KNOCKBACK  = 0x00000008 /* do not affect velocity, just view angles */
+	DAMAGE_BULLET        = 0x00000010 /* damage is from a bullet (used for ricochets) */
+	DAMAGE_NO_PROTECTION = 0x00000020 /* armor, shields, invulnerability, and godmode have no effect */
+
 )
 
 /* ============================================================================ */
@@ -485,10 +598,10 @@ type gclient_t struct {
 	resp      client_respawn_t
 	old_pmove shared.Pmove_state_t /* for detecting out-of-pmove changes */
 
-	// qboolean showscores; /* set layout stat */
-	// qboolean showinventory; /* set layout stat */
-	// qboolean showhelp;
-	// qboolean showhelpicon;
+	showscores    bool /* set layout stat */
+	showinventory bool /* set layout stat */
+	showhelp      bool
+	showhelpicon  bool
 
 	ammo_index int
 
@@ -502,13 +615,13 @@ type gclient_t struct {
 
 	/* sum up damage over an entire frame, so
 	   shotgun blasts give a single big kick */
-	// int damage_armor; /* damage absorbed by armor */
-	// int damage_parmor; /* damage absorbed by power armor */
-	// int damage_blood; /* damage taken out of health */
-	// int damage_knockback; /* impact damage */
-	// vec3_t damage_from; /* origin for vector calculation */
+	damage_armor     int        /* damage absorbed by armor */
+	damage_parmor    int        /* damage absorbed by power armor */
+	damage_blood     int        /* damage taken out of health */
+	damage_knockback int        /* impact damage */
+	damage_from      [3]float32 /* origin for vector calculation */
 
-	// float killer_yaw; /* when dead, look at killer */
+	killer_yaw float32 /* when dead, look at killer */
 
 	weaponstate                         weaponstate_t
 	kick_angles                         [3]float32 /* weapon kicks */
@@ -573,29 +686,33 @@ func (G *gclient_t) copy(other gclient_t) {
 	G.pers.copy(other.pers)
 	// resp client_respawn_t
 	G.old_pmove.Copy(other.old_pmove) /* for detecting out-of-pmove changes */
-	// qboolean showscores; /* set layout stat */
-	// qboolean showinventory; /* set layout stat */
-	// qboolean showhelp;
-	// qboolean showhelpicon;
+	G.showscores = other.showscores
+	G.showinventory = other.showinventory
+	G.showhelp = other.showhelp
+	G.showhelpicon = other.showhelpicon
 	G.ammo_index = other.ammo_index
 	G.buttons = other.buttons
 	G.oldbuttons = other.oldbuttons
 	G.latched_buttons = other.latched_buttons
 	G.weapon_thunk = other.weapon_thunk
 	G.newweapon = other.newweapon
-	// int damage_armor; /* damage absorbed by armor */
-	// int damage_parmor; /* damage absorbed by power armor */
-	// int damage_blood; /* damage taken out of health */
-	// int damage_knockback; /* impact damage */
-	// vec3_t damage_from; /* origin for vector calculation */
-	// float killer_yaw; /* when dead, look at killer */
-	// weaponstate_t weaponstate;
-	// float v_dmg_roll, v_dmg_pitch, v_dmg_time; /* damage kicks */
-	// float fall_time, fall_value; /* for view drop on fall */
-	// float damage_alpha;
-	// float bonus_alpha;
-	// vec3_t damage_blend;
+	G.damage_armor = other.damage_armor
+	G.damage_parmor = other.damage_parmor
+	G.damage_blood = other.damage_blood
+	G.damage_knockback = other.damage_knockback
+	copy(G.damage_from[:], other.damage_from[:])
+	G.killer_yaw = other.killer_yaw
+	G.weaponstate = other.weaponstate
+	G.v_dmg_roll = other.v_dmg_roll
+	G.v_dmg_pitch = other.v_dmg_pitch
+	G.v_dmg_time = other.v_dmg_time
+	G.fall_time = other.fall_time
+	G.fall_value = other.fall_value
+	G.damage_alpha = other.damage_alpha
+	G.bonus_alpha = other.bonus_alpha
+	copy(G.damage_blend[:], other.damage_blend[:])
 	G.bobtime = other.bobtime
+	// G.next_drown_time = other.next_drown_time
 	// float next_drown_time;
 	// int old_waterlevel;
 	// int breather_sound;
@@ -612,12 +729,12 @@ func (G *gclient_t) copy(other gclient_t) {
 	// float grenade_time;
 	// int silencer_shots;
 	// int weapon_sound;
-	// float pickup_msg_time;
+	G.pickup_msg_time = other.pickup_msg_time
 	// float flood_locktill; /* locked from talking */
 	// float flood_when[10]; /* when messages were said */
 	// int flood_whenhead; /* head pointer for when said */
 	// float respawn_time; /* can respawn when time > this */
-	// edict_t *chase_target; /* player we are chasing */
+	G.chase_target = other.chase_target
 	// qboolean update_chase; /* need to update chase info? */
 
 	for i := 0; i < 3; i++ {
@@ -653,8 +770,8 @@ type edict_t struct {
 	mins, maxs           [3]float32
 	absmin, absmax, size [3]float32
 	solid                shared.Solid_t
-	// int clipmask;
-	owner *edict_t
+	clipmask             int
+	owner                *edict_t
 
 	// /* DO NOT MODIFY ANYTHING ABOVE THIS, THE SERVER */
 	// /* EXPECTS THE FIELDS IN THAT ORDER! */
@@ -706,9 +823,8 @@ type edict_t struct {
 	// void (*blocked)(edict_t *self, edict_t *other);
 	touch func(self, other *edict_t, plane *shared.Cplane_t, surf *shared.Csurface_t, G *qGame)
 	use   func(self, other, activator *edict_t, G *qGame)
-	// void (*pain)(edict_t *self, edict_t *other, float kick, int damage);
-	// void (*die)(edict_t *self, edict_t *inflictor, edict_t *attacker,
-	// 		int damage, vec3_t point);
+	pain  func(self, other *edict_t, kick float32, damage int, G *qGame)
+	die   func(self, inflictor, attacker *edict_t, damage int, point []float32, G *qGame)
 
 	touch_debounce_time float32
 	// float pain_debounce_time;
@@ -721,14 +837,14 @@ type edict_t struct {
 	gib_health int
 	deadflag   int
 
-	// float show_hostile;
+	show_hostile float32
 	// float powerarmor_time;
 
 	Map string /* target_changelevel */
 
 	viewheight int /* height above origin where eyesight is determined */
-	// int takedamage;
-	Dmg int
+	takedamage int
+	Dmg        int
 	// int radius_dmg;
 	// float dmg_radius;
 	Sounds int /* make this a spawntemp var? */
@@ -741,10 +857,10 @@ type edict_t struct {
 	groundentity           *edict_t
 	groundentity_linkcount int
 	teamchain              *edict_t
-	// edict_t *teammaster;
+	teammaster             *edict_t
 
-	// edict_t *mynoise; /* can go in client only */
-	// edict_t *mynoise2;
+	mynoise  *edict_t /* can go in client only */
+	mynoise2 *edict_t
 
 	noise_index  int
 	noise_index2 int
@@ -772,7 +888,7 @@ type edict_t struct {
 	item *gitem_t /* for bonus items */
 
 	/* common data blocks */
-	// moveinfo_t moveinfo;
+	moveinfo    moveinfo_t
 	monsterinfo monsterinfo_t
 }
 
@@ -885,7 +1001,7 @@ func (G *edict_t) copy(other edict_t) {
 	G.areanum2 = other.areanum2
 	G.svflags = other.svflags
 	G.solid = other.solid
-	// int clipmask;
+	G.clipmask = other.clipmask
 	G.owner = other.owner
 	G.movetype = other.movetype
 	G.flags = other.flags
@@ -919,9 +1035,8 @@ func (G *edict_t) copy(other edict_t) {
 	// void (*blocked)(edict_t *self, edict_t *other);
 	G.touch = other.touch
 	G.use = other.use
-	// void (*pain)(edict_t *self, edict_t *other, float kick, int damage);
-	// void (*die)(edict_t *self, edict_t *inflictor, edict_t *attacker,
-	// 		int damage, vec3_t point);
+	G.pain = other.pain
+	G.die = other.die
 	G.touch_debounce_time = other.touch_debounce_time
 	// float pain_debounce_time;
 	// float damage_debounce_time;
@@ -931,11 +1046,11 @@ func (G *edict_t) copy(other edict_t) {
 	G.max_health = other.max_health
 	G.gib_health = other.gib_health
 	G.deadflag = other.deadflag
-	// float show_hostile;
+	G.show_hostile = other.show_hostile
 	// float powerarmor_time;
 	G.Map = other.Map
 	G.viewheight = other.viewheight
-	// int takedamage;
+	G.takedamage = other.takedamage
 	G.Dmg = other.Dmg
 	// int radius_dmg;
 	// float dmg_radius;
@@ -948,9 +1063,9 @@ func (G *edict_t) copy(other edict_t) {
 	G.groundentity = other.groundentity
 	G.groundentity_linkcount = other.groundentity_linkcount
 	G.teamchain = other.teamchain
-	// edict_t *teammaster;
-	// edict_t *mynoise; /* can go in client only */
-	// edict_t *mynoise2;
+	G.teammaster = other.teammaster
+	G.mynoise = other.mynoise
+	G.mynoise2 = other.mynoise2
 	G.noise_index = other.noise_index
 	G.noise_index2 = other.noise_index2
 	G.Volume = other.Volume
@@ -966,7 +1081,7 @@ func (G *edict_t) copy(other edict_t) {
 	// int light_level;
 	G.Style = other.Style
 	G.item = other.item
-	// moveinfo_t moveinfo;
+	G.moveinfo.copy(other.moveinfo)
 	G.monsterinfo.copy(other.monsterinfo)
 
 	for i := range G.pos1 {
@@ -1029,6 +1144,8 @@ type qGame struct {
 
 	g_edicts []edict_t
 
+	meansOfDeath int
+
 	deathmatch            *shared.CvarT
 	coop                  *shared.CvarT
 	coop_pickup_weapons   *shared.CvarT
@@ -1090,9 +1207,20 @@ type qGame struct {
 	player_view_bobcycle   int
 	player_view_bobfracsin float32
 
+	enemy_vis     bool
+	enemy_infront bool
+	enemy_range   int
+	enemy_yaw     float32
+
 	pushed   [shared.MAX_EDICTS]pushed_t
 	pushed_i int
 	obstacle *edict_t
+
+	jacket_armor_index int
+	combat_armor_index int
+	body_armor_index   int
+	power_screen_index int
+	power_shield_index int
 }
 
 func QGameCreate(gi shared.Game_import_t) shared.Game_export_t {

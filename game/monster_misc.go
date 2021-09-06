@@ -66,35 +66,35 @@ func (G *qGame) svMovestep(ent *edict_t, move []float32, relink bool) bool {
 		for i := 0; i < 2; i++ {
 			shared.VectorAdd(ent.s.Origin[:], move, neworg)
 
-			// 	 if ((i == 0) && ent- {
-			// 		 if (!ent->goalentity) {
-			// 			 ent->goalentity = ent->enemy;
-			// 		 }
+			if (i == 0) && ent.enemy != nil {
+				if ent.goalentity == nil {
+					ent.goalentity = ent.enemy
+				}
 
-			// 		 dz = ent->s.origin[2] - ent->goalentity->s.origin[2];
+				// 		 dz = ent->s.origin[2] - ent->goalentity->s.origin[2];
 
-			// 		 if (ent->goalentity->client) {
-			// 			 if (dz > 40) {
-			// 				 neworg[2] -= 8;
-			// 			 }
+				// 		 if (ent->goalentity->client) {
+				// 			 if (dz > 40) {
+				// 				 neworg[2] -= 8;
+				// 			 }
 
-			// 			 if (!((ent->flags & FL_SWIM) && (ent->waterlevel < 2))) {
-			// 				 if (dz < 30) {
-			// 					 neworg[2] += 8;
-			// 				 }
-			// 			 }
-			// 		 } else {
-			// 			 if (dz > 8) {
-			// 				 neworg[2] -= 8;
-			// 			 } else if (dz > 0) {
-			// 				 neworg[2] -= dz;
-			// 			 } else if (dz < -8) {
-			// 				 neworg[2] += 8;
-			// 			 } else {
-			// 				 neworg[2] += dz;
-			// 			 }
-			// 		 }
-			// 	 }
+				// 			 if (!((ent->flags & FL_SWIM) && (ent->waterlevel < 2))) {
+				// 				 if (dz < 30) {
+				// 					 neworg[2] += 8;
+				// 				 }
+				// 			 }
+				// 		 } else {
+				// 			 if (dz > 8) {
+				// 				 neworg[2] -= 8;
+				// 			 } else if (dz > 0) {
+				// 				 neworg[2] -= dz;
+				// 			 } else if (dz < -8) {
+				// 				 neworg[2] += 8;
+				// 			 } else {
+				// 				 neworg[2] += dz;
+				// 			 }
+				// 		 }
+			}
 
 			// 	 trace = gi.trace(ent->s.origin, ent->mins, ent->maxs,
 			// 			 neworg, ent, MASK_MONSTERSOLID);
@@ -138,9 +138,9 @@ func (G *qGame) svMovestep(ent *edict_t, move []float32, relink bool) bool {
 			// 		 return true;
 			// 	 }
 
-			// 	 if (!ent->enemy) {
-			// 		 break;
-			// 	 }
+			if ent.enemy == nil {
+				break
+			}
 		}
 
 		return false

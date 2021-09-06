@@ -142,6 +142,7 @@ func (G *qGame) Init() {
 	G.g_edicts = make([]edict_t, G.maxentities.Int()) //gi.TagMalloc(game.maxentities * sizeof(g_edicts[0]), TAG_GAME);
 	for i := range G.g_edicts {
 		G.g_edicts[i].index = i
+		G.g_edicts[i].area.Self = &G.g_edicts[i]
 	}
 
 	// /* initialize all clients for this game */

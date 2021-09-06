@@ -222,6 +222,34 @@ func (G *qGame) monster_triggered_start(self *edict_t) {
 	// self.use = monster_triggered_spawn_use
 }
 
+/*
+ * When a monster dies, it fires all of its targets
+ * with the current enemy as activator.
+ */
+func (G *qGame) monster_death_use(self *edict_t) {
+	if self == nil {
+		return
+	}
+
+	self.flags &^= (FL_FLY | FL_SWIM)
+	self.monsterinfo.aiflags &= AI_GOOD_GUY
+
+	if self.item != nil {
+		// Drop_Item(self, self.item)
+		self.item = nil
+	}
+
+	if len(self.Deathtarget) > 0 {
+		self.Target = self.Deathtarget
+	}
+
+	if len(self.Target) == 0 {
+		return
+	}
+
+	G.gUseTargets(self, self.enemy)
+}
+
 /* ================================================================== */
 
 func (G *qGame) monster_start(self *edict_t) bool {
@@ -239,13 +267,13 @@ func (G *qGame) monster_start(self *edict_t) bool {
 		self.Spawnflags |= 1
 	}
 
-	// if ((self.Spawnflags & 2) != 0 && !self.targetname) {
-	// 	if (g_fix_triggered->value) {
-	// 		self->spawnflags &= ~2;
-	// 	}
+	if (self.Spawnflags&2) != 0 && len(self.Targetname) == 0 {
+		// 	if (g_fix_triggered->value) {
+		// 		self->spawnflags &= ~2;
+		// 	}
 
-	// 	gi.dprintf ("triggered %s at %s has no targetname\n", self->classname, vtos (self->s.origin));
-	// }
+		G.gi.Dprintf("triggered %s at %s has no targetname\n", self.Classname, vtos(self.s.Origin[:]))
+	}
 
 	if (self.monsterinfo.aiflags & AI_GOOD_GUY) == 0 {
 		G.level.total_monsters++
@@ -254,7 +282,7 @@ func (G *qGame) monster_start(self *edict_t) bool {
 	self.nextthink = G.level.time + FRAMETIME
 	self.svflags |= shared.SVF_MONSTER
 	self.s.Renderfx |= shared.RF_FRAMELERP
-	// self.takedamage = DAMAGE_AIM
+	self.takedamage = DAMAGE_AIM
 	// self.air_finished = level.time + 12
 	// self.use = monster_use
 
@@ -262,15 +290,15 @@ func (G *qGame) monster_start(self *edict_t) bool {
 		self.max_health = self.Health
 	}
 
-	// self.clipmask = MASK_MONSTERSOLID
+	self.clipmask = shared.MASK_MONSTERSOLID
 
 	self.s.Skinnum = 0
 	self.deadflag = DEAD_NO
 	self.svflags &^= shared.SVF_DEADMONSTER
 
-	// if (!self->monsterinfo.checkattack) {
-	// 	self->monsterinfo.checkattack = M_CheckAttack;
-	// }
+	if self.monsterinfo.checkattack == nil {
+		self.monsterinfo.checkattack = mCheckAttack
+	}
 
 	copy(self.s.Old_origin[:], self.s.Origin[:])
 
@@ -283,7 +311,7 @@ func (G *qGame) monster_start(self *edict_t) bool {
 	// 	}
 	// }
 
-	// /* randomize what frame they start on */
+	/* randomize what frame they start on */
 	// if (self->monsterinfo.currentmove)
 	// {
 	// 	self->s.frame = self->monsterinfo.currentmove->firstframe +

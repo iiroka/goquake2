@@ -132,6 +132,64 @@ func (G *qGameImp) Setmodel(ent shared.Edict_s, name string) error {
 }
 
 /*
+ * Also checks portalareas so that doors block sight
+ */
+func (G *qGameImp) InPVS(p1, p2 []float32) bool {
+	//  int leafnum;
+	//  int cluster;
+	//  int area1, area2;
+	//  byte *mask;
+
+	leafnum := G.T.common.CMPointLeafnum(p1)
+	cluster := G.T.common.CMLeafCluster(leafnum)
+	area1 := G.T.common.CMLeafArea(leafnum)
+	mask := G.T.common.CMClusterPVS(cluster)
+
+	leafnum = G.T.common.CMPointLeafnum(p2)
+	cluster = G.T.common.CMLeafCluster(leafnum)
+	area2 := G.T.common.CMLeafArea(leafnum)
+
+	if mask != nil && ((mask[cluster>>3] & (1 << (cluster & 7))) == 0) {
+		return false
+	}
+
+	if !G.T.common.CMAreasConnected(area1, area2) {
+		return false /* a door blocks sight */
+	}
+
+	return true
+}
+
+/*
+ * Also checks portalareas so that doors block sound
+ */
+func (G *qGameImp) InPHS(p1, p2 []float32) bool {
+	//  int leafnum;
+	//  int cluster;
+	//  int area1, area2;
+	//  byte *mask;
+
+	leafnum := G.T.common.CMPointLeafnum(p1)
+	cluster := G.T.common.CMLeafCluster(leafnum)
+	area1 := G.T.common.CMLeafArea(leafnum)
+	mask := G.T.common.CMClusterPHS(cluster)
+
+	leafnum = G.T.common.CMPointLeafnum(p2)
+	cluster = G.T.common.CMLeafCluster(leafnum)
+	area2 := G.T.common.CMLeafArea(leafnum)
+
+	if mask != nil && ((mask[cluster>>3] & (1 << (cluster & 7))) == 0) {
+		return false /* more than one bounce away */
+	}
+
+	if !G.T.common.CMAreasConnected(area1, area2) {
+		return false /* a door blocks hearing */
+	}
+
+	return true
+}
+
+/*
  * Called when either the entire server is being killed, or
  * it is changing to a different game directory.
  */

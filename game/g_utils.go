@@ -124,6 +124,15 @@ func (G *qGame) gPickTarget(targetname string) *edict_t {
 	return choice[shared.Randk()%num_choices]
 }
 
+func think_Delay(ent *edict_t, G *qGame) {
+	if ent == nil || G == nil {
+		return
+	}
+
+	G.gUseTargets(ent, ent.activator)
+	G.gFreeEdict(ent)
+}
+
 /*
  * The global "activator" should be set to
  * the entity that initiated the firing.
@@ -149,7 +158,7 @@ func (G *qGame) gUseTargets(ent, activator *edict_t) {
 		t, _ := G.gSpawn()
 		t.Classname = "DelayedUse"
 		t.nextthink = G.level.time + ent.Delay
-		// t.think = Think_Delay
+		t.think = think_Delay
 		t.activator = activator
 
 		if activator == nil {
@@ -337,6 +346,7 @@ func G_InitEdict(e *edict_t, index int) {
 	e.Classname = "noclass"
 	e.gravity = 1.0
 	e.s.Number = index
+	e.area.Self = e
 }
 
 /*
